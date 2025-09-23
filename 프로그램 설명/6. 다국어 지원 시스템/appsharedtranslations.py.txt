@@ -1,0 +1,342 @@
+"""
+Multi-language support for YMV Business Management System
+"""
+
+import streamlit as st
+from typing import Dict, Optional
+from .database import db_manager
+
+class TranslationManager:
+    """Manage translations and language switching"""
+    
+    def __init__(self):
+        self.supported_languages = {
+            'ko': '한국어',
+            'en': 'English', 
+            'vn': 'Tiếng Việt'
+        }
+        self.current_language = 'ko'
+        self.translations_cache = {}
+        self._load_translations()
+    
+    def _load_translations(self):
+        """Load all translations from database"""
+        try:
+            query = "SELECT translation_key, language_code, translation_value FROM translations"
+            results = db_manager.execute_query(query)
+            
+            for row in results:
+                key = row['translation_key']
+                lang = row['language_code']
+                value = row['translation_value']
+                
+                if lang not in self.translations_cache:
+                    self.translations_cache[lang] = {}
+                
+                self.translations_cache[lang][key] = value
+                
+        except Exception as e:
+            # Use fallback translations if database is not available
+            self._load_fallback_translations()
+    
+    def _load_fallback_translations(self):
+        """Load fallback translations"""
+        self.translations_cache = {
+            'ko': {
+                'login': '로그인',
+                'logout': '로그아웃', 
+                'username': '사용자명',
+                'password': '비밀번호',
+                'dashboard': '대시보드',
+                'system': '시스템 관리',
+                'general_affairs': '총무',
+                'sales': '영업 관리',
+                'save': '저장',
+                'cancel': '취소',
+                'edit': '수정',
+                'delete': '삭제',
+                'search': '검색',
+                'add': '추가',
+                'error': '오류',
+                'success': '성공',
+                'warning': '경고',
+                'info': '정보'
+            },
+            'en': {
+                'login': 'Login',
+                'logout': 'Logout',
+                'username': 'Username', 
+                'password': 'Password',
+                'dashboard': 'Dashboard',
+                'system': 'System Management',
+                'general_affairs': 'General Affairs',
+                'sales': 'Sales Management',
+                'save': 'Save',
+                'cancel': 'Cancel',
+                'edit': 'Edit',
+                'delete': 'Delete',
+                'search': 'Search',
+                'add': 'Add',
+                'error': 'Error',
+                'success': 'Success',
+                'warning': 'Warning',
+                'info': 'Information'
+            },
+            'vn': {
+                'login': 'Đăng nhập',
+                'logout': 'Đăng xuất',
+                'username': 'Tên người dùng',
+                'password': 'Mật khẩu', 
+                'dashboard': 'Bảng điều khiển',
+                'system': 'Quản lý hệ thống',
+                'general_affairs': 'Tổng vụ',
+                'sales': 'Quản lý bán hàng',
+                'save': 'Lưu',
+                'cancel': 'Hủy',
+                'edit': 'Chỉnh sửa',
+                'delete': 'Xóa',
+                'search': 'Tìm kiếm',
+                'add': 'Thêm',
+                'error': 'Lỗi',
+                'success': 'Thành công',
+                'warning': 'Cảnh báo',
+                'info': 'Thông tin'
+            }
+        }
+    
+    def set_language(self, language_code: str):
+        """Set current language"""
+        if language_code in self.supported_languages:
+            self.current_language = language_code
+            st.session_state.language = language_code
+    
+    def get_language(self) -> str:
+        """Get current language"""
+        return st.session_state.get('language', 'ko')
+    
+    def translate(self, key: str, language: str = None) -> str:
+        """Get translation for key"""
+        if language is None:
+            language = self.get_language()
+        
+        # Check cache first
+        if language in self.translations_cache:
+            if key in self.translations_cache[language]:
+                return self.translations_cache[language][key]
+        
+        # Fallback to English if key not found in current language
+        if language != 'en' and 'en' in self.translations_cache:
+            if key in self.translations_cache['en']:
+                return self.translations_cache['en'][key]
+        
+        # Return key if no translation found
+        return key
+    
+    def add_translation(self, key: str, translations: Dict[str, str], module: str = None):
+        """Add new translation to database"""
+        try:
+            for language_code, translation_value in translations.items():
+                if language_code in self.supported_languages:
+                    query = """
+                    INSERT INTO translations (translation_key, language_code, translation_value, module_name)
+                    VALUES (%s, %s, %s, %s)
+                    ON CONFLICT (translation_key, language_code) 
+                    DO UPDATE SET translation_value = EXCLUDED.translation_value
+                    """
+                    
+                    db_manager.execute_query(
+                        query, 
+                        (key, language_code, translation_value, module), 
+                        fetch=False
+                    )
+                    
+                    # Update cache
+                    if language_code not in self.translations_cache:
+                        self.translations_cache[language_code] = {}
+                    self.translations_cache[language_code][key] = translation_value
+                    
+        except Exception as e:
+            st.error(f"Failed to add translation: {e}")
+    
+    def get_language_selector(self, key: str = "language_selector") -> str:
+        """Create language selector widget"""
+        current_lang = self.get_language()
+        
+        selected_lang = st.selectbox(
+            "🌐 Language",
+            options=list(self.supported_languages.keys()),
+            format_func=lambda x: self.supported_languages[x],
+            index=list(self.supported_languages.keys()).index(current_lang),
+            key=key
+        )
+        
+        if selected_lang != current_lang:
+            self.set_language(selected_lang)
+            st.rerun()
+        
+        return selected_lang
+
+# Global translation manager instance
+translation_manager = TranslationManager()
+
+# Convenience function for translations
+def t(key: str, language: str = None) -> str:
+    """Translate key to current or specified language"""
+    return translation_manager.translate(key, language)
+
+def add_translations(translations_dict: Dict[str, Dict[str, str]], module: str = None):
+    """Add multiple translations at once"""
+    for key, translations in translations_dict.items():
+        translation_manager.add_translation(key, translations, module)
+
+# Pre-defined translation sets for common use cases
+COMMON_TRANSLATIONS = {
+    # Navigation
+    'home': {'ko': '홈', 'en': 'Home', 'vn': 'Trang chủ'},
+    'back': {'ko': '뒤로', 'en': 'Back', 'vn': 'Quay lại'},
+    'next': {'ko': '다음', 'en': 'Next', 'vn': 'Tiếp theo'},
+    'previous': {'ko': '이전', 'en': 'Previous', 'vn': 'Trước'},
+    'menu': {'ko': '메뉴', 'en': 'Menu', 'vn': 'Menu'},
+    
+    # Actions
+    'create': {'ko': '생성', 'en': 'Create', 'vn': 'Tạo'},
+    'update': {'ko': '업데이트', 'en': 'Update', 'vn': 'Cập nhật'},
+    'view': {'ko': '보기', 'en': 'View', 'vn': 'Xem'},
+    'download': {'ko': '다운로드', 'en': 'Download', 'vn': 'Tải xuống'},
+    'upload': {'ko': '업로드', 'en': 'Upload', 'vn': 'Tải lên'},
+    'export': {'ko': '내보내기', 'en': 'Export', 'vn': 'Xuất'},
+    'import': {'ko': '가져오기', 'en': 'Import', 'vn': 'Nhập'},
+    'print': {'ko': '인쇄', 'en': 'Print', 'vn': 'In'},
+    'send': {'ko': '전송', 'en': 'Send', 'vn': 'Gửi'},
+    'approve': {'ko': '승인', 'en': 'Approve', 'vn': 'Phê duyệt'},
+    'reject': {'ko': '거부', 'en': 'Reject', 'vn': 'Từ chối'},
+    'submit': {'ko': '제출', 'en': 'Submit', 'vn': 'Gửi'},
+    'reset': {'ko': '재설정', 'en': 'Reset', 'vn': 'Đặt lại'},
+    'refresh': {'ko': '새로고침', 'en': 'Refresh', 'vn': 'Làm mới'},
+    
+    # Status
+    'active': {'ko': '활성', 'en': 'Active', 'vn': 'Hoạt động'},
+    'inactive': {'ko': '비활성', 'en': 'Inactive', 'vn': 'Không hoạt động'},
+    'pending': {'ko': '대기중', 'en': 'Pending', 'vn': 'Đang chờ'},
+    'approved': {'ko': '승인됨', 'en': 'Approved', 'vn': 'Đã phê duyệt'},
+    'rejected': {'ko': '거부됨', 'en': 'Rejected', 'vn': 'Bị từ chối'},
+    'draft': {'ko': '초안', 'en': 'Draft', 'vn': 'Bản nháp'},
+    'sent': {'ko': '전송됨', 'en': 'Sent', 'vn': 'Đã gửi'},
+    'completed': {'ko': '완료됨', 'en': 'Completed', 'vn': 'Hoàn thành'},
+    'cancelled': {'ko': '취소됨', 'en': 'Cancelled', 'vn': 'Đã hủy'},
+    
+    # Common fields
+    'name': {'ko': '이름', 'en': 'Name', 'vn': 'Tên'},
+    'description': {'ko': '설명', 'en': 'Description', 'vn': 'Mô tả'},
+    'date': {'ko': '날짜', 'en': 'Date', 'vn': 'Ngày'},
+    'time': {'ko': '시간', 'en': 'Time', 'vn': 'Thời gian'},
+    'amount': {'ko': '금액', 'en': 'Amount', 'vn': 'Số tiền'},
+    'quantity': {'ko': '수량', 'en': 'Quantity', 'vn': 'Số lượng'},
+    'price': {'ko': '가격', 'en': 'Price', 'vn': 'Giá'},
+    'total': {'ko': '합계', 'en': 'Total', 'vn': 'Tổng'},
+    'subtotal': {'ko': '소계', 'en': 'Subtotal', 'vn': 'Tạm tính'},
+    'tax': {'ko': '세금', 'en': 'Tax', 'vn': 'Thuế'},
+    'discount': {'ko': '할인', 'en': 'Discount', 'vn': 'Giảm giá'},
+    'address': {'ko': '주소', 'en': 'Address', 'vn': 'Địa chỉ'},
+    'phone': {'ko': '전화번호', 'en': 'Phone', 'vn': 'Điện thoại'},
+    'email': {'ko': '이메일', 'en': 'Email', 'vn': 'Email'},
+    'notes': {'ko': '비고', 'en': 'Notes', 'vn': 'Ghi chú'},
+    'status': {'ko': '상태', 'en': 'Status', 'vn': 'Trạng thái'},
+    'type': {'ko': '유형', 'en': 'Type', 'vn': 'Loại'},
+    'category': {'ko': '카테고리', 'en': 'Category', 'vn': 'Danh mục'},
+    'code': {'ko': '코드', 'en': 'Code', 'vn': 'Mã'},
+    'number': {'ko': '번호', 'en': 'Number', 'vn': 'Số'},
+    
+    # Business terms
+    'customer': {'ko': '고객', 'en': 'Customer', 'vn': 'Khách hàng'},
+    'supplier': {'ko': '공급업체', 'en': 'Supplier', 'vn': 'Nhà cung cấp'},
+    'product': {'ko': '제품', 'en': 'Product', 'vn': 'Sản phẩm'},
+    'service': {'ko': '서비스', 'en': 'Service', 'vn': 'Dịch vụ'},
+    'quotation': {'ko': '견적서', 'en': 'Quotation', 'vn': 'Báo giá'},
+    'order': {'ko': '주문', 'en': 'Order', 'vn': 'Đơn hàng'},
+    'invoice': {'ko': '송장', 'en': 'Invoice', 'vn': 'Hóa đơn'},
+    'purchase': {'ko': '구매', 'en': 'Purchase', 'vn': 'Mua hàng'},
+    'sale': {'ko': '판매', 'en': 'Sale', 'vn': 'Bán hàng'},
+    'inventory': {'ko': '재고', 'en': 'Inventory', 'vn': 'Tồn kho'},
+    'payment': {'ko': '결제', 'en': 'Payment', 'vn': 'Thanh toán'},
+    'delivery': {'ko': '배송', 'en': 'Delivery', 'vn': 'Giao hàng'},
+    
+    # Time periods
+    'today': {'ko': '오늘', 'en': 'Today', 'vn': 'Hôm nay'},
+    'yesterday': {'ko': '어제', 'en': 'Yesterday', 'vn': 'Hôm qua'},
+    'this_week': {'ko': '이번 주', 'en': 'This Week', 'vn': 'Tuần này'},
+    'last_week': {'ko': '지난 주', 'en': 'Last Week', 'vn': 'Tuần trước'},
+    'this_month': {'ko': '이번 달', 'en': 'This Month', 'vn': 'Tháng này'},
+    'last_month': {'ko': '지난 달', 'en': 'Last Month', 'vn': 'Tháng trước'},
+    'this_year': {'ko': '올해', 'en': 'This Year', 'vn': 'Năm nay'},
+    'last_year': {'ko': '작년', 'en': 'Last Year', 'vn': 'Năm ngoái'},
+    
+    # Messages
+    'loading': {'ko': '로딩 중...', 'en': 'Loading...', 'vn': 'Đang tải...'},
+    'no_data': {'ko': '데이터가 없습니다', 'en': 'No data available', 'vn': 'Không có dữ liệu'},
+    'select_option': {'ko': '옵션을 선택하세요', 'en': 'Please select an option', 'vn': 'Vui lòng chọn một tùy chọn'},
+    'required_field': {'ko': '필수 입력 항목입니다', 'en': 'This field is required', 'vn': 'Trường này là bắt buộc'},
+    'invalid_format': {'ko': '형식이 올바르지 않습니다', 'en': 'Invalid format', 'vn': 'Định dạng không hợp lệ'},
+    'operation_success': {'ko': '작업이 성공적으로 완료되었습니다', 'en': 'Operation completed successfully', 'vn': 'Hoạt động hoàn thành thành công'},
+    'operation_failed': {'ko': '작업이 실패했습니다', 'en': 'Operation failed', 'vn': 'Hoạt động thất bại'},
+    'confirm_delete': {'ko': '정말로 삭제하시겠습니까?', 'en': 'Are you sure you want to delete?', 'vn': 'Bạn có chắc muốn xóa không?'},
+    'unsaved_changes': {'ko': '저장하지 않은 변경사항이 있습니다', 'en': 'You have unsaved changes', 'vn': 'Bạn có thay đổi chưa được lưu'},
+    
+    # Modules
+    'user_management': {'ko': '사용자 관리', 'en': 'User Management', 'vn': 'Quản lý người dùng'},
+    'employee_management': {'ko': '직원 관리', 'en': 'Employee Management', 'vn': 'Quản lý nhân viên'},
+    'product_management': {'ko': '제품 관리', 'en': 'Product Management', 'vn': 'Quản lý sản phẩm'},
+    'customer_management': {'ko': '고객 관리', 'en': 'Customer Management', 'vn': 'Quản lý khách hàng'},
+    'quotation_management': {'ko': '견적서 관리', 'en': 'Quotation Management', 'vn': 'Quản lý báo giá'},
+    'purchase_management': {'ko': '구매 관리', 'en': 'Purchase Management', 'vn': 'Quản lý mua hàng'},
+    'cash_flow_management': {'ko': '현금 흐름 관리', 'en': 'Cash Flow Management', 'vn': 'Quản lý dòng tiền'},
+    'exchange_rate_management': {'ko': '환율 관리', 'en': 'Exchange Rate Management', 'vn': 'Quản lý tỷ giá'},
+    'company_info_management': {'ko': '회사 정보 관리', 'en': 'Company Info Management', 'vn': 'Quản lý thông tin công ty'},
+    'report_management': {'ko': '리포트 관리', 'en': 'Report Management', 'vn': 'Quản lý báo cáo'},
+    'settings': {'ko': '설정', 'en': 'Settings', 'vn': 'Cài đặt'},
+}
+
+def initialize_translations():
+    """Initialize common translations in database"""
+    add_translations(COMMON_TRANSLATIONS)
+
+# Business-specific translations
+BUSINESS_TRANSLATIONS = {
+    # Office supplies categories
+    'office_supplies': {'ko': '사무용품', 'en': 'Office Supplies', 'vn': 'Văn phòng phẩm'},
+    'field_equipment': {'ko': '현장용품', 'en': 'Field Equipment', 'vn': 'Thiết bị hiện trường'},
+    'other_items': {'ko': '기타', 'en': 'Other Items', 'vn': 'Mục khác'},
+    
+    # Payment terms
+    'payment_terms': {'ko': '결제 조건', 'en': 'Payment Terms', 'vn': 'Điều kiện thanh toán'},
+    'delivery_terms': {'ko': '배송 조건', 'en': 'Delivery Terms', 'vn': 'Điều kiện giao hàng'},
+    'warranty_terms': {'ko': '보증 조건', 'en': 'Warranty Terms', 'vn': 'Điều kiện bảo hành'},
+    
+    # Vietnamese labor law specific terms
+    'annual_leave': {'ko': '연차휴가', 'en': 'Annual Leave', 'vn': 'Nghỉ phép năm'},
+    'sick_leave': {'ko': '병가', 'en': 'Sick Leave', 'vn': 'Nghỉ ốm'},
+    'maternity_leave': {'ko': '출산휴가', 'en': 'Maternity Leave', 'vn': 'Nghỉ thai sản'},
+    'paternity_leave': {'ko': '육아휴직', 'en': 'Paternity Leave', 'vn': 'Nghỉ chăm con'},
+    'personal_leave': {'ko': '개인 휴가', 'en': 'Personal Leave', 'vn': 'Nghỉ cá nhân'},
+    'bereavement_leave': {'ko': '경조사 휴가', 'en': 'Bereavement Leave', 'vn': 'Nghỉ tang lễ'},
+    
+    # Currency
+    'usd': {'ko': '미국 달러', 'en': 'US Dollar', 'vn': 'Đô la Mỹ'},
+    'vnd': {'ko': '베트남 동', 'en': 'Vietnamese Dong', 'vn': 'Đồng Việt Nam'},
+    'krw': {'ko': '한국 원', 'en': 'Korean Won', 'vn': 'Won Hàn Quốc'},
+    'cny': {'ko': '중국 위안', 'en': 'Chinese Yuan', 'vn': 'Nhân dân tệ'},
+    'thb': {'ko': '태국 바트', 'en': 'Thai Baht', 'vn': 'Baht Thái'},
+}
+
+def initialize_business_translations():
+    """Initialize business-specific translations"""
+    add_translations(BUSINESS_TRANSLATIONS)
+
+# Helper function for formatted messages
+def t_format(key: str, **kwargs) -> str:
+    """Translate key with format parameters"""
+    translated = t(key)
+    try:
+        return translated.format(**kwargs)
+    except (KeyError, ValueError):
+        return translated

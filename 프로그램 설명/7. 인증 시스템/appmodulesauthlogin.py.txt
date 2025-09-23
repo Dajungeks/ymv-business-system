@@ -1,0 +1,438 @@
+"""
+Authentication system for YMV Business Management System
+"""
+
+import streamlit as st
+import bcrypt
+from datetime import datetime, timedelta
+from typing import Dict, Optional, List
+import jwt
+import os
+from app.shared.database import db_manager, get_user_by_username, get_user_permissions
+from app.shared.utils import generate_secure_token, log_user_activity
+from app.shared.translations import t, translation_manager
+
+class AuthenticationManager:
+    """Handle user authentication and session management"""
+    
+    def __init__(self):
+        self.secret_key = os.getenv('JWT_SECRET_KEY', 'default_secret_key')
+        self.algorithm = 'HS256'
+        self.token_expiry_hours = int(os.getenv('JWT_EXPIRATION_HOURS', 24))
+    
+    def hash_password(self, password: str) -> str:
+        """Hash password using bcrypt"""
+        salt = bcrypt.gensalt()
+        hashed = bcrypt.hashpw(password.encode('utf-8'), salt)
+        return hashed.decode('utf-8')
+    
+    def verify_password(self, password: str, hashed: str) -> bool:
+        """Verify password against hash"""
+        try:
+            return bcrypt.checkpw(password.encode('utf-8'), hashed.encode('utf-8'))
+        except Exception:
+            return False
+    
+    def authenticate_user(self, username: str, password: str) -> Optional[Dict]:
+        """Authenticate user credentials"""
+        try:
+            user = get_user_by_username(username)
+            
+            if not user:
+                return None
+            
+            if not self.verify_password(password, user['password_hash']):
+                return None
+            
+            # Update last login
+            query = "UPDATE users SET last_login = CURRENT_TIMESTAMP WHERE user_id = %s"
+            db_manager.execute_query(query, (user['user_id'],), fetch=False)
+            
+            # Get user permissions
+            permissions = get_user_permissions(user['user_id'])
+            user['permissions'] = permissions
+            
+            # Log successful login
+            log_user_activity(user['user_id'], 'login', f"Successful login from {username}")
+            
+            return user
+            
+        except Exception as e:
+            st.error(f"Authentication error: {e}")
+            return None
+    
+    def create_session_token(self, user_data: Dict) -> str:
+        """Create JWT session token"""
+        payload = {
+            'user_id': user_data['user_id'],
+            'username': user_data['username'],
+            'exp': datetime.utcnow() + timedelta(hours=self.token_expiry_hours)
+        }
+        
+        return jwt.encode(payload, self.secret_key, algorithm=self.algorithm)
+    
+    def verify_session_token(self, token: str) -> Optional[Dict]:
+        """Verify JWT session token"""
+        try:
+            payload = jwt.decode(token, self.secret_key, algorithms=[self.algorithm])
+            return payload
+        except jwt.ExpiredSignatureError:
+            return None
+        except jwt.InvalidTokenError:
+            return None
+    
+    def change_password(self, user_id: int, old_password: str, new_password: str) -> bool:
+        """Change user password"""
+        try:
+            # Get current user data
+            query = "SELECT password_hash FROM users WHERE user_id = %s"
+            result = db_manager.execute_query(query, (user_id,))
+            
+            if not result:
+                return False
+            
+            current_hash = result[0]['password_hash']
+            
+            # Verify old password
+            if not self.verify_password(old_password, current_hash):
+                return False
+            
+            # Hash new password
+            new_hash = self.hash_password(new_password)
+            
+            # Update password
+            update_query = "UPDATE users SET password_hash = %s, updated_at = CURRENT_TIMESTAMP WHERE user_id = %s"
+            db_manager.execute_query(update_query, (new_hash, user_id), fetch=False)
+            
+            # Log password change
+            log_user_activity(user_id, 'password_change', "Password changed successfully")
+            
+            return True
+            
+        except Exception as e:
+            st.error(f"Password change error: {e}")
+            return False
+
+# Global authentication manager
+auth_manager = AuthenticationManager()
+
+def show_login_page():
+    """Display login page"""
+    st.set_page_config(
+        page_title="YMV Business Management System",
+        page_icon="🏢",
+        layout="centered"
+    )
+    
+    # Language selector in sidebar
+    with st.sidebar:
+        translation_manager.get_language_selector()
+    
+    # Main login form
+    st.title("🏢 YMV Business Management System")
+    st.markdown("---")
+    
+    # Create centered columns
+    col1, col2, col3 = st.columns([1, 2, 1])
+    
+    with col2:
+        st.subheader(t('login'))
+        
+        with st.form("login_form"):
+            username = st.text_input(
+                t('username'),
+                placeholder=t('username'),
+                help="Master 계정: Master / 1023"
+            )
+            
+            password = st.text_input(
+                t('password'),
+                type="password", 
+                placeholder=t('password')
+            )
+            
+            col_login, col_demo = st.columns(2)
+            
+            with col_login:
+                login_button = st.form_submit_button(
+                    t('login'),
+                    type="primary",
+                    use_container_width=True
+                )
+            
+            with col_demo:
+                demo_button = st.form_submit_button(
+                    "Demo Login",
+                    use_container_width=True
+                )
+        
+        # Handle demo login
+        if demo_button:
+            username = "Master"
+            password = "1023"
+            login_button = True
+        
+        # Handle login
+        if login_button:
+            if not username or not password:
+                st.error(t('required_field'))
+            else:
+                with st.spinner(t('loading')):
+                    user = auth_manager.authenticate_user(username, password)
+                    
+                    if user:
+                        # Store user data in session state
+                        st.session_state.user_id = user['user_id']
+                        st.session_state.username = user['username']
+                        st.session_state.full_name = user['full_name']
+                        st.session_state.employee_id = user['employee_id']
+                        st.session_state.department = user['department']
+                        st.session_state.position = user['position']
+                        
+                        # Store permissions
+                        permissions = {}
+                        for perm in user['permissions']:
+                            module = perm['module_name']
+                            perm_type = perm['permission_type']
+                            
+                            if module not in permissions:
+                                permissions[module] = []
+                            permissions[module].append(perm_type)
+                        
+                        st.session_state.user_permissions = permissions
+                        st.session_state.authenticated = True
+                        
+                        # Create session token
+                        token = auth_manager.create_session_token(user)
+                        st.session_state.session_token = token
+                        
+                        st.success(t('operation_success'))
+                        st.rerun()
+                    else:
+                        st.error("Invalid username or password")
+    
+    # Footer
+    st.markdown("---")
+    col1, col2, col3 = st.columns(3)
+    
+    with col2:
+        st.markdown(
+            "<div style='text-align: center; color: #666;'>"
+            "YMV Business Management System v1.0<br>"
+            "© 2025 YMV Company"
+            "</div>",
+            unsafe_allow_html=True
+        )
+
+def show_change_password_dialog():
+    """Show change password dialog"""
+    if st.button("🔑 " + t('password')):
+        with st.expander(t('password') + " " + t('edit'), expanded=True):
+            with st.form("change_password_form"):
+                old_password = st.text_input(
+                    "Current " + t('password'),
+                    type="password"
+                )
+                
+                new_password = st.text_input(
+                    "New " + t('password'),
+                    type="password"
+                )
+                
+                confirm_password = st.text_input(
+                    "Confirm New " + t('password'),
+                    type="password"
+                )
+                
+                col1, col2 = st.columns(2)
+                
+                with col1:
+                    if st.form_submit_button(t('save'), type="primary"):
+                        if not all([old_password, new_password, confirm_password]):
+                            st.error(t('required_field'))
+                        elif new_password != confirm_password:
+                            st.error("New passwords do not match")
+                        elif len(new_password) < 4:
+                            st.error("Password must be at least 4 characters")
+                        else:
+                            success = auth_manager.change_password(
+                                st.session_state.user_id,
+                                old_password,
+                                new_password
+                            )
+                            
+                            if success:
+                                st.success(t('operation_success'))
+                                st.rerun()
+                            else:
+                                st.error("Current password is incorrect")
+                
+                with col2:
+                    if st.form_submit_button(t('cancel')):
+                        st.rerun()
+
+def logout_user():
+    """Logout current user"""
+    if st.session_state.get('user_id'):
+        log_user_activity(
+            st.session_state.user_id, 
+            'logout', 
+            f"User {st.session_state.username} logged out"
+        )
+    
+    # Clear session state
+    keys_to_keep = ['language']
+    keys_to_remove = [key for key in st.session_state.keys() if key not in keys_to_keep]
+    
+    for key in keys_to_remove:
+        del st.session_state[key]
+    
+    st.rerun()
+
+def require_authentication():
+    """Decorator/function to require authentication"""
+    if not st.session_state.get('authenticated'):
+        show_login_page()
+        st.stop()
+    
+    # Verify session token if exists
+    if 'session_token' in st.session_state:
+        payload = auth_manager.verify_session_token(st.session_state.session_token)
+        
+        if not payload:
+            # Token expired or invalid
+            logout_user()
+            st.stop()
+
+def check_permission(module: str, permission_type: str = 'read') -> bool:
+    """Check if current user has specific permission"""
+    if not st.session_state.get('authenticated'):
+        return False
+    
+    # Master user has all permissions
+    if st.session_state.get('username') == 'Master':
+        return True
+    
+    permissions = st.session_state.get('user_permissions', {})
+    module_permissions = permissions.get(module, [])
+    
+    # Admin permission grants all access to module
+    if 'admin' in module_permissions:
+        return True
+    
+    # Check specific permission
+    return permission_type in module_permissions
+
+def require_permission(module: str, permission_type: str = 'read'):
+    """Require specific permission or show error"""
+    if not check_permission(module, permission_type):
+        st.error("You don't have permission to access this feature.")
+        st.info(f"Required: {module} - {permission_type}")
+        
+        # Show available permissions
+        permissions = st.session_state.get('user_permissions', {})
+        if permissions:
+            st.write("Your permissions:")
+            for mod, perms in permissions.items():
+                st.write(f"- {mod}: {', '.join(perms)}")
+        
+        st.stop()
+
+def show_user_info():
+    """Show current user information"""
+    if st.session_state.get('authenticated'):
+        with st.sidebar:
+            st.markdown("---")
+            st.markdown("**👤 User Info**")
+            st.write(f"**Name:** {st.session_state.get('full_name', 'Unknown')}")
+            st.write(f"**ID:** {st.session_state.get('employee_id', 'Unknown')}")
+            st.write(f"**Department:** {st.session_state.get('department', 'Unknown')}")
+            st.write(f"**Position:** {st.session_state.get('position', 'Unknown')}")
+            
+            # Show permissions
+            permissions = st.session_state.get('user_permissions', {})
+            if permissions:
+                with st.expander("🔐 Permissions"):
+                    for module, perms in permissions.items():
+                        st.write(f"**{module}:** {', '.join(perms)}")
+            
+            st.markdown("---")
+            
+            # Change password button
+            show_change_password_dialog()
+            
+            # Logout button
+            if st.button("🚪 " + t('logout'), type="primary", use_container_width=True):
+                logout_user()
+
+# Initialize Master user if not exists
+def initialize_master_user():
+    """Create Master user if not exists"""
+    try:
+        existing_user = get_user_by_username('Master')
+        
+        if not existing_user:
+            # Create Master user
+            password_hash = auth_manager.hash_password('1023')
+            
+            query = """
+            INSERT INTO users (username, password_hash, employee_id, full_name, department, position, status)
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
+            """
+            
+            db_manager.execute_query(
+                query,
+                ('Master', password_hash, 'MASTER', 'System Administrator', 'IT', 'Administrator', 'active'),
+                fetch=False
+            )
+            
+            # Get the created user ID
+            user = get_user_by_username('Master')
+            
+            if user:
+                # Grant all permissions to Master
+                permission_query = """
+                INSERT INTO user_permissions (user_id, module_name, permission_type)
+                VALUES (%s, %s, %s)
+                """
+                
+                permissions = [
+                    (user['user_id'], 'admin', 'admin'),
+                    (user['user_id'], 'system', 'admin'),
+                    (user['user_id'], 'general_affairs', 'admin'),
+                    (user['user_id'], 'sales', 'admin')
+                ]
+                
+                db_manager.execute_many(permission_query, permissions)
+                
+                print("Master user created successfully")
+    
+    except Exception as e:
+        print(f"Failed to initialize Master user: {e}")
+
+# Session management functions
+def get_current_user() -> Optional[Dict]:
+    """Get current logged in user data"""
+    if not st.session_state.get('authenticated'):
+        return None
+    
+    return {
+        'user_id': st.session_state.get('user_id'),
+        'username': st.session_state.get('username'),
+        'full_name': st.session_state.get('full_name'),
+        'employee_id': st.session_state.get('employee_id'),
+        'department': st.session_state.get('department'),
+        'position': st.session_state.get('position'),
+        'permissions': st.session_state.get('user_permissions', {})
+    }
+
+def is_master_user() -> bool:
+    """Check if current user is Master"""
+    return st.session_state.get('username') == 'Master'
+
+def get_user_display_name() -> str:
+    """Get display name for current user"""
+    full_name = st.session_state.get('full_name')
+    username = st.session_state.get('username')
+    
+    return full_name if full_name else username if username else 'Unknown User'

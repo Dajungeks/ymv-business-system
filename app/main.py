@@ -1,1373 +1,1425 @@
 import streamlit as st
 import pandas as pd
-import os
-from datetime import datetime, date
-from supabase import create_client, Client
-from dotenv import load_dotenv
-import json
+from datetime import datetime, timedelta
+import uuid
+import time
+from collections import defaultdict
+import calendar
+import io
 
-# 환경 변수 로드
-load_dotenv()
+# 컴포넌트 임포트
+from components.code_management import CodeManagementComponent
+from components.multilingual_input import MultilingualInputComponent
 
 # 페이지 설정
 st.set_page_config(
-    page_title="YMV 관리 시스템",
+    page_title="YMV 관리 프로그램 v4.0",
     page_icon="🏢",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
-# CSS 스타일
+# CSS 스타일 (프린트 지원 포함)
 st.markdown("""
 <style>
     .main-header {
-        background: linear-gradient(90deg, #1e3c72 0%, #2a5298 100%);
+        background: linear-gradient(90deg, #1f4e79, #2e6da4);
+        color: white;
         padding: 1rem;
         border-radius: 10px;
-        color: white;
         text-align: center;
         margin-bottom: 2rem;
     }
-    .metric-card {
-        background: white;
+    .stats-card {
+        background: #f8f9fa;
         padding: 1rem;
-        border-radius: 10px;
+        border-radius: 8px;
+        border-left: 4px solid #007bff;
+        margin-bottom: 1rem;
+    }
+    .expense-stats-card {
+        background: #e8f5e8;
+        padding: 1rem;
+        border-radius: 8px;
+        border-left: 4px solid #28a745;
+        margin-bottom: 1rem;
+    }
+    .warning-stats-card {
+        background: #fff3cd;
+        padding: 1rem;
+        border-radius: 8px;
+        border-left: 4px solid #ffc107;
+        margin-bottom: 1rem;
+    }
+    .ceo-approval-card {
+        background: #e3f2fd;
+        padding: 1rem;
+        border-radius: 8px;
+        border-left: 4px solid #2196f3;
+        margin-bottom: 1rem;
+    }
+    .month-section {
+        background: #f8f9fa;
+        padding: 1rem;
+        border-radius: 8px;
+        margin-bottom: 1rem;
+        border-left: 4px solid #6c757d;
+    }
+    .expense-table {
+        background: white;
+        border-radius: 8px;
+        padding: 1rem;
         box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-        border-left: 4px solid #1e3c72;
     }
-    .success-message {
-        background-color: #d4edda;
-        border: 1px solid #c3e6cb;
-        color: #155724;
-        padding: 0.75rem;
-        border-radius: 0.25rem;
-        margin: 1rem 0;
+    
+    /* 프린트 전용 스타일 */
+    @media print {
+        .main-header, .sidebar, button, .stButton, .stSelectbox, .stTabs {
+            display: none !important;
+        }
+        .print-form {
+            display: block !important;
+            page-break-inside: avoid;
+        }
+        .print-header {
+            text-align: center;
+            margin-bottom: 2rem;
+            border-bottom: 2px solid #000;
+            padding-bottom: 1rem;
+        }
+        .print-content {
+            font-size: 12pt;
+            line-height: 1.5;
+        }
+        .print-signature {
+            margin-top: 3rem;
+            display: flex;
+            justify-content: space-between;
+        }
+        .print-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 1rem 0;
+        }
+        .print-table th, .print-table td {
+            border: 1px solid #000;
+            padding: 8px;
+            text-align: left;
+        }
+        body { margin: 1cm; }
     }
-    .error-message {
-        background-color: #f8d7da;
-        border: 1px solid #f5c6cb;
-        color: #721c24;
-        padding: 0.75rem;
-        border-radius: 0.25rem;
-        margin: 1rem 0;
+    
+    .print-form {
+        display: none;
+        background: white;
+        padding: 2rem;
+        margin: 2rem 0;
+        border: 1px solid #ddd;
     }
-    .status-pending { background-color: #fff3cd; color: #856404; }
-    .status-approved { background-color: #d4edda; color: #155724; }
-    .status-completed { background-color: #d1ecf1; color: #0c5460; }
-    .status-cancelled { background-color: #f8d7da; color: #721c24; }
 </style>
 """, unsafe_allow_html=True)
 
-# Supabase 클라이언트 초기화
+# Supabase 연결 설정
 @st.cache_resource
 def init_supabase():
-    """Supabase 클라이언트 초기화"""
     try:
-        url = os.getenv("SUPABASE_URL")
-        key = os.getenv("SUPABASE_KEY")
-        
-        if not url or not key:
-            st.error("❌ Supabase 연결 정보가 설정되지 않았습니다. .env 파일을 확인해주세요.")
-            st.stop()
-        
-        supabase: Client = create_client(url, key)
-        return supabase
+        from supabase import create_client
+        url = st.secrets["SUPABASE_URL"]
+        key = st.secrets["SUPABASE_ANON_KEY"]
+        return create_client(url, key)
     except Exception as e:
-        st.error(f"❌ Supabase 연결 실패: {str(e)}")
-        st.stop()
+        st.error(f"Supabase 연결 실패: {e}")
+        return None
 
-# Supabase 클라이언트
 supabase = init_supabase()
 
-# 데이터베이스 연결 확인
-def check_connection():
-    """데이터베이스 연결 확인"""
-    try:
-        result = supabase.table('employees').select('id').limit(1).execute()
-        return True
-    except Exception as e:
-        st.error(f"❌ 데이터베이스 연결 실패: {str(e)}")
-        return False
+# 유틸리티 함수들
+def generate_unique_key(prefix=""):
+    """고유한 위젯 키 생성"""
+    timestamp = str(int(time.time() * 1000))
+    unique_id = str(uuid.uuid4())[:8]
+    return f"{prefix}_{timestamp}_{unique_id}"
 
-# 데이터 로드 함수 (Supabase)
-@st.cache_data(ttl=60)  # 1분 캐시
-def load_data_from_supabase(table_name, select_fields="*", filters=None):
+def load_data_from_supabase(table, columns="*", filters=None):
     """Supabase에서 데이터 로드"""
+    if not supabase:
+        return []
+    
     try:
-        query = supabase.table(table_name).select(select_fields)
-        
+        query = supabase.table(table).select(columns)
         if filters:
-            for field, value in filters.items():
-                query = query.eq(field, value)
+            for key, value in filters.items():
+                query = query.eq(key, value)
         
-        result = query.execute()
-        return result.data if result.data else []
+        response = query.execute()
+        return response.data if response.data else []
     except Exception as e:
-        st.error(f"❌ 데이터 로드 실패 ({table_name}): {str(e)}")
+        st.error(f"데이터 로드 실패 ({table}): {e}")
         return []
 
-# 데이터 삽입 함수
-def insert_data_to_supabase(table_name, data):
-    """Supabase에 데이터 삽입"""
+def save_data_to_supabase(table, data):
+    """Supabase에 데이터 저장"""
+    if not supabase:
+        return False
+    
     try:
-        result = supabase.table(table_name).insert(data).execute()
-        return result.data[0] if result.data else None
-    except Exception as e:
-        st.error(f"❌ 데이터 삽입 실패 ({table_name}): {str(e)}")
-        return None
-
-# 데이터 업데이트 함수
-def update_data_in_supabase(table_name, data, id_field="id", id_value=None):
-    """Supabase에서 데이터 업데이트"""
-    try:
-        result = supabase.table(table_name).update(data).eq(id_field, id_value).execute()
-        return result.data[0] if result.data else None
-    except Exception as e:
-        st.error(f"❌ 데이터 업데이트 실패 ({table_name}): {str(e)}")
-        return None
-
-# 데이터 삭제 함수
-def delete_data_from_supabase(table_name, id_field="id", id_value=None):
-    """Supabase에서 데이터 삭제"""
-    try:
-        result = supabase.table(table_name).delete().eq(id_field, id_value).execute()
+        response = supabase.table(table).insert(data).execute()
         return True
     except Exception as e:
-        st.error(f"❌ 데이터 삭제 실패 ({table_name}): {str(e)}")
+        st.error(f"데이터 저장 실패 ({table}): {e}")
         return False
 
-# CSV 다운로드 함수
-def download_csv(data, filename):
-    """CSV 파일 다운로드 버튼 생성"""
-    if data:
-        df = pd.DataFrame(data)
-        csv = df.to_csv(index=False, encoding='utf-8-sig')
-        st.download_button(
-            label="📁 CSV 다운로드",
-            data=csv,
-            file_name=f"{filename}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
-            mime="text/csv"
-        )
-
-# CSV 업로드 처리 함수
-def process_csv_upload(uploaded_file, required_columns):
-    """CSV 파일 업로드 처리"""
+def update_data_in_supabase(table, data, id_field="id"):
+    """Supabase에서 데이터 업데이트"""
+    if not supabase:
+        return False
+    
     try:
-        df = pd.read_csv(uploaded_file, encoding='utf-8')
-        
-        # 필수 컬럼 확인
-        missing_columns = [col for col in required_columns if col not in df.columns]
-        if missing_columns:
-            st.error(f"필수 컬럼이 누락되었습니다: {', '.join(missing_columns)}")
-            return None
-            
-        return df.to_dict('records')
+        item_id = data.pop(id_field)
+        response = supabase.table(table).update(data).eq(id_field, item_id).execute()
+        return True
     except Exception as e:
-        st.error(f"CSV 파일 처리 중 오류가 발생했습니다: {str(e)}")
-        return None
+        st.error(f"데이터 업데이트 실패 ({table}): {e}")
+        return False
 
-# 로그인 시스템
-def login_system():
-    """로그인 시스템"""
-    if 'logged_in' not in st.session_state:
-        st.session_state.logged_in = False
-        st.session_state.current_user = None
-
-    if not st.session_state.logged_in:
-        st.markdown("""
-        <div class="main-header">
-            <h1>🏢 YMV 관리 시스템</h1>
-            <p>베트남 소재 한국 기업을 위한 통합 비즈니스 관리 시스템</p>
-            <p>🔗 <strong>Supabase 연결 버전</strong></p>
-        </div>
-        """, unsafe_allow_html=True)
-        
-        # 연결 상태 확인
-        if not check_connection():
-            st.error("❌ 데이터베이스에 연결할 수 없습니다.")
-            return False
-        
-        col1, col2, col3 = st.columns([1, 2, 1])
-        with col2:
-            st.subheader("🔐 로그인")
-            
-            # 직원 데이터 로드
-            employees = load_data_from_supabase('employees', 'id, username, password, name, department, position, email, is_active, is_admin')
-            
-            username = st.text_input("사용자명")
-            password = st.text_input("비밀번호", type="password")
-            
-            if st.button("로그인", use_container_width=True):
-                # 사용자 인증
-                user = None
-                for emp in employees:
-                    if emp.get('username') == username and emp.get('password') == password:
-                        if emp.get('is_active', True):
-                            user = emp
-                            break
-                
-                if user:
-                    st.session_state.logged_in = True
-                    st.session_state.current_user = user
-                    st.cache_data.clear()  # 캐시 클리어
-                    st.rerun()
-                else:
-                    st.error("잘못된 사용자명 또는 비밀번호입니다.")
-        
+def delete_data_from_supabase(table, item_id, id_field="id"):
+    """Supabase에서 데이터 삭제"""
+    if not supabase:
         return False
     
-    return True
+    try:
+        response = supabase.table(table).delete().eq(id_field, item_id).execute()
+        return True
+    except Exception as e:
+        st.error(f"데이터 삭제 실패 ({table}): {e}")
+        return False
 
-# 메인 대시보드
-def dashboard():
-    """대시보드 페이지"""
-    st.markdown("""
-    <div class="main-header">
-        <h1>🏢 YMV 관리 시스템 대시보드</h1>
-        <p>🔗 Supabase 연결 | 현재 시스템 현황을 한눈에 확인하세요</p>
+def get_current_user():
+    """현재 로그인한 사용자 정보 반환"""
+    if 'user_id' in st.session_state:
+        users = load_data_from_supabase('employees', '*', {'id': st.session_state.user_id})
+        return users[0] if users else None
+    return None
+
+def get_approval_status_info(status):
+    """승인 상태별 정보 반환"""
+    status_info = {
+        '대기중': {'emoji': '📝', 'color': '#6c757d', 'description': '직원이 작성한 초기 상태'},
+        'CEO승인대기': {'emoji': '👔', 'color': '#ff9800', 'description': 'CEO 승인 필요'},
+        '승인됨': {'emoji': '✅', 'color': '#28a745', 'description': 'CEO 승인 완료'},
+        '지급완료': {'emoji': '💰', 'color': '#17a2b8', 'description': '실제 지급 완료'},
+        '인보이스 확인완료': {'emoji': '📋', 'color': '#007bff', 'description': '최종 인보이스 확인 완료'},
+        '반려됨': {'emoji': '❌', 'color': '#dc3545', 'description': 'CEO가 반려'}
+    }
+    return status_info.get(status, {'emoji': '❓', 'color': '#6c757d', 'description': '알 수 없음'})
+
+def calculate_expense_statistics(expenses):
+    """지출 통계 계산"""
+    if not expenses:
+        return {}
+    
+    # 현재 날짜
+    now = datetime.now()
+    current_month = now.strftime('%Y-%m')
+    current_year = str(now.year)
+    
+    stats = {
+        'total_count': len(expenses),
+        'total_amount_usd': 0,
+        'total_amount_vnd': 0,
+        'total_amount_krw': 0,
+        'current_month_amount_usd': 0,
+        'current_year_amount_usd': 0,
+        'by_type': defaultdict(lambda: {'count': 0, 'amount': 0}),
+        'by_status': defaultdict(lambda: {'count': 0, 'amount': 0}),
+        'by_month': defaultdict(lambda: {'count': 0, 'amount_usd': 0, 'amount_vnd': 0, 'amount_krw': 0}),
+        'pending_count': 0,
+        'ceo_approval_waiting': 0,
+        'approved_count': 0,
+        'completed_count': 0,
+        'rejected_count': 0,
+        'invoice_confirmed_count': 0
+    }
+    
+    for expense in expenses:
+        amount = expense.get('amount', 0)
+        currency = expense.get('currency', 'USD')
+        expense_type = expense.get('expense_type', '기타')
+        status = expense.get('status', '대기중')
+        expense_date = expense.get('expense_date', '')
+        
+        # 총 금액 (통화별)
+        if currency == 'USD':
+            stats['total_amount_usd'] += amount
+        elif currency == 'VND':
+            stats['total_amount_vnd'] += amount
+        elif currency == 'KRW':
+            stats['total_amount_krw'] += amount
+        
+        # 월별/연도별 통계
+        if expense_date:
+            try:
+                expense_month = expense_date[:7]  # YYYY-MM
+                expense_year = expense_date[:4]   # YYYY
+                
+                if currency == 'USD':
+                    stats['by_month'][expense_month]['amount_usd'] += amount
+                elif currency == 'VND':
+                    stats['by_month'][expense_month]['amount_vnd'] += amount
+                elif currency == 'KRW':
+                    stats['by_month'][expense_month]['amount_krw'] += amount
+                
+                stats['by_month'][expense_month]['count'] += 1
+                
+                # 현재 월/연도 통계
+                if expense_month == current_month and currency == 'USD':
+                    stats['current_month_amount_usd'] += amount
+                if expense_year == current_year and currency == 'USD':
+                    stats['current_year_amount_usd'] += amount
+            except:
+                pass
+        
+        # 유형별 통계 (USD 기준)
+        if currency == 'USD':
+            stats['by_type'][expense_type]['count'] += 1
+            stats['by_type'][expense_type]['amount'] += amount
+        
+        # 상태별 통계
+        stats['by_status'][status]['count'] += 1
+        if currency == 'USD':
+            stats['by_status'][status]['amount'] += amount
+        
+        # 상태별 카운트 (CEO 승인 워크플로우)
+        if status == '대기중':
+            stats['pending_count'] += 1
+        elif status == 'CEO승인대기':
+            stats['ceo_approval_waiting'] += 1
+        elif status == '승인됨':
+            stats['approved_count'] += 1
+        elif status == '지급완료':
+            stats['completed_count'] += 1
+        elif status == '인보이스 확인완료':
+            stats['invoice_confirmed_count'] += 1
+        elif status == '반려됨':
+            stats['rejected_count'] += 1
+    
+    return stats
+
+def create_csv_download(expenses, employees):
+    """CSV 다운로드 데이터 생성 - 한글 깨짐 완전 해결"""
+    if not expenses:
+        return None
+    
+    employee_dict = {emp['id']: emp['name'] for emp in employees}
+    
+    # CSV용 데이터 가공
+    csv_data = []
+    for expense in expenses:
+        csv_data.append({
+            '지출일': expense.get('expense_date', ''),
+            '지출유형': expense.get('expense_type', ''),
+            '금액': expense.get('amount', 0),
+            '통화': expense.get('currency', ''),
+            '결제방법': expense.get('payment_method', ''),
+            '거래처': expense.get('vendor', ''),
+            '사업목적': expense.get('purpose', ''),
+            '지출내역': expense.get('description', ''),
+            '상태': expense.get('status', ''),
+            '요청자': employee_dict.get(expense.get('requester'), 'N/A'),
+            '등록일': expense.get('created_at', '')[:10]
+        })
+    
+    # DataFrame 생성
+    df = pd.DataFrame(csv_data)
+    
+    # CSV 생성 (BOM 포함)
+    output = io.StringIO()
+    df.to_csv(output, index=False, encoding='utf-8')
+    csv_string = output.getvalue()
+    
+    # BOM 추가
+    csv_bytes = '\ufeff' + csv_string
+    
+    return csv_bytes.encode('utf-8')
+
+def render_print_form(expense):
+    """프린트 가능한 지출 요청서 양식"""
+    employee_dict = {emp['id']: emp['name'] for emp in load_data_from_supabase('employees')}
+    requester_name = employee_dict.get(expense.get('requester'), 'N/A')
+    
+    status_info = get_approval_status_info(expense.get('status', '대기중'))
+    
+    print_html = f"""
+    <div class="print-form" id="print-form-{expense.get('id')}">
+        <div class="print-header">
+            <h1>YMV 지출 요청서</h1>
+            <p>요청번호: EXP-{expense.get('id'):04d} | 작성일: {expense.get('created_at', '')[:10]}</p>
+        </div>
+        
+        <div class="print-content">
+            <table class="print-table">
+                <tr>
+                    <th width="20%">요청자</th>
+                    <td width="30%">{requester_name}</td>
+                    <th width="20%">지출일</th>
+                    <td width="30%">{expense.get('expense_date', 'N/A')}</td>
+                </tr>
+                <tr>
+                    <th>지출유형</th>
+                    <td>{expense.get('expense_type', 'N/A')}</td>
+                    <th>금액</th>
+                    <td>{expense.get('amount', 0):,.2f} {expense.get('currency', 'USD')}</td>
+                </tr>
+                <tr>
+                    <th>결제방법</th>
+                    <td>{expense.get('payment_method', 'N/A')}</td>
+                    <th>거래처</th>
+                    <td>{expense.get('vendor', 'N/A')}</td>
+                </tr>
+                <tr>
+                    <th>상태</th>
+                    <td colspan="3">{status_info['emoji']} {expense.get('status', 'N/A')}</td>
+                </tr>
+            </table>
+            
+            <div style="margin: 1rem 0;">
+                <strong>사업 목적:</strong><br>
+                {expense.get('purpose', 'N/A')}
+            </div>
+            
+            <div style="margin: 1rem 0;">
+                <strong>지출 내역:</strong><br>
+                {expense.get('description', 'N/A')}
+            </div>
+            
+            <div class="print-signature">
+                <div>
+                    <p>요청자 서명</p>
+                    <p>_________________</p>
+                    <p>{requester_name}</p>
+                </div>
+                <div>
+                    <p>CEO 승인</p>
+                    <p>_________________</p>
+                    <p>날짜: __________</p>
+                </div>
+            </div>
+        </div>
     </div>
-    """, unsafe_allow_html=True)
+    """
     
-    # 사용자 정보 표시
-    user = st.session_state.current_user
-    col1, col2 = st.columns([3, 1])
-    with col1:
-        st.write(f"👋 안녕하세요, **{user['name']}**님! ({user['department']} - {user['position']})")
+    st.markdown(print_html, unsafe_allow_html=True)
+    
+    # 프린트 버튼
+    if st.button(f"🖨️ 프린트", key=f"print_{expense.get('id')}"):
+        st.markdown("""
+        <script>
+        setTimeout(function() {
+            window.print();
+        }, 100);
+        </script>
+        """, unsafe_allow_html=True)
+        st.success("프린트 창이 열렸습니다. 인쇄를 완료해주세요.")
+
+# 인증 함수들
+def login_user(username, password):
+    """사용자 로그인"""
+    employees = load_data_from_supabase('employees')
+    for emp in employees:
+        if emp['username'] == username and emp['password'] == password and emp['is_active']:
+            st.session_state.user_id = emp['id']
+            st.session_state.username = emp['username']
+            st.session_state.is_admin = emp['is_admin']
+            st.session_state.logged_in = True
+            return True
+    return False
+
+def logout_user():
+    """사용자 로그아웃"""
+    for key in ['user_id', 'username', 'is_admin', 'logged_in']:
+        if key in st.session_state:
+            del st.session_state[key]
+
+# 로그인 페이지
+def show_login_page():
+    """로그인 페이지 표시"""
+    st.markdown('<div class="main-header"><h1>🏢 YMV 관리 프로그램 v4.0</h1><p>베트남 소재 한국 기업을 위한 통합 비즈니스 관리 시스템</p></div>', unsafe_allow_html=True)
+    
+    col1, col2, col3 = st.columns([1, 2, 1])
     with col2:
-        if st.button("🚪 로그아웃"):
-            st.session_state.logged_in = False
-            st.session_state.current_user = None
-            st.cache_data.clear()
-            st.rerun()
+        with st.form("login_form"):
+            st.subheader("🔐 로그인")
+            username = st.text_input("사용자명", placeholder="사용자명을 입력하세요")
+            password = st.text_input("비밀번호", type="password", placeholder="비밀번호를 입력하세요")
+            
+            if st.form_submit_button("로그인", use_container_width=True):
+                if username and password:
+                    if login_user(username, password):
+                        st.success("로그인 성공!")
+                        st.rerun()
+                    else:
+                        st.error("로그인 정보가 올바르지 않습니다.")
+                else:
+                    st.error("사용자명과 비밀번호를 입력해주세요.")
+        
+        with st.expander("💡 기본 계정 정보"):
+            st.info("""
+            **기본 관리자 계정:**
+            - 사용자명: Master
+            - 비밀번호: 1023
+            
+            **v4.0 새로운 기능:**
+            - 🏷️ 제품 코드 관리 시스템
+            - 🌍 다국어 제품명 지원 (영어/베트남어)
+            - 📋 다국어 견적서 출력
+            - 👔 CEO 승인 워크플로우
+            """)
+
+# 대시보드
+def show_dashboard():
+    """대시보드 페이지"""
+    user = get_current_user()
+    if not user:
+        st.error("사용자 정보를 불러올 수 없습니다.")
+        return
     
-    # 통계 카드
+    st.markdown(f'<div class="main-header"><h1>🏠 대시보드</h1><p>환영합니다, {user["name"]}님!</p></div>', unsafe_allow_html=True)
+    
+    # 통계 정보 로드
+    purchases = load_data_from_supabase('purchases')
+    expenses = load_data_from_supabase('expenses')
+    quotations = load_data_from_supabase('quotations')
+    customers = load_data_from_supabase('customers')
+    products = load_data_from_supabase('products')
+    employees = load_data_from_supabase('employees')
+    product_codes = load_data_from_supabase('product_codes', '*', {'is_active': True})
+    
+    # 지출 통계 계산
+    expense_stats = calculate_expense_statistics(expenses)
+    
+    # 상단 통계 카드
     col1, col2, col3, col4 = st.columns(4)
     
     with col1:
-        purchases = load_data_from_supabase('purchases', 'id')
-        st.metric("📦 구매품", len(purchases))
+        st.markdown(f"""
+        <div class="stats-card">
+            <h3>📦 구매품</h3>
+            <h2>{len(purchases)}건</h2>
+            <p>대기중: {len([p for p in purchases if p.get('status') == '대기중'])}건</p>
+        </div>
+        """, unsafe_allow_html=True)
     
     with col2:
-        expenses = load_data_from_supabase('expenses', 'id')
-        st.metric("💰 지출요청", len(expenses))
+        st.markdown(f"""
+        <div class="stats-card">
+            <h3>💰 지출요청</h3>
+            <h2>{len(expenses)}건</h2>
+            <p>CEO 승인대기: {expense_stats.get('ceo_approval_waiting', 0)}건</p>
+        </div>
+        """, unsafe_allow_html=True)
     
     with col3:
-        quotations = load_data_from_supabase('quotations', 'id')
-        st.metric("📋 견적서", len(quotations))
+        st.markdown(f"""
+        <div class="stats-card">
+            <h3>📋 견적서</h3>
+            <h2>{len(quotations)}건</h2>
+            <p>발송됨: {len([q for q in quotations if q.get('status') == '발송됨'])}건</p>
+        </div>
+        """, unsafe_allow_html=True)
     
     with col4:
-        customers = load_data_from_supabase('customers', 'id')
-        st.metric("👥 고객", len(customers))
+        st.markdown(f"""
+        <div class="stats-card">
+            <h3>🏷️ 제품코드</h3>
+            <h2>{len(product_codes)}개</h2>
+            <p>v4.0 신규 기능</p>
+        </div>
+        """, unsafe_allow_html=True)
     
-    st.divider()
+    # CEO 승인 대기 알림 (관리자만)
+    if user.get('is_admin') and expense_stats.get('ceo_approval_waiting', 0) > 0:
+        st.markdown(f"""
+        <div class="ceo-approval-card">
+            <h3>👔 CEO 승인 필요</h3>
+            <h2>{expense_stats.get('ceo_approval_waiting', 0)}건</h2>
+            <p>승인이 필요한 지출 요청서가 있습니다.</p>
+        </div>
+        """, unsafe_allow_html=True)
     
-    # 최근 활동
-    col1, col2 = st.columns(2)
+    # v4.0 새 기능 소개
+    st.markdown("### 🆕 v4.0 새로운 기능")
+    col1, col2, col3 = st.columns(3)
     
     with col1:
-        st.subheader("📦 최근 구매품")
-        recent_purchases = load_data_from_supabase('purchases', '*')
-        if recent_purchases:
-            # 최신 5개만 표시
-            recent_purchases = sorted(recent_purchases, key=lambda x: x.get('created_at', ''), reverse=True)[:5]
-            for item in recent_purchases:
-                with st.expander(f"{item.get('item_name', 'N/A')} - {item.get('status', 'N/A')}"):
-                    st.write(f"**카테고리**: {item.get('category')}")
-                    st.write(f"**수량**: {item.get('quantity')} {item.get('unit')}")
-                    st.write(f"**금액**: ${item.get('total_price', 0):.2f}")
-        else:
-            st.info("등록된 구매품이 없습니다.")
+        st.info("""
+        **🏷️ 제품 코드 관리**
+        - 7단계 체계적 제품 코드 시스템
+        - HR-01-02-ST-KR-00 형식
+        - 카테고리 기반 자동 생성
+        """)
     
     with col2:
-        st.subheader("📋 최근 견적서")
-        recent_quotes = load_data_from_supabase('quotations', '*')
-        if recent_quotes:
-            # 최신 5개만 표시
-            recent_quotes = sorted(recent_quotes, key=lambda x: x.get('created_at', ''), reverse=True)[:5]
-            for quote in recent_quotes:
-                with st.expander(f"{quote.get('customer_name', 'N/A')} - {quote.get('status', 'N/A')}"):
-                    st.write(f"**회사**: {quote.get('company')}")
-                    st.write(f"**견적일**: {quote.get('quote_date')}")
-                    st.write(f"**총액**: {quote.get('currency', 'USD')} {quote.get('total_amount', 0):.2f}")
-        else:
-            st.info("등록된 견적서가 없습니다.")
-
-# 구매품 관리
-def purchase_management():
-    """구매품 관리 페이지"""
-    st.header("📦 구매품 관리")
+        st.info("""
+        **🌍 다국어 제품명**
+        - 영어/베트남어 제품명 지원
+        - 현지 고객 맞춤 견적서
+        - 언어별 우선순위 표시
+        """)
     
+    with col3:
+        st.info("""
+        **👔 CEO 승인 워크플로우**
+        - 4단계 승인 프로세스
+        - 프린트 가능한 공식 양식
+        - 승인 이력 추적
+        """)
+
+# 지출 요청서 관리
+def show_expense_management():
+    """지출 요청서 관리 페이지"""
+    st.markdown('<div class="main-header"><h1>💰 지출 요청서 관리</h1></div>', unsafe_allow_html=True)
+    
+    # 탭 구성
+    tab1, tab2, tab3, tab4 = st.tabs(["📝 지출 요청서 작성", "📋 지출 요청서 목록", "📊 비용 통계", "👔 CEO 승인"])
+    
+    with tab1:
+        st.subheader("새 지출 요청서 작성")
+        
+        with st.form("expense_form"):
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                expense_type = st.selectbox("지출 유형", [
+                    "출장비", "사무용품", "접대비", "교육비", "교통비", 
+                    "식비", "통신비", "장비구입", "유지보수", "마케팅", "기타"
+                ])
+                
+                expense_date = st.date_input("지출 예정일", value=datetime.now().date())
+                
+                amount = st.number_input("금액", min_value=0.0, format="%.2f")
+                
+                currency = st.selectbox("통화", ["USD", "VND", "KRW"])
+            
+            with col2:
+                payment_method = st.selectbox("결제 방법", [
+                    "현금", "법인카드", "계좌이체", "수표"
+                ])
+                
+                vendor = st.text_input("거래처/공급업체")
+                
+                purpose = st.text_area("사업 목적", placeholder="지출의 목적과 사유를 입력하세요")
+                
+                # 일반 직원은 '대기중'만 선택 가능, 관리자는 모든 상태 선택 가능
+                user = get_current_user()
+                if user and user.get('is_admin'):
+                    status = st.selectbox("상태", ["대기중", "CEO승인대기", "승인됨", "지급완료", "반려됨", "인보이스 확인완료"])
+                else:
+                    status = st.selectbox("상태", ["대기중", "CEO승인대기"])
+            
+            description = st.text_area("지출 내역", placeholder="상세한 지출 내역을 입력하세요")
+            
+            if st.form_submit_button("지출 요청서 등록", use_container_width=True):
+                if expense_type and amount > 0 and description:
+                    user = get_current_user()
+                    if user:
+                        new_expense = {
+                            'expense_type': expense_type,
+                            'expense_date': expense_date.isoformat(),
+                            'amount': amount,
+                            'currency': currency,
+                            'payment_method': payment_method,
+                            'vendor': vendor,
+                            'purpose': purpose,
+                            'description': description,
+                            'status': status,
+                            'requester': user['id'],
+                            'created_at': datetime.now().isoformat()
+                        }
+                        
+                        if save_data_to_supabase('expenses', new_expense):
+                            st.success("✅ 지출 요청서가 등록되었습니다!")
+                            st.rerun()
+                        else:
+                            st.error("❌ 지출 요청서 등록에 실패했습니다.")
+                    else:
+                        st.error("❌ 사용자 정보를 확인할 수 없습니다.")
+                else:
+                    st.error("❌ 필수 항목을 입력해주세요.")
+    
+    with tab2:
+        st.subheader("지출 요청서 목록")
+        
+        # 필터링 및 정렬 옵션
+        col1, col2, col3, col4 = st.columns([2, 2, 2, 1])
+        
+        with col1:
+            filter_type = st.selectbox("유형 필터", 
+                ["전체"] + ["출장비", "사무용품", "접대비", "교육비", "교통비", 
+                "식비", "통신비", "장비구입", "유지보수", "마케팅", "기타"],
+                key=generate_unique_key("expense_type"))
+        
+        with col2:
+            filter_status = st.selectbox("상태 필터", 
+                ["전체"] + ["대기중", "CEO승인대기", "승인됨", "지급완료", "반려됨", "인보이스 확인완료"],
+                key=generate_unique_key("expense_status"))
+        
+        with col3:
+            sort_order = st.selectbox("정렬 기준", 
+                ["지출일 최신순", "지출일 오래된순", "금액 높은순", "금액 낮은순"],
+                key=generate_unique_key("expense_sort"))
+        
+        with col4:
+            # CSV 다운로드 버튼
+            expenses_for_csv = load_data_from_supabase('expenses')
+            employees_for_csv = load_data_from_supabase('employees')
+            
+            if expenses_for_csv:
+                csv_data = create_csv_download(expenses_for_csv, employees_for_csv)
+                st.download_button(
+                    label="📁 CSV 다운로드",
+                    data=csv_data,
+                    file_name=f"expenses_{datetime.now().strftime('%Y%m%d')}.csv",
+                    mime="text/csv",
+                    key=generate_unique_key("download_expenses")
+                )
+        
+        # 데이터 로드 및 처리
+        expenses = load_data_from_supabase('expenses')
+        employees = load_data_from_supabase('employees')
+        
+        if not expenses:
+            st.info("등록된 지출 요청서가 없습니다.")
+            return
+        
+        # 직원 정보 매핑
+        employee_dict = {emp['id']: emp['name'] for emp in employees}
+        
+        # 데이터 가공
+        for expense in expenses:
+            expense['requester_name'] = employee_dict.get(expense.get('requester'), 'N/A')
+            # 날짜 형식 처리
+            expense_date = expense.get('expense_date', '')
+            if expense_date:
+                try:
+                    expense['expense_date_formatted'] = datetime.fromisoformat(expense_date.replace('Z', '+00:00')).strftime('%Y-%m-%d')
+                    expense['month_key'] = expense['expense_date_formatted'][:7]  # YYYY-MM
+                except:
+                    expense['expense_date_formatted'] = expense_date[:10] if len(expense_date) >= 10 else expense_date
+                    expense['month_key'] = expense_date[:7] if len(expense_date) >= 7 else 'N/A'
+            else:
+                expense['expense_date_formatted'] = 'N/A'
+                expense['month_key'] = 'N/A'
+        
+        # 필터링
+        filtered_expenses = expenses
+        
+        if filter_type != "전체":
+            filtered_expenses = [e for e in filtered_expenses if e.get('expense_type') == filter_type]
+        
+        if filter_status != "전체":
+            filtered_expenses = [e for e in filtered_expenses if e.get('status') == filter_status]
+        
+        # 정렬
+        if sort_order == "지출일 최신순":
+            filtered_expenses = sorted(filtered_expenses, key=lambda x: x.get('expense_date', ''), reverse=True)
+        elif sort_order == "지출일 오래된순":
+            filtered_expenses = sorted(filtered_expenses, key=lambda x: x.get('expense_date', ''))
+        elif sort_order == "금액 높은순":
+            filtered_expenses = sorted(filtered_expenses, key=lambda x: x.get('amount', 0), reverse=True)
+        elif sort_order == "금액 낮은순":
+            filtered_expenses = sorted(filtered_expenses, key=lambda x: x.get('amount', 0))
+        
+        # 엑셀 형태 테이블로 표시
+        if filtered_expenses:
+            st.markdown('<div class="expense-table">', unsafe_allow_html=True)
+            
+            # 테이블 데이터 준비
+            table_data = []
+            for expense in filtered_expenses:
+                status_info = get_approval_status_info(expense.get('status', '대기중'))
+                
+                table_data.append({
+                    '지출일': expense['expense_date_formatted'],
+                    '유형': expense.get('expense_type', 'N/A'),
+                    '금액': f"{expense.get('amount', 0):,.0f} {expense.get('currency', '')}",
+                    '거래처': expense.get('vendor', 'N/A'),
+                    '결제방법': expense.get('payment_method', 'N/A'),
+                    '상태': f"{status_info['emoji']} {expense.get('status', 'N/A')}",
+                    '요청자': expense['requester_name']
+                })
+            
+            # DataFrame 생성 및 표시
+            df = pd.DataFrame(table_data)
+            
+            st.dataframe(
+                df,
+                use_container_width=True,
+                hide_index=True,
+                column_config={
+                    '지출일': st.column_config.DateColumn("지출일", width="medium"),
+                    '유형': st.column_config.TextColumn("유형", width="medium"),
+                    '금액': st.column_config.TextColumn("금액", width="medium"),
+                    '거래처': st.column_config.TextColumn("거래처", width="medium"),
+                    '결제방법': st.column_config.TextColumn("결제방법", width="medium"),
+                    '상태': st.column_config.TextColumn("상태", width="medium"),
+                    '요청자': st.column_config.TextColumn("요청자", width="small")
+                }
+            )
+            
+            st.markdown('</div>', unsafe_allow_html=True)
+            
+            # 월단위 상세 정보 표시
+            st.markdown("### 📅 월단위 상세 정보")
+            
+            # 월별 그룹핑
+            monthly_expenses = defaultdict(list)
+            for expense in filtered_expenses:
+                month_key = expense['month_key']
+                monthly_expenses[month_key].append(expense)
+            
+            # 월별 정렬 (최신순)
+            sorted_months = sorted(monthly_expenses.keys(), reverse=True)
+            
+            for month in sorted_months:
+                if month == 'N/A':
+                    continue
+                    
+                month_expenses = monthly_expenses[month]
+                month_total_usd = sum(e.get('amount', 0) for e in month_expenses if e.get('currency') == 'USD')
+                month_total_vnd = sum(e.get('amount', 0) for e in month_expenses if e.get('currency') == 'VND')
+                month_total_krw = sum(e.get('amount', 0) for e in month_expenses if e.get('currency') == 'KRW')
+                
+                # 월 이름 변환
+                try:
+                    year, month_num = month.split('-')
+                    month_name = calendar.month_name[int(month_num)]
+                    display_month = f"{year}년 {month_name}"
+                except:
+                    display_month = month
+                
+                with st.expander(f"📅 {display_month} ({len(month_expenses)}건)", expanded=False):
+                    # 월별 요약
+                    col1, col2, col3 = st.columns(3)
+                    with col1:
+                        if month_total_usd > 0:
+                            st.metric("USD 총액", f"${month_total_usd:,.2f}")
+                    with col2:
+                        if month_total_vnd > 0:
+                            st.metric("VND 총액", f"₫{month_total_vnd:,.0f}")
+                    with col3:
+                        if month_total_krw > 0:
+                            st.metric("KRW 총액", f"₩{month_total_krw:,.0f}")
+                    
+                    # 월별 상세 목록
+                    for idx, expense in enumerate(month_expenses):
+                        expense_id = expense.get('id')
+                        status_info = get_approval_status_info(expense.get('status', '대기중'))
+                        
+                        st.markdown(f"""
+                        **{status_info['emoji']} {expense.get('expense_type', 'N/A')}** - {expense['expense_date_formatted']} - {expense.get('amount', 0):,.0f} {expense.get('currency', '')}
+                        """)
+                        
+                        col1, col2, col3 = st.columns([2, 2, 2])
+                        
+                        with col1:
+                            st.write(f"거래처: {expense.get('vendor', 'N/A')}")
+                            st.write(f"결제방법: {expense.get('payment_method', 'N/A')}")
+                        
+                        with col2:
+                            st.write(f"상태: {expense.get('status', 'N/A')}")
+                            st.write(f"요청자: {expense['requester_name']}")
+                        
+                        with col3:
+                            # 액션 버튼들
+                            button_col1, button_col2, button_col3, button_col4 = st.columns(4)
+                            
+                            with button_col1:
+                                if st.button("📝", key=f"edit_btn_{expense_id}_{idx}", help="수정"):
+                                    st.session_state[f"edit_expense_{expense_id}"] = True
+                                    st.rerun()
+                            
+                            with button_col2:
+                                if st.button("🔄", key=f"status_btn_{expense_id}_{idx}", help="상태변경"):
+                                    st.session_state[f"change_status_{expense_id}"] = True
+                                    st.rerun()
+                            
+                            with button_col3:
+                                if st.button("🖨️", key=f"print_btn_{expense_id}_{idx}", help="프린트"):
+                                    st.session_state[f"show_print_{expense_id}"] = True
+                                    st.rerun()
+                            
+                            with button_col4:
+                                if st.button("❌", key=f"delete_btn_{expense_id}_{idx}", help="삭제"):
+                                    if delete_data_from_supabase('expenses', expense_id):
+                                        st.success("✅ 삭제되었습니다!")
+                                        st.rerun()
+                        
+                        # 상세 정보
+                        if expense.get('purpose'):
+                            st.write(f"**사업 목적:** {expense.get('purpose')}")
+                        if expense.get('description'):
+                            st.write(f"**지출 내역:** {expense.get('description')}")
+                        
+                        # 프린트 폼 표시 (조건부)
+                        if st.session_state.get(f"show_print_{expense_id}", False):
+                            st.markdown("---")
+                            st.markdown("### 🖨️ 지출 요청서 출력")
+                            render_print_form(expense)
+                            if st.button("❌ 닫기", key=f"close_print_{expense_id}"):
+                                st.session_state[f"show_print_{expense_id}"] = False
+                                st.rerun()
+                        
+                        # 수정 폼 (조건부 표시)
+                        if st.session_state.get(f"edit_expense_{expense_id}", False):
+                            st.markdown("---")
+                            st.markdown("### ✏️ 지출 요청서 수정")
+                            
+                            with st.form(f"edit_expense_form_{expense_id}"):
+                                edit_col1, edit_col2 = st.columns(2)
+                                
+                                with edit_col1:
+                                    edit_expense_type = st.selectbox("지출 유형", 
+                                        ["출장비", "사무용품", "접대비", "교육비", "교통비", "식비", "통신비", "장비구입", "유지보수", "마케팅", "기타"],
+                                        index=["출장비", "사무용품", "접대비", "교육비", "교통비", "식비", "통신비", "장비구입", "유지보수", "마케팅", "기타"].index(expense.get('expense_type', '기타')))
+                                    
+                                    try:
+                                        edit_expense_date = st.date_input("지출 예정일", value=datetime.fromisoformat(expense.get('expense_date', datetime.now().isoformat())).date())
+                                    except:
+                                        edit_expense_date = st.date_input("지출 예정일", value=datetime.now().date())
+                                    
+                                    edit_amount = st.number_input("금액", value=expense.get('amount', 0.0), format="%.2f")
+                                    edit_currency = st.selectbox("통화", ["USD", "VND", "KRW"], index=["USD", "VND", "KRW"].index(expense.get('currency', 'USD')))
+                                
+                                with edit_col2:
+                                    edit_payment_method = st.selectbox("결제 방법", 
+                                        ["현금", "법인카드", "계좌이체", "수표"],
+                                        index=["현금", "법인카드", "계좌이체", "수표"].index(expense.get('payment_method', '현금')))
+                                    
+                                    edit_vendor = st.text_input("거래처/공급업체", value=expense.get('vendor', ''))
+                                    edit_purpose = st.text_area("사업 목적", value=expense.get('purpose', ''))
+                                    
+                                    user = get_current_user()
+                                    if user and user.get('is_admin'):
+                                        edit_status = st.selectbox("상태", 
+                                            ["대기중", "CEO승인대기", "승인됨", "지급완료", "반려됨", "인보이스 확인완료"],
+                                            index=["대기중", "CEO승인대기", "승인됨", "지급완료", "반려됨", "인보이스 확인완료"].index(expense.get('status', '대기중')))
+                                    else:
+                                        edit_status = st.selectbox("상태", 
+                                            ["대기중", "CEO승인대기"],
+                                            index=["대기중", "CEO승인대기"].index(expense.get('status', '대기중')) if expense.get('status') in ["대기중", "CEO승인대기"] else 0)
+                                
+                                edit_description = st.text_area("지출 내역", value=expense.get('description', ''))
+                                
+                                submit_col1, submit_col2 = st.columns(2)
+                                with submit_col1:
+                                    if st.form_submit_button("💾 수정 저장", use_container_width=True):
+                                        update_data = {
+                                            'id': expense_id,
+                                            'expense_type': edit_expense_type,
+                                            'expense_date': edit_expense_date.isoformat(),
+                                            'amount': edit_amount,
+                                            'currency': edit_currency,
+                                            'payment_method': edit_payment_method,
+                                            'vendor': edit_vendor,
+                                            'purpose': edit_purpose,
+                                            'description': edit_description,
+                                            'status': edit_status,
+                                            'updated_at': datetime.now().isoformat()
+                                        }
+                                        
+                                        if update_data_in_supabase('expenses', update_data):
+                                            st.success("✅ 수정이 완료되었습니다!")
+                                            st.session_state[f"edit_expense_{expense_id}"] = False
+                                            st.rerun()
+                                        else:
+                                            st.error("❌ 수정에 실패했습니다.")
+                                
+                                with submit_col2:
+                                    if st.form_submit_button("❌ 취소", use_container_width=True):
+                                        st.session_state[f"edit_expense_{expense_id}"] = False
+                                        st.rerun()
+                        
+                        # 상태 변경 폼 (조건부 표시)
+                        if st.session_state.get(f"change_status_{expense_id}", False):
+                            st.markdown("---")
+                            st.markdown("### 🔄 상태 변경")
+                            
+                            with st.form(f"status_change_form_{expense_id}"):
+                                user = get_current_user()
+                                if user and user.get('is_admin'):
+                                    status_options = ["대기중", "CEO승인대기", "승인됨", "지급완료", "반려됨", "인보이스 확인완료"]
+                                else:
+                                    status_options = ["대기중", "CEO승인대기"]
+                                
+                                new_status = st.selectbox("새 상태 선택", 
+                                    status_options,
+                                    index=status_options.index(expense.get('status', '대기중')) if expense.get('status') in status_options else 0)
+                                
+                                status_col1, status_col2 = st.columns(2)
+                                with status_col1:
+                                    if st.form_submit_button("💾 상태 변경", use_container_width=True):
+                                        status_update_data = {
+                                            'id': expense_id,
+                                            'status': new_status,
+                                            'updated_at': datetime.now().isoformat()
+                                        }
+                                        
+                                        if update_data_in_supabase('expenses', status_update_data):
+                                            st.success(f"✅ 상태가 '{new_status}'으로 변경되었습니다!")
+                                            st.session_state[f"change_status_{expense_id}"] = False
+                                            st.rerun()
+                                        else:
+                                            st.error("❌ 상태 변경에 실패했습니다.")
+                                
+                                with status_col2:
+                                    if st.form_submit_button("❌ 취소", use_container_width=True):
+                                        st.session_state[f"change_status_{expense_id}"] = False
+                                        st.rerun()
+                        
+                        st.markdown("---")
+        else:
+            st.info("조건에 맞는 지출 요청서가 없습니다.")
+    
+    with tab3:
+        st.subheader("📊 비용 사용현황 통계")
+        
+        # 데이터 로드
+        expenses = load_data_from_supabase('expenses')
+        
+        if not expenses:
+            st.info("통계를 표시할 지출 요청서가 없습니다.")
+            return
+        
+        # 통계 계산
+        stats = calculate_expense_statistics(expenses)
+        
+        # 상단 요약 통계
+        st.markdown("### 📈 전체 요약")
+        col1, col2, col3, col4 = st.columns(4)
+        
+        with col1:
+            st.markdown(f"""
+            <div class="expense-stats-card">
+                <h3>📝 총 건수</h3>
+                <h2>{stats['total_count']}건</h2>
+            </div>
+            """, unsafe_allow_html=True)
+        
+        with col2:
+            st.markdown(f"""
+            <div class="expense-stats-card">
+                <h3>💰 USD 총액</h3>
+                <h2>${stats['total_amount_usd']:,.0f}</h2>
+            </div>
+            """, unsafe_allow_html=True)
+        
+        with col3:
+            st.markdown(f"""
+            <div class="expense-stats-card">
+                <h3>💴 VND 총액</h3>
+                <h2>₫{stats['total_amount_vnd']:,.0f}</h2>
+            </div>
+            """, unsafe_allow_html=True)
+        
+        with col4:
+            st.markdown(f"""
+            <div class="expense-stats-card">
+                <h3>💸 KRW 총액</h3>
+                <h2>₩{stats['total_amount_krw']:,.0f}</h2>
+            </div>
+            """, unsafe_allow_html=True)
+        
+        # 승인 워크플로우 현황
+        st.markdown("### 👔 승인 워크플로우 현황")
+        flow_col1, flow_col2, flow_col3, flow_col4, flow_col5, flow_col6 = st.columns(6)
+        
+        with flow_col1:
+            st.markdown(f"""
+            <div class="warning-stats-card">
+                <h4>📝 대기중</h4>
+                <h3>{stats['pending_count']}건</h3>
+            </div>
+            """, unsafe_allow_html=True)
+        
+        with flow_col2:
+            st.markdown(f"""
+            <div class="ceo-approval-card">
+                <h4>👔 CEO승인대기</h4>
+                <h3>{stats['ceo_approval_waiting']}건</h3>
+            </div>
+            """, unsafe_allow_html=True)
+        
+        with flow_col3:
+            st.markdown(f"""
+            <div class="expense-stats-card">
+                <h4>✅ 승인됨</h4>
+                <h3>{stats['approved_count']}건</h3>
+            </div>
+            """, unsafe_allow_html=True)
+        
+        with flow_col4:
+            st.markdown(f"""
+            <div class="expense-stats-card">
+                <h4>💰 지급완료</h4>
+                <h3>{stats['completed_count']}건</h3>
+            </div>
+            """, unsafe_allow_html=True)
+        
+        with flow_col5:
+            st.markdown(f"""
+            <div class="expense-stats-card">
+                <h4>📋 인보이스완료</h4>
+                <h3>{stats['invoice_confirmed_count']}건</h3>
+            </div>
+            """, unsafe_allow_html=True)
+        
+        with flow_col6:
+            st.markdown(f"""
+            <div class="error-message">
+                <h4>❌ 반려됨</h4>
+                <h3>{stats['rejected_count']}건</h3>
+            </div>
+            """, unsafe_allow_html=True)
+        
+        # 유형별 통계
+        st.markdown("### 📊 지출 유형별 통계 (USD)")
+        if stats['by_type']:
+            type_data = []
+            for expense_type, data in stats['by_type'].items():
+                type_data.append({
+                    '지출유형': expense_type,
+                    '건수': data['count'],
+                    '금액': f"${data['amount']:,.2f}"
+                })
+            
+            type_df = pd.DataFrame(type_data)
+            st.dataframe(type_df, use_container_width=True, hide_index=True)
+        
+        # 월별 추이
+        st.markdown("### 📅 월별 지출 추이")
+        if stats['by_month']:
+            month_data = []
+            sorted_months = sorted(stats['by_month'].keys())
+            
+            for month in sorted_months:
+                data = stats['by_month'][month]
+                month_data.append({
+                    '월': month,
+                    '건수': data['count'],
+                    'USD': data['amount_usd'],
+                    'VND': data['amount_vnd'],
+                    'KRW': data['amount_krw']
+                })
+            
+            month_df = pd.DataFrame(month_data)
+            st.dataframe(month_df, use_container_width=True, hide_index=True)
+            
+            # 차트로 표시
+            if len(month_data) > 0:
+                st.markdown("### 📈 월별 USD 지출 차트")
+                st.line_chart(month_df.set_index('월')['USD'])
+    
+    with tab4:
+        st.subheader("👔 CEO 승인 관리")
+        
+        user = get_current_user()
+        if not user or not user.get('is_admin'):
+            st.warning("CEO 승인 기능은 관리자만 사용할 수 있습니다.")
+            return
+        
+        # CEO 승인 대기 목록
+        expenses = load_data_from_supabase('expenses')
+        employees = load_data_from_supabase('employees')
+        employee_dict = {emp['id']: emp['name'] for emp in employees}
+        
+        # CEO 승인 대기 건만 필터링
+        pending_expenses = [e for e in expenses if e.get('status') == 'CEO승인대기']
+        
+        if not pending_expenses:
+            st.info("CEO 승인 대기 중인 지출 요청서가 없습니다.")
+            return
+        
+        st.markdown(f"### 📋 승인 대기 목록 ({len(pending_expenses)}건)")
+        
+        for idx, expense in enumerate(pending_expenses):
+            expense_id = expense.get('id')
+            requester_name = employee_dict.get(expense.get('requester'), 'N/A')
+            
+            with st.expander(f"👔 EXP-{expense_id:04d} - {expense.get('expense_type', 'N/A')} - {expense.get('amount', 0):,.0f} {expense.get('currency', 'USD')}"):
+                col1, col2 = st.columns([3, 1])
+                
+                with col1:
+                    # 지출 요청서 정보
+                    st.write(f"**요청자:** {requester_name}")
+                    st.write(f"**지출일:** {expense.get('expense_date', 'N/A')}")
+                    st.write(f"**지출유형:** {expense.get('expense_type', 'N/A')}")
+                    st.write(f"**금액:** {expense.get('amount', 0):,.2f} {expense.get('currency', 'USD')}")
+                    st.write(f"**거래처:** {expense.get('vendor', 'N/A')}")
+                    st.write(f"**결제방법:** {expense.get('payment_method', 'N/A')}")
+                    
+                    if expense.get('purpose'):
+                        st.write(f"**사업목적:** {expense.get('purpose')}")
+                    if expense.get('description'):
+                        st.write(f"**지출내역:** {expense.get('description')}")
+                
+                with col2:
+                    st.markdown("**CEO 승인 결정**")
+                    
+                    # 승인 버튼
+                    if st.button("✅ 승인", key=f"approve_{expense_id}_{idx}", use_container_width=True):
+                        status_update = {
+                            'id': expense_id,
+                            'status': '승인됨',
+                            'updated_at': datetime.now().isoformat()
+                        }
+                        
+                        if update_data_in_supabase('expenses', status_update):
+                            st.success("✅ 승인이 완료되었습니다!")
+                            st.rerun()
+                        else:
+                            st.error("❌ 승인 처리에 실패했습니다.")
+                    
+                    # 반려 버튼
+                    if st.button("❌ 반려", key=f"reject_{expense_id}_{idx}", use_container_width=True):
+                        status_update = {
+                            'id': expense_id,
+                            'status': '반려됨',
+                            'updated_at': datetime.now().isoformat()
+                        }
+                        
+                        if update_data_in_supabase('expenses', status_update):
+                            st.success("❌ 반려 처리가 완료되었습니다!")
+                            st.rerun()
+                        else:
+                            st.error("❌ 반려 처리에 실패했습니다.")
+                    
+                    # 프린트 버튼
+                    if st.button("🖨️ 출력", key=f"print_approval_{expense_id}_{idx}", use_container_width=True):
+                        st.session_state[f"show_approval_print_{expense_id}"] = True
+                        st.rerun()
+                
+                # 승인용 프린트 폼 (조건부)
+                if st.session_state.get(f"show_approval_print_{expense_id}", False):
+                    st.markdown("---")
+                    st.markdown("### 🖨️ CEO 승인용 지출 요청서")
+                    render_print_form(expense)
+                    if st.button("❌ 닫기", key=f"close_approval_print_{expense_id}"):
+                        st.session_state[f"show_approval_print_{expense_id}"] = False
+                        st.rerun()
+
+# 구매품 관리 (기존과 동일)
+def show_purchase_management():
+    """구매품 관리 페이지"""
+    st.markdown('<div class="main-header"><h1>📦 구매품 관리</h1></div>', unsafe_allow_html=True)
+    
+    # 탭 구성
     tab1, tab2 = st.tabs(["📝 구매품 등록", "📋 구매품 목록"])
     
     with tab1:
         st.subheader("새 구매품 등록")
         
-        col1, col2 = st.columns(2)
-        with col1:
-            category = st.selectbox("카테고리", ["사무용품", "판매제품", "핫런너", "기타"])
-            item_name = st.text_input("품목명")
-            quantity = st.number_input("수량", min_value=1, value=1)
-            unit = st.text_input("단위", value="개")
-        
-        with col2:
-            unit_price = st.number_input("단가 (USD)", min_value=0.0, format="%.2f")
-            supplier = st.text_input("공급업체")
-            urgency = st.selectbox("긴급도", ["보통", "긴급", "매우긴급"])
-            notes = st.text_area("비고")
-        
-        if st.button("구매품 등록", use_container_width=True):
-            if item_name and supplier:
-                new_purchase = {
-                    'category': category,
-                    'item_name': item_name,
-                    'quantity': quantity,
-                    'unit': unit,
-                    'unit_price': unit_price,
-                    'supplier': supplier,
-                    'request_date': date.today().isoformat(),
-                    'urgency': urgency,
-                    'status': '대기중',
-                    'notes': notes,
-                    'requester': st.session_state.current_user['id']
-                }
-                
-                result = insert_data_to_supabase('purchases', new_purchase)
-                if result:
-                    st.success("구매품이 성공적으로 등록되었습니다!")
-                    st.cache_data.clear()
-                    st.rerun()
+        with st.form("purchase_form"):
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                category = st.selectbox("카테고리", 
+                    ["사무용품", "판매제품", "핫런너", "기타"])
+                item_name = st.text_input("품목명")
+                quantity = st.number_input("수량", min_value=1, value=1)
+                unit = st.text_input("단위", value="개")
+            
+            with col2:
+                unit_price = st.number_input("단가 (USD)", min_value=0.0, format="%.2f")
+                supplier = st.text_input("공급업체")
+                urgency = st.selectbox("긴급도", ["보통", "긴급", "매우긴급"])
+                status = st.selectbox("상태", ["대기중", "승인됨", "주문완료", "취소됨"])
+            
+            description = st.text_area("설명")
+            
+            if st.form_submit_button("구매품 등록", use_container_width=True):
+                if item_name and supplier:
+                    user = get_current_user()
+                    if user:
+                        new_purchase = {
+                            'category': category,
+                            'item_name': item_name,
+                            'quantity': quantity,
+                            'unit': unit,
+                            'unit_price': unit_price,
+                            'total_amount': quantity * unit_price,
+                            'supplier': supplier,
+                            'urgency': urgency,
+                            'status': status,
+                            'description': description,
+                            'requester': user['id'],
+                            'created_at': datetime.now().isoformat()
+                        }
+                        
+                        if save_data_to_supabase('purchases', new_purchase):
+                            st.success("✅ 구매품이 등록되었습니다!")
+                            st.rerun()
+                        else:
+                            st.error("❌ 구매품 등록에 실패했습니다.")
+                    else:
+                        st.error("❌ 사용자 정보를 확인할 수 없습니다.")
                 else:
-                    st.error("구매품 등록 중 오류가 발생했습니다.")
-            else:
-                st.error("품목명과 공급업체는 필수 입력 사항입니다.")
+                    st.error("❌ 필수 항목을 입력해주세요.")
     
     with tab2:
         st.subheader("구매품 목록")
         
-        purchases = load_data_from_supabase('purchases_detail', '*')  # 뷰 사용
-        
-        if purchases:
-            # 필터 옵션
-            col1, col2, col3 = st.columns(3)
-            with col1:
-                filter_category = st.selectbox("카테고리 필터", ["전체"] + ["사무용품", "판매제품", "핫런너", "기타"])
-            with col2:
-                filter_status = st.selectbox("상태 필터", ["전체", "대기중", "승인됨", "주문완료", "취소됨"])
-            with col3:
-                download_csv(purchases, "구매품목록")
-            
-            # 필터 적용
-            filtered_purchases = purchases.copy()
-            if filter_category != "전체":
-                filtered_purchases = [p for p in filtered_purchases if p.get('category') == filter_category]
-            if filter_status != "전체":
-                filtered_purchases = [p for p in filtered_purchases if p.get('status') == filter_status]
-            
-            # 구매품 목록 표시
-            for purchase in sorted(filtered_purchases, key=lambda x: x.get('created_at', ''), reverse=True):
-                with st.expander(f"📦 {purchase.get('item_name')} - {purchase.get('status')}"):
-                    col1, col2, col3 = st.columns(3)
-                    
-                    with col1:
-                        st.write(f"**ID**: {purchase.get('id')}")
-                        st.write(f"**카테고리**: {purchase.get('category')}")
-                        st.write(f"**품목명**: {purchase.get('item_name')}")
-                        st.write(f"**공급업체**: {purchase.get('supplier')}")
-                    
-                    with col2:
-                        st.write(f"**수량**: {purchase.get('quantity')} {purchase.get('unit')}")
-                        st.write(f"**단가**: ${purchase.get('unit_price', 0):.2f}")
-                        st.write(f"**총액**: ${purchase.get('total_price', 0):.2f}")
-                        st.write(f"**긴급도**: {purchase.get('urgency')}")
-                    
-                    with col3:
-                        st.write(f"**상태**: {purchase.get('status')}")
-                        st.write(f"**요청일**: {purchase.get('request_date')}")
-                        st.write(f"**요청자**: {purchase.get('requester_name', 'N/A')}")
-                        if purchase.get('notes'):
-                            st.write(f"**비고**: {purchase.get('notes')}")
-                    
-                    # 수정/삭제 버튼
-                    col1, col2, col3 = st.columns(3)
-                    with col1:
-                        if st.button(f"📝 수정", key=f"edit_purchase_{purchase['id']}"):
-                            st.session_state[f"editing_purchase_{purchase['id']}"] = True
-                    with col2:
-                        new_status = st.selectbox("상태 변경", 
-                                                ["대기중", "승인됨", "주문완료", "취소됨"],
-                                                index=["대기중", "승인됨", "주문완료", "취소됨"].index(purchase.get('status', '대기중')),
-                                                key=f"status_{purchase['id']}")
-                        if new_status != purchase.get('status'):
-                            update_data_in_supabase('purchases', {'status': new_status}, 'id', purchase['id'])
-                            st.cache_data.clear()
-                            st.rerun()
-                    with col3:
-                        if st.button(f"❌ 삭제", key=f"delete_purchase_{purchase['id']}"):
-                            if delete_data_from_supabase('purchases', 'id', purchase['id']):
-                                st.success("구매품이 삭제되었습니다.")
-                                st.cache_data.clear()
-                                st.rerun()
-                    
-                    # 수정 폼
-                    if st.session_state.get(f"editing_purchase_{purchase['id']}", False):
-                        st.write("---")
-                        st.write("**수정하기**")
-                        col1, col2 = st.columns(2)
-                        with col1:
-                            new_item_name = st.text_input("품목명", value=purchase.get('item_name', ''), key=f"edit_item_{purchase['id']}")
-                            new_quantity = st.number_input("수량", value=purchase.get('quantity', 1), key=f"edit_qty_{purchase['id']}")
-                            new_unit_price = st.number_input("단가", value=purchase.get('unit_price', 0.0), key=f"edit_price_{purchase['id']}")
-                        with col2:
-                            new_supplier = st.text_input("공급업체", value=purchase.get('supplier', ''), key=f"edit_supplier_{purchase['id']}")
-                            new_urgency = st.selectbox("긴급도", ["보통", "긴급", "매우긴급"], 
-                                                     index=["보통", "긴급", "매우긴급"].index(purchase.get('urgency', '보통')),
-                                                     key=f"edit_urgency_{purchase['id']}")
-                            new_notes = st.text_area("비고", value=purchase.get('notes', ''), key=f"edit_notes_{purchase['id']}")
-                        
-                        col1, col2 = st.columns(2)
-                        with col1:
-                            if st.button("💾 저장", key=f"save_purchase_{purchase['id']}"):
-                                update_data = {
-                                    'item_name': new_item_name,
-                                    'quantity': new_quantity,
-                                    'unit_price': new_unit_price,
-                                    'supplier': new_supplier,
-                                    'urgency': new_urgency,
-                                    'notes': new_notes
-                                }
-                                
-                                if update_data_in_supabase('purchases', update_data, 'id', purchase['id']):
-                                    st.session_state[f"editing_purchase_{purchase['id']}"] = False
-                                    st.success("구매품 정보가 수정되었습니다.")
-                                    st.cache_data.clear()
-                                    st.rerun()
-                        with col2:
-                            if st.button("❌ 취소", key=f"cancel_purchase_{purchase['id']}"):
-                                st.session_state[f"editing_purchase_{purchase['id']}"] = False
-                                st.rerun()
-        else:
-            st.info("등록된 구매품이 없습니다.")
-
-# 지출 요청서 관리
-def expense_management():
-    """지출 요청서 관리 페이지"""
-    st.header("💰 지출 요청서 관리")
-    
-    tab1, tab2 = st.tabs(["📝 지출 요청서 작성", "📋 지출 요청서 목록"])
-    
-    with tab1:
-        st.subheader("새 지출 요청서 작성")
-        
-        col1, col2 = st.columns(2)
+        # 필터링
+        col1, col2, col3 = st.columns([2, 2, 1])
         with col1:
-            expense_type = st.selectbox("지출 유형", 
-                ["출장비", "사무용품", "접대비", "교육비", "교통비", "식비", "통신비", "장비구입", "유지보수", "마케팅", "기타"])
-            amount = st.number_input("금액", min_value=0.0, format="%.2f")
-            currency = st.selectbox("통화", ["USD", "VND", "KRW"])
-            payment_method = st.selectbox("결제 방법", ["현금", "법인카드", "계좌이체", "수표"])
-        
+            filter_category = st.selectbox("카테고리 필터", 
+                ["전체"] + ["사무용품", "판매제품", "핫런너", "기타"],
+                key=generate_unique_key("purchase_category"))
         with col2:
-            expense_date = st.date_input("지출 예정일", value=date.today())
-            department = st.text_input("부서", value=st.session_state.current_user.get('department', ''))
-            urgency = st.selectbox("긴급도", ["보통", "긴급", "매우긴급"])
-            
-        description = st.text_area("지출 내역")
-        business_purpose = st.text_area("사업 목적")
-        
-        if st.button("지출 요청서 작성", use_container_width=True):
-            if description and business_purpose and amount > 0:
-                new_expense = {
-                    'expense_type': expense_type,
-                    'amount': amount,
-                    'currency': currency,
-                    'payment_method': payment_method,
-                    'expense_date': expense_date.isoformat(),
-                    'department': department,
-                    'requester': st.session_state.current_user['id'],
-                    'urgency': urgency,
-                    'description': description,
-                    'business_purpose': business_purpose,
-                    'status': '대기중'
-                }
-                
-                result = insert_data_to_supabase('expenses', new_expense)
-                if result:
-                    st.success("지출 요청서가 성공적으로 작성되었습니다!")
-                    st.cache_data.clear()
-                    st.rerun()
-                else:
-                    st.error("지출 요청서 작성 중 오류가 발생했습니다.")
-            else:
-                st.error("모든 필수 정보를 입력해주세요.")
-    
-    with tab2:
-        st.subheader("지출 요청서 목록")
-        
-        expenses = load_data_from_supabase('expenses_detail', '*')
-        
-        if expenses:
-            # 필터 및 다운로드
-            col1, col2, col3 = st.columns(3)
-            with col1:
-                filter_status = st.selectbox("상태 필터", ["전체", "대기중", "승인됨", "지급완료", "반려됨"])
-            with col2:
-                filter_type = st.selectbox("유형 필터", ["전체"] + ["출장비", "사무용품", "접대비", "교육비", "교통비", "식비", "통신비", "장비구입", "유지보수", "마케팅", "기타"])
-            with col3:
-                download_csv(expenses, "지출요청서목록")
-            
-            # 필터 적용
-            filtered_expenses = expenses.copy()
-            if filter_status != "전체":
-                filtered_expenses = [e for e in filtered_expenses if e.get('status') == filter_status]
-            if filter_type != "전체":
-                filtered_expenses = [e for e in filtered_expenses if e.get('expense_type') == filter_type]
-            
-            # 지출 요청서 목록 표시
-            for expense in sorted(filtered_expenses, key=lambda x: x.get('created_at', ''), reverse=True):
-                with st.expander(f"💰 {expense.get('expense_type')} - {expense.get('currency')} {expense.get('amount', 0):,.2f}"):
-                    col1, col2, col3 = st.columns(3)
-                    
-                    with col1:
-                        st.write(f"**ID**: {expense.get('id')}")
-                        st.write(f"**지출 유형**: {expense.get('expense_type')}")
-                        st.write(f"**금액**: {expense.get('currency')} {expense.get('amount', 0):,.2f}")
-                        st.write(f"**결제 방법**: {expense.get('payment_method')}")
-                    
-                    with col2:
-                        st.write(f"**지출 예정일**: {expense.get('expense_date')}")
-                        st.write(f"**부서**: {expense.get('department')}")
-                        st.write(f"**요청자**: {expense.get('requester_name', 'N/A')}")
-                        st.write(f"**긴급도**: {expense.get('urgency')}")
-                    
-                    with col3:
-                        st.write(f"**상태**: {expense.get('status')}")
-                        st.write(f"**작성일**: {expense.get('created_at', '')[:10]}")
-                    
-                    st.write(f"**지출 내역**: {expense.get('description')}")
-                    st.write(f"**사업 목적**: {expense.get('business_purpose')}")
-                    
-                    # 수정/삭제 버튼
-                    col1, col2, col3 = st.columns(3)
-                    with col2:
-                        new_status = st.selectbox("상태 변경", 
-                                                ["대기중", "승인됨", "지급완료", "반려됨"],
-                                                index=["대기중", "승인됨", "지급완료", "반려됨"].index(expense.get('status', '대기중')),
-                                                key=f"expense_status_{expense['id']}")
-                        if new_status != expense.get('status'):
-                            update_data_in_supabase('expenses', {'status': new_status}, 'id', expense['id'])
-                            st.cache_data.clear()
-                            st.rerun()
-                    with col3:
-                        if st.button(f"❌ 삭제", key=f"delete_expense_{expense['id']}"):
-                            if delete_data_from_supabase('expenses', 'id', expense['id']):
-                                st.success("지출 요청서가 삭제되었습니다.")
-                                st.cache_data.clear()
-                                st.rerun()
-        else:
-            st.info("등록된 지출 요청서가 없습니다.")
-
-# 견적서 관리
-def quotation_management():
-    """견적서 관리 페이지"""
-    st.header("📋 견적서 관리")
-    
-    tab1, tab2 = st.tabs(["📝 견적서 작성", "📋 견적서 목록"])
-    
-    with tab1:
-        st.subheader("새 견적서 작성")
-        
-        # 고객 정보 섹션
-        st.write("### 👥 고객 정보")
-        customers = load_data_from_supabase('customers', '*')
-        
-        col1, col2 = st.columns(2)
-        with col1:
-            if customers:
-                customer_options = ["직접 입력"] + [f"{c['company_name']} ({c['contact_person']})" for c in customers]
-                selected_customer = st.selectbox("기존 고객 선택", customer_options)
-                
-                if selected_customer != "직접 입력":
-                    # 기존 고객 정보 자동 입력
-                    customer_data = customers[customer_options.index(selected_customer) - 1]
-                    customer_name = st.text_input("고객명", value=customer_data['contact_person'])
-                    company = st.text_input("회사명", value=customer_data['company_name'])
-                    email = st.text_input("이메일", value=customer_data.get('email', ''))
-                    phone = st.text_input("연락처", value=customer_data.get('phone', ''))
-                else:
-                    customer_name = st.text_input("고객명")
-                    company = st.text_input("회사명")
-                    email = st.text_input("이메일")
-                    phone = st.text_input("연락처")
-            else:
-                customer_name = st.text_input("고객명")
-                company = st.text_input("회사명")
-                email = st.text_input("이메일")
-                phone = st.text_input("연락처")
-        
-        with col2:
-            quote_date = st.date_input("견적일", value=date.today())
-            valid_until = st.date_input("유효기간")
-            currency = st.selectbox("통화", ["USD", "VND", "KRW"])
-        
-        # 견적 항목 섹션
-        st.write("### 📦 견적 항목")
-        products = load_data_from_supabase('products', '*')
-        
-        col1, col2 = st.columns(2)
-        with col1:
-            if products:
-                product_options = ["직접 입력"] + [f"{p['product_code']} - {p['product_name']}" for p in products]
-                selected_product = st.selectbox("기존 제품 선택", product_options)
-                
-                if selected_product != "직접 입력":
-                    # 기존 제품 정보 자동 입력
-                    product_data = products[product_options.index(selected_product) - 1]
-                    item_name = st.text_input("제품명", value=product_data['product_name'])
-                    
-                    # 환율 적용
-                    exchange_rates = load_data_from_supabase('exchange_rates', '*')
-                    base_price = product_data.get('unit_price', 0)
-                    
-                    if currency == 'VND' and product_data.get('currency') == 'USD':
-                        # USD -> VND 변환
-                        usd_to_vnd = 24000  # 기본값
-                        for rate in exchange_rates:
-                            if rate.get('from_currency') == 'USD' and rate.get('to_currency') == 'VND':
-                                usd_to_vnd = rate.get('rate', 24000)
-                                break
-                        unit_price = st.number_input("단가", value=base_price * usd_to_vnd, format="%.2f")
-                    else:
-                        unit_price = st.number_input("단가", value=base_price, format="%.2f")
-                else:
-                    item_name = st.text_input("제품명")
-                    unit_price = st.number_input("단가", min_value=0.0, format="%.2f")
-            else:
-                item_name = st.text_input("제품명")
-                unit_price = st.number_input("단가", min_value=0.0, format="%.2f")
-        
-        with col2:
-            quantity = st.number_input("수량", min_value=1, value=1)
-            total_amount = quantity * unit_price
-            st.write(f"**총액**: {currency} {total_amount:,.2f}")
-        
-        notes = st.text_area("특이사항")
-        
-        if st.button("견적서 작성", use_container_width=True):
-            if customer_name and company and item_name:
-                new_quotation = {
-                    'customer_name': customer_name,
-                    'company': company,
-                    'contact_person': customer_name,
-                    'email': email,
-                    'phone': phone,
-                    'quote_date': quote_date.isoformat(),
-                    'valid_until': valid_until.isoformat(),
-                    'currency': currency,
-                    'item_name': item_name,
-                    'quantity': quantity,
-                    'unit_price': unit_price,
-                    'notes': notes,
-                    'status': '작성중',
-                    'created_by': st.session_state.current_user['id']
-                }
-                
-                result = insert_data_to_supabase('quotations', new_quotation)
-                if result:
-                    st.success("견적서가 성공적으로 작성되었습니다!")
-                    st.cache_data.clear()
-                    st.rerun()
-                else:
-                    st.error("견적서 작성 중 오류가 발생했습니다.")
-            else:
-                st.error("고객명, 회사명, 제품명은 필수 입력 사항입니다.")
-    
-    with tab2:
-        st.subheader("견적서 목록")
-        
-        quotations = load_data_from_supabase('quotations_detail', '*')
-        
-        if quotations:
-            # 필터 및 다운로드
-            col1, col2, col3 = st.columns(3)
-            with col1:
-                filter_status = st.selectbox("상태 필터", ["전체", "작성중", "발송됨", "승인됨", "거절됨", "만료됨"])
-            with col2:
-                filter_currency = st.selectbox("통화 필터", ["전체", "USD", "VND", "KRW"])
-            with col3:
-                download_csv(quotations, "견적서목록")
-            
-            # 필터 적용
-            filtered_quotations = quotations.copy()
-            if filter_status != "전체":
-                filtered_quotations = [q for q in filtered_quotations if q.get('status') == filter_status]
-            if filter_currency != "전체":
-                filtered_quotations = [q for q in filtered_quotations if q.get('currency') == filter_currency]
-            
-            # 견적서 목록 표시
-            for quotation in sorted(filtered_quotations, key=lambda x: x.get('created_at', ''), reverse=True):
-                with st.expander(f"📋 {quotation.get('company')} - {quotation.get('currency')} {quotation.get('total_amount', 0):,.2f}"):
-                    col1, col2, col3 = st.columns(3)
-                    
-                    with col1:
-                        st.write(f"**견적서 번호**: {quotation.get('id')}")
-                        st.write(f"**고객명**: {quotation.get('customer_name')}")
-                        st.write(f"**회사명**: {quotation.get('company')}")
-                        st.write(f"**연락처**: {quotation.get('phone')}")
-                    
-                    with col2:
-                        st.write(f"**견적일**: {quotation.get('quote_date')}")
-                        st.write(f"**유효기간**: {quotation.get('valid_until')}")
-                        st.write(f"**제품명**: {quotation.get('item_name')}")
-                        st.write(f"**수량**: {quotation.get('quantity')}")
-                    
-                    with col3:
-                        st.write(f"**단가**: {quotation.get('currency')} {quotation.get('unit_price', 0):,.2f}")
-                        st.write(f"**총액**: {quotation.get('currency')} {quotation.get('total_amount', 0):,.2f}")
-                        st.write(f"**상태**: {quotation.get('status')}")
-                        st.write(f"**작성자**: {quotation.get('created_by_name', 'N/A')}")
-                    
-                    if quotation.get('notes'):
-                        st.write(f"**특이사항**: {quotation.get('notes')}")
-                    
-                    # 수정/삭제 버튼
-                    col1, col2, col3 = st.columns(3)
-                    with col2:
-                        new_status = st.selectbox("상태 변경", 
-                                                ["작성중", "발송됨", "승인됨", "거절됨", "만료됨"],
-                                                index=["작성중", "발송됨", "승인됨", "거절됨", "만료됨"].index(quotation.get('status', '작성중')),
-                                                key=f"quote_status_{quotation['id']}")
-                        if new_status != quotation.get('status'):
-                            update_data_in_supabase('quotations', {'status': new_status}, 'id', quotation['id'])
-                            st.cache_data.clear()
-                            st.rerun()
-                    with col3:
-                        if st.button(f"❌ 삭제", key=f"delete_quote_{quotation['id']}"):
-                            if delete_data_from_supabase('quotations', 'id', quotation['id']):
-                                st.success("견적서가 삭제되었습니다.")
-                                st.cache_data.clear()
-                                st.rerun()
-        else:
-            st.info("등록된 견적서가 없습니다.")
-
-# 고객 관리
-def customer_management():
-    """고객 관리 페이지"""
-    st.header("👥 고객 관리")
-    
-    tab1, tab2, tab3 = st.tabs(["📝 고객 등록", "📋 고객 목록", "📁 CSV 업로드"])
-    
-    with tab1:
-        st.subheader("새 고객 등록")
-        
-        col1, col2 = st.columns(2)
-        with col1:
-            company_name = st.text_input("회사명")
-            contact_person = st.text_input("담당자명")
-            position = st.text_input("직책")
-            phone = st.text_input("연락처")
-        
-        with col2:
-            email = st.text_input("이메일")
-            address = st.text_area("주소")
-            industry = st.text_input("업종")
-            notes = st.text_area("비고")
-        
-        if st.button("고객 등록", use_container_width=True):
-            if company_name and contact_person:
-                new_customer = {
-                    'company_name': company_name,
-                    'contact_person': contact_person,
-                    'position': position,
-                    'phone': phone,
-                    'email': email,
-                    'address': address,
-                    'industry': industry,
-                    'notes': notes
-                }
-                
-                result = insert_data_to_supabase('customers', new_customer)
-                if result:
-                    st.success("고객이 성공적으로 등록되었습니다!")
-                    st.cache_data.clear()
-                    st.rerun()
-                else:
-                    st.error("고객 등록 중 오류가 발생했습니다.")
-            else:
-                st.error("회사명과 담당자명은 필수 입력 사항입니다.")
-    
-    with tab2:
-        st.subheader("고객 목록")
-        
-        customers = load_data_from_supabase('customers', '*')
-        
-        if customers:
-            # 검색 및 다운로드
-            col1, col2 = st.columns(2)
-            with col1:
-                search_term = st.text_input("🔍 검색 (회사명, 담당자명, 업종)")
-            with col2:
-                download_csv(customers, "고객목록")
-            
-            # 검색 필터 적용
-            if search_term:
-                filtered_customers = []
-                for customer in customers:
-                    if (search_term.lower() in customer.get('company_name', '').lower() or
-                        search_term.lower() in customer.get('contact_person', '').lower() or
-                        search_term.lower() in customer.get('industry', '').lower()):
-                        filtered_customers.append(customer)
-            else:
-                filtered_customers = customers
-            
-            # 고객 목록 표시
-            for customer in sorted(filtered_customers, key=lambda x: x.get('created_at', ''), reverse=True):
-                with st.expander(f"👥 {customer.get('company_name')} - {customer.get('contact_person')}"):
-                    col1, col2, col3 = st.columns(3)
-                    
-                    with col1:
-                        st.write(f"**ID**: {customer.get('id')}")
-                        st.write(f"**회사명**: {customer.get('company_name')}")
-                        st.write(f"**담당자**: {customer.get('contact_person')}")
-                        st.write(f"**직책**: {customer.get('position')}")
-                    
-                    with col2:
-                        st.write(f"**연락처**: {customer.get('phone')}")
-                        st.write(f"**이메일**: {customer.get('email')}")
-                        st.write(f"**업종**: {customer.get('industry')}")
-                    
-                    with col3:
-                        st.write(f"**주소**: {customer.get('address')}")
-                        st.write(f"**등록일**: {customer.get('created_at', '')[:10]}")
-                        if customer.get('notes'):
-                            st.write(f"**비고**: {customer.get('notes')}")
-                    
-                    # 삭제 버튼
-                    if st.button(f"❌ 삭제", key=f"delete_customer_{customer['id']}"):
-                        if delete_data_from_supabase('customers', 'id', customer['id']):
-                            st.success("고객이 삭제되었습니다.")
-                            st.cache_data.clear()
-                            st.rerun()
-        else:
-            st.info("등록된 고객이 없습니다.")
-    
-    with tab3:
-        st.subheader("CSV 파일 업로드")
-        
-        # CSV 템플릿 다운로드
-        st.write("### 📁 CSV 템플릿")
-        template_data = [{
-            'company_name': '샘플회사',
-            'contact_person': '홍길동',
-            'position': '구매팀장',
-            'phone': '010-1234-5678',
-            'email': 'hong@sample.com',
-            'address': '서울시 강남구',
-            'industry': '제조업',
-            'notes': '주요 고객'
-        }]
-        template_df = pd.DataFrame(template_data)
-        csv_template = template_df.to_csv(index=False, encoding='utf-8-sig')
-        st.download_button(
-            label="📥 CSV 템플릿 다운로드",
-            data=csv_template,
-            file_name="고객_템플릿.csv",
-            mime="text/csv"
-        )
-        
-        # CSV 파일 업로드
-        st.write("### 📤 CSV 파일 업로드")
-        uploaded_file = st.file_uploader("CSV 파일을 선택하세요", type=['csv'])
-        
-        if uploaded_file is not None:
-            required_columns = ['company_name', 'contact_person', 'position', 'phone', 'email', 'address', 'industry', 'notes']
-            new_customers_data = process_csv_upload(uploaded_file, required_columns)
-            
-            if new_customers_data:
-                st.write("### 📋 업로드 데이터 미리보기")
-                preview_df = pd.DataFrame(new_customers_data)
-                st.dataframe(preview_df)
-                
-                if st.button("💾 고객 데이터 저장", use_container_width=True):
-                    success_count = 0
-                    for customer_data in new_customers_data:
-                        result = insert_data_to_supabase('customers', customer_data)
-                        if result:
-                            success_count += 1
-                    
-                    if success_count > 0:
-                        st.success(f"✅ {success_count}개의 고객이 성공적으로 등록되었습니다!")
-                        st.cache_data.clear()
-                        st.rerun()
-                    else:
-                        st.error("❌ 고객 데이터 저장 중 오류가 발생했습니다.")
-
-# 제품 관리
-def product_management():
-    """제품 관리 페이지"""
-    st.header("📦 제품 관리")
-    
-    tab1, tab2, tab3 = st.tabs(["📝 제품 등록", "📋 제품 목록", "📁 CSV 업로드"])
-    
-    with tab1:
-        st.subheader("새 제품 등록")
-        
-        col1, col2 = st.columns(2)
-        with col1:
-            product_code = st.text_input("제품 코드")
-            product_name = st.text_input("제품명")
-            category = st.selectbox("카테고리", ["핫런너", "사무용품", "기계부품", "전자제품", "기타"])
-            unit = st.text_input("단위", value="개")
-        
-        with col2:
-            unit_price_usd = st.number_input("단가 (USD)", min_value=0.0, format="%.2f")
-            
-            # 환율 정보 로드 및 VND 판매가 계산
-            exchange_rates = load_data_from_supabase('exchange_rates', '*')
-            usd_to_vnd_rate = 24000  # 기본값
-            for rate in exchange_rates:
-                if rate.get('from_currency') == 'USD' and rate.get('to_currency') == 'VND':
-                    usd_to_vnd_rate = rate.get('rate', 24000)
-                    break
-            
-            vnd_price = unit_price_usd * usd_to_vnd_rate
-            unit_price_vnd = st.number_input("판매가 (VND)", value=vnd_price, format="%.0f")
-            
-            supplier = st.text_input("공급업체")
-            stock_quantity = st.number_input("재고수량", min_value=0, value=0)
-        
-        description = st.text_area("제품 설명")
-        
-        if st.button("제품 등록", use_container_width=True):
-            if product_code and product_name:
-                new_product = {
-                    'product_code': product_code,
-                    'product_name': product_name,
-                    'category': category,
-                    'unit': unit,
-                    'unit_price': unit_price_usd,
-                    'unit_price_vnd': unit_price_vnd,
-                    'currency': 'USD',
-                    'supplier': supplier,
-                    'stock_quantity': stock_quantity,
-                    'description': description
-                }
-                
-                result = insert_data_to_supabase('products', new_product)
-                if result:
-                    st.success("제품이 성공적으로 등록되었습니다!")
-                    st.cache_data.clear()
-                    st.rerun()
-                else:
-                    st.error("제품 등록 중 오류가 발생했습니다.")
-            else:
-                st.error("제품 코드와 제품명은 필수 입력 사항입니다.")
-    
-    with tab2:
-        st.subheader("제품 목록")
-        
-        products = load_data_from_supabase('products', '*')
-        
-        if products:
-            # 검색 및 필터
-            col1, col2, col3 = st.columns(3)
-            with col1:
-                search_term = st.text_input("🔍 검색 (제품명, 제품코드)")
-            with col2:
-                filter_category = st.selectbox("카테고리 필터", ["전체"] + ["핫런너", "사무용품", "기계부품", "전자제품", "기타"])
-            with col3:
-                download_csv(products, "제품목록")
-            
-            # 필터 적용
-            filtered_products = products.copy()
-            if search_term:
-                filtered_products = [p for p in filtered_products 
-                                   if search_term.lower() in p.get('product_name', '').lower() or 
-                                      search_term.lower() in p.get('product_code', '').lower()]
-            if filter_category != "전체":
-                filtered_products = [p for p in filtered_products if p.get('category') == filter_category]
-            
-            # 제품 목록 표시
-            for product in sorted(filtered_products, key=lambda x: x.get('created_at', ''), reverse=True):
-                with st.expander(f"📦 {product.get('product_code')} - {product.get('product_name')}"):
-                    col1, col2, col3 = st.columns(3)
-                    
-                    with col1:
-                        st.write(f"**제품 코드**: {product.get('product_code')}")
-                        st.write(f"**제품명**: {product.get('product_name')}")
-                        st.write(f"**카테고리**: {product.get('category')}")
-                        st.write(f"**단위**: {product.get('unit')}")
-                    
-                    with col2:
-                        st.write(f"**단가**: ${product.get('unit_price', 0):,.2f}")
-                        st.write(f"**판매가**: ₫{product.get('unit_price_vnd', 0):,.0f}")
-                        st.write(f"**공급업체**: {product.get('supplier')}")
-                        st.write(f"**재고**: {product.get('stock_quantity', 0)}")
-                    
-                    with col3:
-                        st.write(f"**등록일**: {product.get('created_at', '')[:10]}")
-                        if product.get('description'):
-                            st.write(f"**설명**: {product.get('description')}")
-                    
-                    # 삭제 버튼
-                    if st.button(f"❌ 삭제", key=f"delete_product_{product['id']}"):
-                        if delete_data_from_supabase('products', 'id', product['id']):
-                            st.success("제품이 삭제되었습니다.")
-                            st.cache_data.clear()
-                            st.rerun()
-        else:
-            st.info("등록된 제품이 없습니다.")
-    
-    with tab3:
-        st.subheader("CSV 파일 업로드")
-        
-        # CSV 템플릿 다운로드
-        st.write("### 📁 CSV 템플릿")
-        template_data = [{
-            'product_code': 'HR001',
-            'product_name': '핫런너 시스템 A형',
-            'category': '핫런너',
-            'unit': '세트',
-            'unit_price': 1500.0,
-            'unit_price_vnd': 36000000,
-            'supplier': '핫런너코리아',
-            'stock_quantity': 10,
-            'description': '고성능 핫런너 시스템'
-        }]
-        template_df = pd.DataFrame(template_data)
-        csv_template = template_df.to_csv(index=False, encoding='utf-8-sig')
-        st.download_button(
-            label="📥 CSV 템플릿 다운로드",
-            data=csv_template,
-            file_name="제품_템플릿.csv",
-            mime="text/csv"
-        )
-        
-        # CSV 파일 업로드
-        st.write("### 📤 CSV 파일 업로드")
-        uploaded_file = st.file_uploader("CSV 파일을 선택하세요", type=['csv'])
-        
-        if uploaded_file is not None:
-            required_columns = ['product_code', 'product_name', 'category', 'unit', 'unit_price', 'unit_price_vnd', 'supplier', 'stock_quantity', 'description']
-            new_products_data = process_csv_upload(uploaded_file, required_columns)
-            
-            if new_products_data:
-                st.write("### 📋 업로드 데이터 미리보기")
-                preview_df = pd.DataFrame(new_products_data)
-                st.dataframe(preview_df)
-                
-                if st.button("💾 제품 데이터 저장", use_container_width=True):
-                    success_count = 0
-                    for product_data in new_products_data:
-                        result = insert_data_to_supabase('products', product_data)
-                        if result:
-                            success_count += 1
-                    
-                    if success_count > 0:
-                        st.success(f"✅ {success_count}개의 제품이 성공적으로 등록되었습니다!")
-                        st.cache_data.clear()
-                        st.rerun()
-                    else:
-                        st.error("❌ 제품 데이터 저장 중 오류가 발생했습니다.")
-
-# 직원 관리
-def employee_management():
-    """직원 관리 페이지"""
-    st.header("👨‍💼 직원 관리")
-    
-    tab1, tab2 = st.tabs(["📝 직원 등록", "📋 직원 목록"])
-    
-    with tab1:
-        st.subheader("새 직원 등록")
-        
-        col1, col2 = st.columns(2)
-        with col1:
-            name = st.text_input("이름")
-            username = st.text_input("사용자명 (로그인용)")
-            password = st.text_input("비밀번호", type="password")
-            department = st.selectbox("부서", ["총무", "영업", "생산", "품질", "구매", "관리", "시스템관리"])
-        
-        with col2:
-            position = st.text_input("직책")
-            email = st.text_input("이메일")
-            phone = st.text_input("연락처")
-            is_admin = st.checkbox("관리자 권한")
-        
-        notes = st.text_area("비고")
-        
-        if st.button("직원 등록", use_container_width=True):
-            if name and username and password:
-                new_employee = {
-                    'name': name,
-                    'username': username,
-                    'password': password,
-                    'department': department,
-                    'position': position,
-                    'email': email,
-                    'phone': phone,
-                    'is_admin': is_admin,
-                    'is_active': True,
-                    'notes': notes
-                }
-                
-                result = insert_data_to_supabase('employees', new_employee)
-                if result:
-                    st.success("직원이 성공적으로 등록되었습니다!")
-                    st.cache_data.clear()
-                    st.rerun()
-                else:
-                    st.error("직원 등록 중 오류가 발생했습니다.")
-            else:
-                st.error("이름, 사용자명, 비밀번호는 필수 입력 사항입니다.")
-    
-    with tab2:
-        st.subheader("직원 목록")
-        
-        employees = load_data_from_supabase('employees', '*')
-        
-        if employees:
-            # 필터 및 다운로드
-            col1, col2 = st.columns(2)
-            with col1:
-                filter_department = st.selectbox("부서 필터", ["전체"] + ["총무", "영업", "생산", "품질", "구매", "관리", "시스템관리"])
-            with col2:
-                # 비밀번호 제외하고 다운로드
-                download_employees = []
-                for emp in employees:
-                    emp_copy = emp.copy()
-                    emp_copy.pop('password', None)  # 비밀번호 제거
-                    download_employees.append(emp_copy)
-                download_csv(download_employees, "직원목록")
-            
-            # 필터 적용
-            filtered_employees = employees.copy()
-            if filter_department != "전체":
-                filtered_employees = [e for e in filtered_employees if e.get('department') == filter_department]
-            
-            # 직원 목록 표시
-            for employee in sorted(filtered_employees, key=lambda x: x.get('created_at', ''), reverse=True):
-                status_icon = "✅" if employee.get('is_active', True) else "❌"
-                admin_icon = "👑" if employee.get('is_admin', False) else ""
-                
-                with st.expander(f"{status_icon} {admin_icon} {employee.get('name')} - {employee.get('department')} ({employee.get('position')})"):
-                    col1, col2, col3 = st.columns(3)
-                    
-                    with col1:
-                        st.write(f"**ID**: {employee.get('id')}")
-                        st.write(f"**이름**: {employee.get('name')}")
-                        st.write(f"**사용자명**: {employee.get('username')}")
-                        st.write(f"**부서**: {employee.get('department')}")
-                    
-                    with col2:
-                        st.write(f"**직책**: {employee.get('position')}")
-                        st.write(f"**이메일**: {employee.get('email')}")
-                        st.write(f"**연락처**: {employee.get('phone')}")
-                        st.write(f"**관리자**: {'예' if employee.get('is_admin') else '아니오'}")
-                    
-                    with col3:
-                        st.write(f"**상태**: {'활성' if employee.get('is_active', True) else '비활성'}")
-                        st.write(f"**등록일**: {employee.get('created_at', '')[:10]}")
-                        if employee.get('notes'):
-                            st.write(f"**비고**: {employee.get('notes')}")
-                    
-                    # 수정/삭제 버튼
-                    col1, col2, col3 = st.columns(3)
-                    with col1:
-                        new_status = not employee.get('is_active', True)
-                        status_text = "비활성화" if employee.get('is_active', True) else "활성화"
-                        if st.button(f"🔄 {status_text}", key=f"toggle_employee_{employee['id']}"):
-                            update_data_in_supabase('employees', {'is_active': new_status}, 'id', employee['id'])
-                            st.cache_data.clear()
-                            st.rerun()
-                    with col2:
-                        pass  # 공간 확보
-                    with col3:
-                        # Master 계정은 삭제 불가
-                        if employee.get('username') != 'Master':
-                            if st.button(f"❌ 삭제", key=f"delete_employee_{employee['id']}"):
-                                if delete_data_from_supabase('employees', 'id', employee['id']):
-                                    st.success("직원이 삭제되었습니다.")
-                                    st.cache_data.clear()
-                                    st.rerun()
-                        else:
-                            st.write("*시스템 계정*")
-        else:
-            st.info("등록된 직원이 없습니다.")
-
-# 시스템 관리
-def system_management():
-    """시스템 관리 페이지"""
-    st.header("⚙️ 시스템 관리")
-    
-    tab1, tab2 = st.tabs(["🏢 회사 정보", "💱 환율 관리"])
-    
-    with tab1:
-        st.subheader("회사 기본 정보")
-        
-        company_info = load_data_from_supabase('company_info', '*')
-        
-        if company_info:
-            company_data = company_info[0]
-        else:
-            company_data = {}
-        
-        col1, col2 = st.columns(2)
-        with col1:
-            company_name = st.text_input("회사명", value=company_data.get('company_name', ''))
-            address = st.text_area("주소", value=company_data.get('address', ''))
-            phone = st.text_input("전화번호", value=company_data.get('phone', ''))
-            email = st.text_input("이메일", value=company_data.get('email', ''))
-        
-        with col2:
-            tax_number = st.text_input("사업자등록번호", value=company_data.get('tax_number', ''))
-            ceo_name = st.text_input("대표자명", value=company_data.get('ceo_name', ''))
-            business_type = st.text_input("업종", value=company_data.get('business_type', ''))
-            notes = st.text_area("비고", value=company_data.get('notes', ''))
-        
-        if st.button("💾 회사 정보 저장", use_container_width=True):
-            new_company_data = {
-                'company_name': company_name,
-                'address': address,
-                'phone': phone,
-                'email': email,
-                'tax_number': tax_number,
-                'ceo_name': ceo_name,
-                'business_type': business_type,
-                'notes': notes
-            }
-            
-            if company_info:
-                # 업데이트
-                if update_data_in_supabase('company_info', new_company_data, 'id', company_info[0]['id']):
-                    st.success("회사 정보가 성공적으로 수정되었습니다!")
-                    st.cache_data.clear()
-                    st.rerun()
-            else:
-                # 새로 생성
-                if insert_data_to_supabase('company_info', new_company_data):
-                    st.success("회사 정보가 성공적으로 저장되었습니다!")
-                    st.cache_data.clear()
-                    st.rerun()
-    
-    with tab2:
-        st.subheader("환율 관리")
-        
-        # 환율 등록
-        col1, col2, col3 = st.columns(3)
-        with col1:
-            from_currency = st.selectbox("기준 통화", ["USD", "VND", "KRW"])
-        with col2:
-            to_currency = st.selectbox("대상 통화", ["VND", "USD", "KRW"])
+            filter_status = st.selectbox("상태 필터", 
+                ["전체"] + ["대기중", "승인됨", "주문완료", "취소됨"],
+                key=generate_unique_key("purchase_status"))
         with col3:
-            rate = st.number_input("환율", min_value=0.0, format="%.4f")
+            if st.button("📁 CSV 다운로드"):
+                purchases = load_data_from_supabase('purchases')
+                if purchases:
+                    df = pd.DataFrame(purchases)
+                    csv = df.to_csv(index=False, encoding='utf-8-sig')
+                    st.download_button(
+                        label="CSV 파일 다운로드",
+                        data=csv,
+                        file_name=f"purchases_{datetime.now().strftime('%Y%m%d')}.csv",
+                        mime="text/csv"
+                    )
         
-        if st.button("환율 등록"):
-            if from_currency != to_currency and rate > 0:
-                new_rate = {
-                    'from_currency': from_currency,
-                    'to_currency': to_currency,
-                    'rate': rate,
-                    'effective_date': date.today().isoformat(),
-                    'created_by': st.session_state.current_user['id']
-                }
-                
-                if insert_data_to_supabase('exchange_rates', new_rate):
-                    st.success("환율이 등록되었습니다!")
-                    st.cache_data.clear()
-                    st.rerun()
+        # 데이터 로드 및 필터링
+        purchases = load_data_from_supabase('purchases')
         
-        # 등록된 환율 목록
-        st.write("### 등록된 환율")
-        exchange_rates = load_data_from_supabase('exchange_rates', '*')
-        if exchange_rates:
-            download_csv(exchange_rates, "환율목록")
-            for rate in sorted(exchange_rates, key=lambda x: x.get('effective_date', ''), reverse=True):
-                col1, col2 = st.columns([3, 1])
-                with col1:
-                    st.write(f"**{rate['from_currency']} → {rate['to_currency']}**: {rate['rate']:,.4f} (적용일: {rate['effective_date']})")
-                with col2:
-                    if st.button(f"❌ 삭제", key=f"delete_rate_{rate['id']}"):
-                        if delete_data_from_supabase('exchange_rates', 'id', rate['id']):
-                            st.success("환율이 삭제되었습니다.")
-                            st.cache_data.clear()
-                            st.rerun()
+        if filter_category != "전체":
+            purchases = [p for p in purchases if p.get('category') == filter_category]
+        if filter_status != "전체":
+            purchases = [p for p in purchases if p.get('status') == filter_status]
+        
+        # 구매품 목록 표시
+        if purchases:
+            for purchase in purchases:
+                with st.expander(f"📦 {purchase.get('item_name', 'N/A')} - {purchase.get('status', 'N/A')}"):
+                    col1, col2, col3 = st.columns([2, 2, 1])
+                    
+                    with col1:
+                        st.write(f"**카테고리:** {purchase.get('category', 'N/A')}")
+                        st.write(f"**수량:** {purchase.get('quantity', 0)} {purchase.get('unit', '')}")
+                        st.write(f"**단가:** ${purchase.get('unit_price', 0):.2f}")
+                        st.write(f"**총액:** ${purchase.get('total_amount', 0):.2f}")
+                    
+                    with col2:
+                        st.write(f"**공급업체:** {purchase.get('supplier', 'N/A')}")
+                        st.write(f"**긴급도:** {purchase.get('urgency', 'N/A')}")
+                        st.write(f"**등록일:** {purchase.get('created_at', 'N/A')[:10]}")
+                        if purchase.get('description'):
+                            st.write(f"**설명:** {purchase.get('description')}")
+                    
+                    with col3:
+                        if st.button("🔄 상태변경", key=f"status_{purchase.get('id')}"):
+                            st.info("상태 변경 기능은 곧 구현됩니다.")
+                        if st.button("❌ 삭제", key=f"delete_{purchase.get('id')}"):
+                            if delete_data_from_supabase('purchases', purchase.get('id')):
+                                st.success("✅ 삭제되었습니다!")
+                                st.rerun()
         else:
-            st.info("등록된 환율이 없습니다.")
+            st.info("조건에 맞는 구매품이 없습니다.")
 
 # 메인 애플리케이션
 def main():
     """메인 애플리케이션"""
     
-    # 로그인 확인
-    if not login_system():
+    # 로그인 체크
+    if 'logged_in' not in st.session_state or not st.session_state.logged_in:
+        show_login_page()
         return
+    
+    # 메뉴 초기화 (세션 상태에서 관리)
+    if 'current_menu' not in st.session_state:
+        st.session_state.current_menu = "🏠 대시보드"
     
     # 사이드바 메뉴
     with st.sidebar:
-        st.markdown(f"""
-        ### 👋 환영합니다!
-        **{st.session_state.current_user['name']}**님  
-        ({st.session_state.current_user['department']} - {st.session_state.current_user['position']})
+        st.markdown("### 🏢 YMV 관리 프로그램 v4.0")
         
-        🔗 **Supabase 연결됨**
-        """)
+        user = get_current_user()
+        if user:
+            st.success(f"👋 {user['name']}님 환영합니다!")
+            st.caption(f"부서: {user.get('department', 'N/A')} | 직책: {user.get('position', 'N/A')}")
+            
+            # CEO 승인 대기 알림 (관리자만)
+            if user.get('is_admin'):
+                expenses = load_data_from_supabase('expenses')
+                ceo_pending = len([e for e in expenses if e.get('status') == 'CEO승인대기'])
+                if ceo_pending > 0:
+                    st.warning(f"👔 CEO 승인 대기: {ceo_pending}건")
         
-        st.divider()
+        st.markdown("---")
         
-        menu = st.selectbox(
-            "📋 메뉴 선택",
-            [
-                "🏠 대시보드",
-                "📦 구매품 관리", 
-                "💰 지출 요청서",
-                "📋 견적서 관리",
-                "👥 고객 관리",
-                "📦 제품 관리", 
-                "👨‍💼 직원 관리",
-                "⚙️ 시스템 관리"
-            ]
-        )
+        # 메뉴 버튼들
+        menu_items = [
+            "🏠 대시보드",
+            "📦 구매품 관리", 
+            "💰 지출 요청서",
+            "📋 견적서 관리",
+            "👥 고객 관리",
+            "📦 제품 관리",
+            "👨‍💼 직원 관리",
+            "⚙️ 시스템 관리"
+        ]
         
-        st.divider()
+        st.markdown("### 📋 메뉴")
+        for menu_item in menu_items:
+            if st.button(menu_item, use_container_width=True, 
+                        key=f"menu_{menu_item}",
+                        type="primary" if st.session_state.current_menu == menu_item else "secondary"):
+                st.session_state.current_menu = menu_item
+                st.rerun()
         
-        # 시스템 정보
-        st.write("### ℹ️ 시스템 정보")
-        st.write(f"**버전**: v2.1.0 (Supabase)")
-        st.write(f"**로그인 시간**: {datetime.now().strftime('%H:%M')}")
-        st.write(f"**DB**: 연결됨 ✅")
+        st.markdown("---")
         
         # 빠른 통계
-        st.write("### 📊 빠른 통계")
-        purchases = load_data_from_supabase('purchases', 'id')
-        expenses = load_data_from_supabase('expenses', 'id')
-        quotations = load_data_from_supabase('quotations', 'id')
-        customers = load_data_from_supabase('customers', 'id')
-        products = load_data_from_supabase('products', 'id')
-        employees = load_data_from_supabase('employees', 'id', {'is_active': True})
+        st.markdown("### 📊 빠른 통계")
+        purchases = load_data_from_supabase('purchases')
+        expenses = load_data_from_supabase('expenses')
+        quotations = load_data_from_supabase('quotations')
+        customers = load_data_from_supabase('customers')
         
         st.metric("구매품", len(purchases))
         st.metric("지출요청", len(expenses))
         st.metric("견적서", len(quotations))
         st.metric("고객", len(customers))
-        st.metric("제품", len(products))
-        st.metric("직원", len(employees))
+        
+        st.markdown("---")
+        
+        if st.button("🚪 로그아웃", use_container_width=True):
+            logout_user()
+            st.rerun()
     
-    # 메인 컨텐츠
-    if menu == "🏠 대시보드":
-        dashboard()
-    elif menu == "📦 구매품 관리":
-        purchase_management()
-    elif menu == "💰 지출 요청서":
-        expense_management()
-    elif menu == "📋 견적서 관리":
-        quotation_management()
-    elif menu == "👥 고객 관리":
-        customer_management()
-    elif menu == "📦 제품 관리":
-        product_management()
-    elif menu == "👨‍💼 직원 관리":
-        employee_management()
-    elif menu == "⚙️ 시스템 관리":
-        system_management()
+    # 선택된 메뉴에 따라 페이지 표시
+    current_menu = st.session_state.current_menu
+    
+    if current_menu == "🏠 대시보드":
+        show_dashboard()
+    elif current_menu == "📦 구매품 관리":
+        show_purchase_management()
+    elif current_menu == "💰 지출 요청서":
+        show_expense_management()
+    elif current_menu == "📋 견적서 관리":
+        st.info("견적서 관리 기능은 Step 6에서 구현됩니다.")
+    elif current_menu == "👥 고객 관리":
+        st.info("고객 관리 기능은 Step 7에서 구현됩니다.")
+    elif current_menu == "📦 제품 관리":
+        st.info("제품 관리 기능은 Step 8에서 구현됩니다.")
+    elif current_menu == "👨‍💼 직원 관리":
+        st.info("직원 관리 기능은 향후 구현됩니다.")
+    elif current_menu == "⚙️ 시스템 관리":
+        # 코드 관리 컴포넌트 사용
+        code_mgmt = CodeManagementComponent(supabase)
+        code_mgmt.render_code_management_page()
 
 if __name__ == "__main__":
     main()
