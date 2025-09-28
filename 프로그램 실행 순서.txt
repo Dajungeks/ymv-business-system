@@ -1,0 +1,3 @@
+D:
+cd ymv-business-system
+streamlit run app/main.py

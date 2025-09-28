@@ -1,0 +1,106 @@
+code01,code02,code03,code04,code05,code06,code07,full_code,description,is_active,created_at
+HR,ST,OP,16,MAE,xx,0,HR-ST-OP-16-MAE-xx-00,Standard,TRUE,2025-09-28
+HR,ST,OP,16,MCC,xx,0,HR-ST-OP-16-MCC-xx-00,Standard,TRUE,2025-09-29
+HR,ST,OP,16,MAA,xx,0,HR-ST-OP-16-MAA-xx-00,Standard,TRUE,2025-09-30
+HR,ST,OP,20,MAE,xx,0,HR-ST-OP-20-MAE-xx-00,Standard,TRUE,2025-10-01
+HR,ST,OP,20,MCC,xx,0,HR-ST-OP-20-MCC-xx-00,Standard,TRUE,2025-10-02
+HR,ST,OP,20,MAA,xx,0,HR-ST-OP-20-MAA-xx-00,Standard,TRUE,2025-10-03
+HR,ST,OP,25,MAE,xx,0,HR-ST-OP-25-MAE-xx-00,Standard,TRUE,2025-10-04
+HR,ST,OP,25,MCC,xx,0,HR-ST-OP-25-MCC-xx-00,Standard,TRUE,2025-10-05
+HR,ST,OP,25,MAA,xx,0,HR-ST-OP-25-MAA-xx-00,Standard,TRUE,2025-10-06
+HR,ST,OP,35,MAE,xx,0,HR-ST-OP-35-MAE-xx-00,Standard,TRUE,2025-10-07
+HR,ST,OP,35,MCC,xx,0,HR-ST-OP-35-MCC-xx-00,Standard,TRUE,2025-10-08
+HR,ST,OP,35,MAA,xx,0,HR-ST-OP-35-MAA-xx-00,Standard,TRUE,2025-10-09
+HR,ST,OP,45,MAE,xx,0,HR-ST-OP-45-MAE-xx-00,Standard,TRUE,2025-10-10
+HR,ST,OP,45,MCC,xx,0,HR-ST-OP-45-MCC-xx-00,Standard,TRUE,2025-10-11
+HR,ST,OP,45,MAA,xx,0,HR-ST-OP-45-MAA-xx-00,Standard,TRUE,2025-10-12
+HR,SO,OP,20,MAE,xx,0,HR-SO-OP-20-MAE-xx-00,Single Open Nozzle ( Normal Type),TRUE,2025-10-13
+HR,SO,OP,20,MCC,xx,0,HR-SO-OP-20-MCC-xx-00,Single Open Nozzle ( Normal Type),TRUE,2025-10-14
+HR,SO,OP,20,MAA,xx,0,HR-SO-OP-20-MAA-xx-00,Single Open Nozzle ( Normal Type),TRUE,2025-10-15
+HR,SO,OP,25,MAE,xx,0,HR-SO-OP-25-MAE-xx-00,Single Open Nozzle ( Normal Type),TRUE,2025-10-16
+HR,SO,OP,25,MCC,xx,0,HR-SO-OP-25-MCC-xx-00,Single Open Nozzle ( Normal Type),TRUE,2025-10-17
+HR,SO,OP,25,MAA,xx,0,HR-SO-OP-25-MAA-xx-00,Single Open Nozzle ( Normal Type),TRUE,2025-10-18
+HR,SO,OP,35,MAE,xx,0,HR-SO-OP-35-MAE-xx-00,Single Open Nozzle ( Normal Type),TRUE,2025-10-19
+HR,SO,OP,35,MCC,xx,0,HR-SO-OP-35-MCC-xx-00,Single Open Nozzle ( Normal Type),TRUE,2025-10-20
+HR,SO,OP,35,MAA,xx,0,HR-SO-OP-35-MAA-xx-00,Single Open Nozzle ( Normal Type),TRUE,2025-10-21
+HR,SO,OP,45,MAE,xx,0,HR-SO-OP-45-MAE-xx-00,Single Open Nozzle ( Normal Type),TRUE,2025-10-22
+HR,SO,OP,45,MCC,xx,0,HR-SO-OP-45-MCC-xx-00,Single Open Nozzle ( Normal Type),TRUE,2025-10-23
+HR,SO,OP,45,MAA,xx,0,HR-SO-OP-45-MAA-xx-00,Single Open Nozzle ( Normal Type),TRUE,2025-10-24
+HR,SL,OP,20,MAE,xx,0,HR-SL-OP-20-MAE-xx-00,Single Open Nozzle (Long Type / NL Heater),TRUE,2025-10-25
+HR,SL,OP,20,MCC,xx,0,HR-SL-OP-20-MCC-xx-00,Single Open Nozzle (Long Type / NL Heater),TRUE,2025-10-26
+HR,SL,OP,20,MAA,xx,0,HR-SL-OP-20-MAA-xx-00,Single Open Nozzle (Long Type / NL Heater),TRUE,2025-10-27
+HR,SL,OP,25,MAE,xx,0,HR-SL-OP-25-MAE-xx-00,Single Open Nozzle (Long Type / NL Heater),TRUE,2025-10-28
+HR,SL,OP,25,MCC,xx,0,HR-SL-OP-25-MCC-xx-00,Single Open Nozzle (Long Type / NL Heater),TRUE,2025-10-29
+HR,SL,OP,25,MAA,xx,0,HR-SL-OP-25-MAA-xx-00,Single Open Nozzle (Long Type / NL Heater),TRUE,2025-10-30
+HR,SL,OP,35,MAE,xx,0,HR-SL-OP-35-MAE-xx-00,Single Open Nozzle (Long Type / NL Heater),TRUE,2025-10-31
+HR,SL,OP,35,MCC,xx,0,HR-SL-OP-35-MCC-xx-00,Single Open Nozzle (Long Type / NL Heater),TRUE,2025-11-01
+HR,SL,OP,35,MAA,xx,0,HR-SL-OP-35-MAA-xx-00,Single Open Nozzle (Long Type / NL Heater),TRUE,2025-11-02
+HR,SL,OP,45,MAE,xx,0,HR-SL-OP-45-MAE-xx-00,Single Open Nozzle (Long Type / NL Heater),TRUE,2025-11-03
+HR,SL,OP,45,MCC,xx,0,HR-SL-OP-45-MCC-xx-00,Single Open Nozzle (Long Type / NL Heater),TRUE,2025-11-04
+HR,SL,OP,45,MAA,xx,0,HR-SL-OP-45-MAA-xx-00,Single Open Nozzle (Long Type / NL Heater),TRUE,2025-11-05
+HR,CP,OP,10,CC,xx,0,HR-CP-OP-10-CC-xx-00,Cosmetic & Packaging,TRUE,2025-11-06
+HR,CP,OP,10,CL,xx,0,HR-CP-OP-10-CL-xx-00,Cosmetic & Packaging,TRUE,2025-11-07
+HR,CP,OP,12,CC,xx,0,HR-CP-OP-12-CC-xx-00,Cosmetic & Packaging,TRUE,2025-11-08
+HR,CP,OP,12,CL,xx,0,HR-CP-OP-12-CL-xx-00,Cosmetic & Packaging,TRUE,2025-11-09
+HR,CP,OP,18,CC,xx,0,HR-CP-OP-18-CC-xx-00,Cosmetic & Packaging,TRUE,2025-11-10
+HR,CP,OP,18,CL,xx,0,HR-CP-OP-18-CL-xx-00,Cosmetic & Packaging,TRUE,2025-11-11
+HR,CP,OP,22,CC,xx,0,HR-CP-OP-22-CC-xx-00,Cosmetic & Packaging,TRUE,2025-11-12
+HR,CP,OP,22,CL,xx,0,HR-CP-OP-22-CL-xx-00,Cosmetic & Packaging,TRUE,2025-11-13
+HR,CP,OP,32,CC,xx,0,HR-CP-OP-32-CC-xx-00,Cosmetic & Packaging,TRUE,2025-11-14
+HR,CP,OP,32,CL,xx,0,HR-CP-OP-32-CL-xx-00,Cosmetic & Packaging,TRUE,2025-11-15
+HR,SE,OP,15,MAE,xx,0,HR-SE-OP-15-MAE-xx-00,Super Engineering,TRUE,2025-11-16
+HR,SE,OP,15,MCC,xx,0,HR-SE-OP-15-MCC-xx-00,Super Engineering,TRUE,2025-11-17
+HR,SE,OP,18,MAE,xx,0,HR-SE-OP-18-MAE-xx-00,Super Engineering,TRUE,2025-11-18
+HR,SE,OP,18,MCC,xx,0,HR-SE-OP-18-MCC-xx-00,Super Engineering,TRUE,2025-11-19
+HR,PT,OP,45,MAE,xx,0,HR-PT-OP-45-MAE-xx-00,Pallet,TRUE,2025-11-20
+HR,PT,OP,45,MCC,xx,0,HR-PT-OP-45-MCC-xx-00,Pallet,TRUE,2025-11-21
+HR,PT,OP,45,MAA,xx,0,HR-PT-OP-45-MAA-xx-00,Pallet,TRUE,2025-11-22
+HR,ST,VV,16,MAE,xx,0,HR-ST-VV-16-MAE-xx-00,Standard,TRUE,2025-11-23
+HR,ST,VV,16,MCC,xx,0,HR-ST-VV-16-MCC-xx-00,Standard,TRUE,2025-11-24
+HR,ST,VV,20,MAE,xx,0,HR-ST-VV-20-MAE-xx-00,Standard,TRUE,2025-11-25
+HR,ST,VV,20,MCC,xx,0,HR-ST-VV-20-MCC-xx-00,Standard,TRUE,2025-11-26
+HR,ST,VV,25,MAE,xx,0,HR-ST-VV-25-MAE-xx-00,Standard,TRUE,2025-11-27
+HR,ST,VV,25,MCC,xx,0,HR-ST-VV-25-MCC-xx-00,Standard,TRUE,2025-11-28
+HR,ST,VV,35,MAE,xx,0,HR-ST-VV-35-MAE-xx-00,Standard,TRUE,2025-11-29
+HR,ST,VV,35,MCC,xx,0,HR-ST-VV-35-MCC-xx-00,Standard,TRUE,2025-11-30
+HR,ST,VV,45,MAE,xx,0,HR-ST-VV-45-MAE-xx-00,Standard,TRUE,2025-12-01
+HR,ST,VV,45,MCC,xx,0,HR-ST-VV-45-MCC-xx-00,Standard,TRUE,2025-12-02
+HR,SV,VV,20,MAE,xx,0,HR-SV-VV-20-MAE-xx-00,Single Valve,TRUE,2025-12-03
+HR,SV,VV,20,MCC,xx,0,HR-SV-VV-20-MCC-xx-00,Single Valve,TRUE,2025-12-04
+HR,SV,VV,25,MAE,xx,0,HR-SV-VV-25-MAE-xx-00,Single Valve,TRUE,2025-12-05
+HR,SV,VV,25,MCC,xx,0,HR-SV-VV-25-MCC-xx-00,Single Valve,TRUE,2025-12-06
+HR,SV,VV,35,MAE,xx,0,HR-SV-VV-35-MAE-xx-00,Single Valve,TRUE,2025-12-07
+HR,SV,VV,35,MCC,xx,0,HR-SV-VV-35-MCC-xx-00,Single Valve,TRUE,2025-12-08
+HR,SV,VV,45,MAE,xx,0,HR-SV-VV-45-MAE-xx-00,Single Valve,TRUE,2025-12-09
+HR,SV,VV,45,MCC,xx,0,HR-SV-VV-45-MCC-xx-00,Single Valve,TRUE,2025-12-10
+HR,CP,VV,10,VV,xx,0,HR-CP-VV-10-VV-xx-00,Cosmetic & Packaging,TRUE,2025-12-11
+HR,CP,VV,10,VS,xx,0,HR-CP-VV-10-VS-xx-00,Cosmetic & Packaging,TRUE,2025-12-12
+HR,CP,VV,10,VC,xx,0,HR-CP-VV-10-VC-xx-00,Cosmetic & Packaging,TRUE,2025-12-13
+HR,CP,VV,10,VL,xx,0,HR-CP-VV-10-VL-xx-00,Cosmetic & Packaging,TRUE,2025-12-14
+HR,CP,VV,12,VV,xx,0,HR-CP-VV-12-VV-xx-00,Cosmetic & Packaging,TRUE,2025-12-15
+HR,CP,VV,12,VS,xx,0,HR-CP-VV-12-VS-xx-00,Cosmetic & Packaging,TRUE,2025-12-16
+HR,CP,VV,12,VC,xx,0,HR-CP-VV-12-VC-xx-00,Cosmetic & Packaging,TRUE,2025-12-17
+HR,CP,VV,12,VL,xx,0,HR-CP-VV-12-VL-xx-00,Cosmetic & Packaging,TRUE,2025-12-18
+HR,CP,VV,18,VV,xx,0,HR-CP-VV-18-VV-xx-00,Cosmetic & Packaging,TRUE,2025-12-19
+HR,CP,VV,18,VS,xx,0,HR-CP-VV-18-VS-xx-00,Cosmetic & Packaging,TRUE,2025-12-20
+HR,CP,VV,18,VC,xx,0,HR-CP-VV-18-VC-xx-00,Cosmetic & Packaging,TRUE,2025-12-21
+HR,CP,VV,18,VL,xx,0,HR-CP-VV-18-VL-xx-00,Cosmetic & Packaging,TRUE,2025-12-22
+HR,CP,VV,22,VV,xx,0,HR-CP-VV-22-VV-xx-00,Cosmetic & Packaging,TRUE,2025-12-23
+HR,CP,VV,22,VS,xx,0,HR-CP-VV-22-VS-xx-00,Cosmetic & Packaging,TRUE,2025-12-24
+HR,CP,VV,22,VC,xx,0,HR-CP-VV-22-VC-xx-00,Cosmetic & Packaging,TRUE,2025-12-25
+HR,CP,VV,22,VL,xx,0,HR-CP-VV-22-VL-xx-00,Cosmetic & Packaging,TRUE,2025-12-26
+HR,CP,VV,32,VV,xx,0,HR-CP-VV-32-VV-xx-00,Cosmetic & Packaging,TRUE,2025-12-27
+HR,CP,VV,32,VS,xx,0,HR-CP-VV-32-VS-xx-00,Cosmetic & Packaging,TRUE,2025-12-28
+HR,CP,VV,32,VC,xx,0,HR-CP-VV-32-VC-xx-00,Cosmetic & Packaging,TRUE,2025-12-29
+HR,CP,VV,32,VL,xx,0,HR-CP-VV-32-VL-xx-00,Cosmetic & Packaging,TRUE,2025-12-30
+HR,SE,VV,15,MVA,xx,0,HR-SE-VV-15-MVA-xx-00,Super Engineering,TRUE,2025-12-31
+HR,SE,VV,15,MVC,xx,0,HR-SE-VV-15-MVC-xx-00,Super Engineering,TRUE,2026-01-01
+HR,SE,VV,18,MVA,xx,0,HR-SE-VV-18-MVA-xx-00,Super Engineering,TRUE,2026-01-02
+HR,SE,VV,18,MVC,xx,0,HR-SE-VV-18-MVC-xx-00,Super Engineering,TRUE,2026-01-03
+HR,SE,VV,25,MVA,xx,0,HR-SE-VV-25-MVA-xx-00,Super Engineering,TRUE,2026-01-04
+HR,SE,VV,25,MVC,xx,0,HR-SE-VV-25-MVC-xx-00,Super Engineering,TRUE,2026-01-05
+HR,SE,VV,35,MVA,xx,0,HR-SE-VV-35-MVA-xx-00,Super Engineering,TRUE,2026-01-06
+HR,SE,VV,35,MVC,xx,0,HR-SE-VV-35-MVC-xx-00,Super Engineering,TRUE,2026-01-07
+HR,PT,VV,45,MAE,xx,0,HR-PT-VV-45-MAE-xx-00,Pallet,TRUE,2026-01-08
+HR,PT,VV,45,MCC,xx,0,HR-PT-VV-45-MCC-xx-00,Pallet,TRUE,2026-01-09
+HR,PT,VV,45,MAA,xx,0,HR-PT-VV-45-MAA-xx-00,Pallet,TRUE,2026-01-10
