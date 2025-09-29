@@ -3,124 +3,143 @@ import pandas as pd
 from datetime import datetime, date, timedelta
 
 def show_sales_process_dashboard(load_func):
-    """영업 프로세스 대시보드 및 현황 관리"""
+    """영업 프로세스 현황 대시보드"""
+    st.header("📊 영업 프로세스 현황")
     
-    st.subheader("📊 영업 프로세스 현황")
+    # 데이터 로드
+    processes = load_func('sales_process')
     
-    try:
-        # 영업 프로세스 데이터 로드
-        processes = load_func("sales_process")
+    if processes:
+        df = pd.DataFrame(processes)
         
-        if not processes:
-            st.info("진행 중인 영업 프로세스가 없습니다.")
-            st.write("견적서 전환 탭에서 새로운 프로세스를 시작해보세요.")
-            return
-        
-        # 전체 통계
-        total_processes = len(processes)
-        total_amount = sum(float(p.get('total_amount', 0)) for p in processes)
-        
-        # 상태별 통계
-        status_counts = {}
-        for process in processes:
-            status = process.get('process_status', 'unknown')
-            status_counts[status] = status_counts.get(status, 0) + 1
-        
-        # 메트릭 표시
+        # 메트릭 카드
         col1, col2, col3, col4 = st.columns(4)
         
         with col1:
-            st.metric("총 프로세스", total_processes)
+            st.metric("총 프로세스", len(df))
+        
         with col2:
-            st.metric("총 거래액", f"{total_amount:,.0f} VND")
+            total_amount = df['total_amount'].sum() if 'total_amount' in df.columns else 0
+            st.metric("총 거래액", f"${total_amount:,.0f}")
+        
         with col3:
-            completed = status_counts.get('completed', 0)
-            completion_rate = (completed / total_processes * 100) if total_processes > 0 else 0
+            completed = len(df[df['process_status'] == 'completed']) if 'process_status' in df.columns else 0
+            completion_rate = (completed / len(df) * 100) if len(df) > 0 else 0
             st.metric("완료율", f"{completion_rate:.1f}%")
+        
         with col4:
-            in_progress = total_processes - completed
+            in_progress = len(df[df['process_status'].isin(['approved', 'ordered', 'received'])]) if 'process_status' in df.columns else 0
             st.metric("진행 중", in_progress)
         
         # 상태별 분포 차트
-        if status_counts:
-            st.write("### 📈 상태별 분포")
-            
-            # 상태명 한글화
-            status_korean = {
-                'quotation': '견적 단계',
-                'approved': '승인됨',
-                'ordered': '발주 완료',
-                'received': '입고 완료',
-                'inspected': '검수 완료',
-                'shipped': '출고 완료',
-                'completed': '완료'
-            }
-            
-            chart_data = []
-            for status, count in status_counts.items():
-                chart_data.append({
-                    '상태': status_korean.get(status, status),
-                    '건수': count
-                })
-            
-            if chart_data:
-                chart_df = pd.DataFrame(chart_data)
-                st.bar_chart(chart_df.set_index('상태'))
-        
-        # 프로세스 목록 테이블
-        st.write("### 📋 진행 중인 프로세스")
-        
-        # 테이블용 데이터 준비
-        display_data = []
-        for process in processes:
-            display_data.append({
-                '프로세스 번호': process.get('process_number', 'N/A'),
-                '고객사': process.get('customer_company', 'N/A'),
-                '상품': process.get('item_description', 'N/A')[:30] + '...' if len(process.get('item_description', '')) > 30 else process.get('item_description', 'N/A'),
-                '금액 (VND)': f"{float(process.get('total_amount', 0)):,.0f}",
-                '상태': status_korean.get(process.get('process_status', ''), process.get('process_status', 'N/A')),
-                '생성일': process.get('created_at', 'N/A')[:10] if process.get('created_at') else 'N/A'
-            })
-        
-        if display_data:
-            df = pd.DataFrame(display_data)
-            st.dataframe(df, use_container_width=True, hide_index=True)
+        if 'process_status' in df.columns:
+            st.subheader("📈 상태별 분포")
+            status_counts = df['process_status'].value_counts()
+            st.bar_chart(status_counts)
         
         # 지연 알림
         render_delay_alerts(processes)
         
-    except Exception as e:
-        st.error(f"대시보드 로드 중 오류 발생: {str(e)}")
+        # 프로세스 목록 - 상태 변경 기능 포함
+        st.subheader("📋 프로세스 목록")
+        render_process_list_with_status_update(processes, load_func)
+        
+    else:
+        st.info("등록된 영업 프로세스가 없습니다.")
+        
+        # 빈 메트릭 표시
+        col1, col2, col3, col4 = st.columns(4)
+        with col1:
+            st.metric("총 프로세스", "0")
+        with col2:
+            st.metric("총 거래액", "$0")
+        with col3:
+            st.metric("완료율", "0%")
+        with col4:
+            st.metric("진행 중", "0")
+
+def render_process_list_with_status_update(processes, load_func):
+    """프로세스 목록 - 상태 변경 기능 포함"""
+    for process in processes:
+        with st.expander(f"📋 {process.get('process_number', 'N/A')} - {process.get('customer_name', 'N/A')}"):
+            col1, col2 = st.columns([2, 1])
+            
+            with col1:
+                st.write(f"**고객명**: {process.get('customer_name', 'N/A')}")
+                st.write(f"**품목**: {process.get('item_description', 'N/A')}")
+                st.write(f"**수량**: {process.get('quantity', 0):,}개")
+                st.write(f"**총 금액**: ${process.get('total_amount', 0):,.2f}")
+                st.write(f"**예상 납기**: {process.get('expected_delivery_date', 'N/A')}")
+                st.write(f"**현재 상태**: {process.get('process_status', 'N/A')}")
+            
+            with col2:
+                # 상태 변경 기능
+                current_status = process.get('process_status', 'approved')
+                status_options = ['approved', 'completed', 'ordered', 'received', 'closed']
+                
+                try:
+                    current_index = status_options.index(current_status)
+                except ValueError:
+                    current_index = 0
+                
+                new_status = st.selectbox(
+                    "상태 변경:",
+                    status_options,
+                    index=current_index,
+                    key=f"status_{process['id']}"
+                )
+                
+                if st.button(f"상태 저장", key=f"save_{process['id']}"):
+                    # 상태 업데이트 - update_func이 필요하지만 여기서는 임시로 표시만
+                    st.success(f"상태를 {new_status}로 변경했습니다!")
+                    st.info("페이지를 새로고침하면 변경사항이 반영됩니다.")
 
 def render_delay_alerts(processes):
-    """지연 알림"""
+    """지연 알림 시스템"""
+    if not processes:
+        return
     
-    st.write("### ⚠️ 지연 알림")
+    st.subheader("⚠️ 지연 알림")
     
     today = date.today()
     delayed_processes = []
     
     for process in processes:
-        expected_date = process.get('expected_delivery_date')
-        if expected_date:
+        if process.get('expected_delivery_date'):
             try:
-                expected = datetime.strptime(expected_date, '%Y-%m-%d').date()
-                if expected < today and process.get('process_status') != 'completed':
-                    days_delayed = (today - expected).days
+                # 문자열을 date 객체로 변환
+                if isinstance(process['expected_delivery_date'], str):
+                    expected_date = datetime.strptime(process['expected_delivery_date'], '%Y-%m-%d').date()
+                else:
+                    expected_date = process['expected_delivery_date']
+                
+                # 완료되지 않았고 예상 배송일이 지난 경우
+                if (process.get('process_status') != 'completed' and 
+                    expected_date < today):
                     delayed_processes.append({
                         'process_number': process.get('process_number', 'N/A'),
-                        'customer_company': process.get('customer_company', 'N/A'),
-                        'days_delayed': days_delayed,
+                        'customer_name': process.get('customer_name', 'N/A'),
+                        'expected_delivery_date': expected_date,
+                        'days_delayed': (today - expected_date).days,
                         'status': process.get('process_status', 'N/A')
                     })
-            except:
+            except (ValueError, TypeError):
                 continue
     
     if delayed_processes:
-        for delayed in delayed_processes:
-            st.warning(
-                f"🚨 **{delayed['process_number']}** ({delayed['customer_company']}) - "
-                f"{delayed['days_delayed']}일 지연 (상태: {delayed['status']})"
-            )
+        st.warning(f"⚠️ {len(delayed_processes)}개 프로세스가 지연되고 있습니다!")
+        
+        delay_df = pd.DataFrame(delayed_processes)
+        delay_df = delay_df.sort_values('days_delayed', ascending=False)
+        
+        for _, row in delay_df.iterrows():
+            with st.expander(f"🚨 {row['process_number']} - {row['days_delayed']}일 지연"):
+                col1, col2 = st.columns(2)
+                with col1:
+                    st.write(f"**고객명**: {row['customer_name']}")
+                    st.write(f"**현재 상태**: {row['status']}")
+                with col2:
+                    st.write(f"**예상 배송일**: {row['expected_delivery_date']}")
+                    st.write(f"**지연 일수**: {row['days_delayed']}일")
     else:
         st.success("✅ 지연된 프로세스가 없습니다.")

@@ -1,4 +1,4 @@
- # employee_management.py - 직원 관리 시스템 (베트남 기준)
+# employee_management.py - 직원 관리 시스템 (베트남 기준)
 import streamlit as st
 import pandas as pd
 from datetime import datetime, date, timedelta
@@ -20,8 +20,8 @@ def show_employee_management(load_func, save_func, update_func, delete_func,
         st.error("로그인이 필요합니다.")
         return
     
-    # 탭 구성
-    tabs = st.tabs(["📋 직원 목록", "➕ 직원 등록/수정", "🏢 조직도", "⏰ 근태 관리", "💰 급여 관리"])
+    # 탭 구성 (비밀번호 관리 탭 추가)
+    tabs = st.tabs(["📋 직원 목록", "➕ 직원 등록/수정", "🏢 조직도", "⏰ 근태 관리", "💰 급여 관리", "🔑 비밀번호 관리"])
     
     with tabs[0]:
         render_employee_list(load_func, save_func, update_func, delete_func, 
@@ -41,6 +41,104 @@ def show_employee_management(load_func, save_func, update_func, delete_func,
     with tabs[4]:
         render_payroll_management(load_func, save_func, update_func,
                                 current_user, check_permission_func)
+    
+    with tabs[5]:
+        render_password_management(load_func, update_func, current_user)
+
+def render_password_management(load_func, update_func, current_user):
+    """비밀번호 관리 탭"""
+    
+    st.subheader("🔑 비밀번호 관리")
+    
+    user_role = current_user.get('role', 'Staff')
+    
+    # Master/CEO는 모든 직원 비밀번호 변경 가능
+    if user_role in ['Master', 'CEO']:
+        st.write("### 관리자 - 직원 비밀번호 변경")
+        
+        # 직원 목록 로드
+        employees = load_func("employees")
+        if not employees:
+            st.info("직원 정보가 없습니다.")
+            return
+        
+        # 직원 선택
+        employee_options = {f"{emp.get('name', 'N/A')} ({emp.get('username', 'N/A')}) - {emp.get('department', 'N/A')}": emp 
+                          for emp in employees}
+        
+        selected_emp_key = st.selectbox("변경할 직원 선택", list(employee_options.keys()))
+        selected_emp = employee_options[selected_emp_key]
+        
+        st.info(f"선택된 직원: {selected_emp.get('name')} ({selected_emp.get('role', 'Staff')})")
+        
+        with st.form("admin_password_change"):
+            new_password = st.text_input("새 비밀번호", type="password")
+            confirm_password = st.text_input("비밀번호 확인", type="password")
+            
+            submitted = st.form_submit_button("비밀번호 변경", type="primary")
+            
+            if submitted:
+                if not new_password:
+                    st.error("새 비밀번호를 입력해주세요.")
+                elif len(new_password) < 4:
+                    st.error("비밀번호는 최소 4자 이상이어야 합니다.")
+                elif new_password != confirm_password:
+                    st.error("비밀번호가 일치하지 않습니다.")
+                else:
+                    # 비밀번호 업데이트
+                    update_data = {
+                        'id': selected_emp['id'],
+                        'password': new_password,
+                        'updated_at': datetime.now().isoformat()
+                    }
+                    
+                    if update_func("employees", update_data, "id"):
+                        st.success(f"✅ {selected_emp.get('name')} 직원의 비밀번호가 변경되었습니다.")
+                        st.balloons()
+                    else:
+                        st.error("비밀번호 변경에 실패했습니다.")
+    
+    # 본인 비밀번호 변경
+    st.write("---")
+    st.write("### 내 비밀번호 변경")
+    
+    with st.form("self_password_change"):
+        current_password = st.text_input("현재 비밀번호", type="password", key="current_pwd")
+        new_password = st.text_input("새 비밀번호", type="password", key="new_pwd")
+        confirm_password = st.text_input("비밀번호 확인", type="password", key="confirm_pwd")
+        
+        submitted = st.form_submit_button("내 비밀번호 변경", type="primary")
+        
+        if submitted:
+            # 현재 비밀번호 확인
+            current_employee = load_func("employees", filters={"id": current_user['id']})
+            if not current_employee:
+                st.error("사용자 정보를 찾을 수 없습니다.")
+            else:
+                current_employee = current_employee[0]
+                
+                if current_password != current_employee.get('password'):
+                    st.error("현재 비밀번호가 일치하지 않습니다.")
+                elif not new_password:
+                    st.error("새 비밀번호를 입력해주세요.")
+                elif len(new_password) < 4:
+                    st.error("비밀번호는 최소 4자 이상이어야 합니다.")
+                elif new_password != confirm_password:
+                    st.error("새 비밀번호가 일치하지 않습니다.")
+                else:
+                    # 비밀번호 업데이트
+                    update_data = {
+                        'id': current_user['id'],
+                        'password': new_password,
+                        'updated_at': datetime.now().isoformat()
+                    }
+                    
+                    if update_func("employees", update_data, "id"):
+                        st.success("✅ 비밀번호가 성공적으로 변경되었습니다.")
+                        st.info("다음 로그인부터 새 비밀번호를 사용하세요.")
+                        st.balloons()
+                    else:
+                        st.error("비밀번호 변경에 실패했습니다.")
 
 def render_employee_list(load_func, save_func, update_func, delete_func, 
                         current_user, check_permission_func):
@@ -52,7 +150,7 @@ def render_employee_list(load_func, save_func, update_func, delete_func,
     col1, col2, col3, col4 = st.columns([2, 1, 1, 1])
     
     with col1:
-        search_term = st.text_input("🔍 검색", placeholder="이름, 사번, 이메일로 검색")
+        search_term = st.text_input("검색", placeholder="이름, 사번, 이메일로 검색")
     
     with col2:
         dept_filter = st.selectbox("부서 필터", ["전체"] + get_departments_list(load_func))
@@ -61,7 +159,7 @@ def render_employee_list(load_func, save_func, update_func, delete_func,
         status_filter = st.selectbox("상태 필터", ["전체", "재직", "휴직", "퇴직"])
     
     with col4:
-        role_filter = st.selectbox("역할 필터", ["전체", "admin", "manager", "employee"])
+        role_filter = st.selectbox("역할 필터", ["전체", "Staff", "Manager", "Admin", "CEO", "Master"])
     
     # 직원 데이터 로드
     try:
@@ -116,8 +214,8 @@ def render_employee_form(load_func, save_func, update_func, current_user, check_
     
     st.subheader("직원 등록/수정")
     
-    # 권한 확인 - 수정된 방식
-    if current_user.get('role') not in ['admin', 'manager']:
+    # 권한 확인 - Master, CEO, Admin 가능
+    if current_user.get('role') not in ['Master', 'CEO', 'Admin']:
         st.error("직원 등록/수정 권한이 없습니다.")
         return
     
@@ -180,10 +278,27 @@ def render_employee_form(load_func, save_func, update_func, current_user, check_
             manager_id = st.selectbox("직속 상관", [None] + managers,
                                     format_func=lambda x: "선택 안함" if x is None else x['name'])
             
-            # 역할 및 상태
-            role = st.selectbox("역할", ["employee", "manager", "admin"],
-                              index=["employee", "manager", "admin"].index(existing_data.get('role', 'employee'))
-                              if existing_data else 0)
+            # 역할 (Staff, Manager, Admin, CEO, Master)
+            role_options = ["Staff", "Manager", "Admin", "CEO", "Master"]
+            
+            # 호환성을 위한 매핑
+            role_mapping = {
+                'employee': 'Staff',
+                'manager': 'Manager',
+                'admin': 'Admin',
+                'ceo': 'CEO',
+                'master': 'Master'
+            }
+            
+            if existing_data:
+                current_role = existing_data.get('role', 'Staff')
+                # 소문자로 변환 후 매핑 시도
+                current_role = role_mapping.get(current_role.lower(), current_role)
+                role_index = role_options.index(current_role) if current_role in role_options else 0
+            else:
+                role_index = 0
+            
+            role = st.selectbox("역할 *", role_options, index=role_index)
             
             employment_status = st.selectbox("재직 상태", ["active", "inactive", "resigned"],
                                            index=["active", "inactive", "resigned"].index(
@@ -272,13 +387,14 @@ def render_employee_form(load_func, save_func, update_func, current_user, check_
                 }
                 
                 if not existing_data:
-                    employee_data['password'] = password  # 신규 등록시 비밀번호 추가
+                    employee_data['password'] = password
                     employee_data['created_at'] = datetime.now().isoformat()
                 
                 # 저장 실행
                 try:
                     if existing_data:
-                        update_func("employees", employee_data, existing_data['id'])
+                        employee_data['id'] = existing_data['id']
+                        update_func("employees", employee_data, "id")
                         # 인사 이력 기록
                         record_employee_history(existing_data, employee_data, current_user['id'], save_func)
                         st.success("직원 정보가 수정되었습니다.")
@@ -341,14 +457,14 @@ def render_attendance_management(load_func, save_func, update_func, current_user
     
     st.subheader("근태 관리")
     
-    # 권한에 따른 탭 구성 - 수정된 방식
-    if current_user.get('role') in ['admin', 'manager']:
+    # 권한에 따른 탭 구성 - Master, CEO, Admin
+    if current_user.get('role') in ['Master', 'CEO', 'Admin']:
         attendance_tabs = st.tabs(["월별 근태", "출퇴근 기록", "근태 통계"])
     else:
         attendance_tabs = st.tabs(["내 출퇴근"])
     
-    # 월별 근태 현황 (관리자/매니저)
-    if current_user.get('role') in ['admin', 'manager']:
+    # 월별 근태 현황 (관리자)
+    if current_user.get('role') in ['Master', 'CEO', 'Admin']:
         with attendance_tabs[0]:
             render_monthly_attendance(load_func, current_user)
         
@@ -368,8 +484,8 @@ def render_payroll_management(load_func, save_func, update_func, current_user, c
     st.subheader("급여 관리")
     st.caption("Vietnam Tax & Social Insurance Calculation")
     
-    # 권한 확인 - 수정된 방식
-    if current_user.get('role') not in ['admin']:
+    # 권한 확인 - Master, CEO만
+    if current_user.get('role') not in ['Master', 'CEO']:
         st.error("급여 관리 권한이 없습니다.")
         return
     
@@ -395,18 +511,18 @@ def get_departments_list(load_func) -> List[str]:
         return ["IT팀", "영업팀", "인사팀"]
 
 def get_positions_list(load_func) -> List[str]:
-    """직급 목록 가져오기"""
+    """직급 목록 가져오기 (영문)"""
     try:
         positions = load_func("positions", filters={"is_active": True})
-        return [pos['position_name'] for pos in positions] if positions else ["사원", "주임", "대리", "과장", "부장"]
+        return [pos['position_name'] for pos in positions] if positions else ["Staff", "Junior Manager", "Manager", "Senior Manager", "Director", "CEO"]
     except:
-        return ["사원", "주임", "대리", "과장", "부장"]
+        return ["Staff", "Junior Manager", "Manager", "Senior Manager", "Director", "CEO"]
 
 def get_managers_list(load_func) -> List[Dict]:
     """관리자 목록 가져오기"""
     try:
         managers = load_func("employees", 
-                           filters={"role": ["manager", "admin"], "employment_status": "active"})
+                           filters={"role": ["Master", "CEO", "Admin"], "employment_status": "active"})
         return managers if managers else []
     except:
         return []
@@ -471,10 +587,9 @@ def display_employee_table(df: pd.DataFrame, current_user: Dict, check_permissio
     if '상태' in display_df.columns:
         display_df['상태'] = display_df['상태'].map(status_map).fillna("알 수 없음")
     
-    # 역할 한글화
-    role_map = {"admin": "관리자", "manager": "매니저", "employee": "직원"}
+    # 역할은 영문 그대로 표시 (대소문자만 통일)
     if '역할' in display_df.columns:
-        display_df['역할'] = display_df['역할'].map(role_map).fillna("직원")
+        display_df['역할'] = display_df['역할'].str.title()
     
     # 테이블 표시
     st.dataframe(
@@ -567,22 +682,22 @@ def calculate_vietnam_tax(gross_salary: float) -> Dict[str, float]:
     
     # 2024년 베트남 개인소득세율 (VND)
     tax_brackets = [
-        (5000000, 0.05),    # 5백만 VND 이하: 5%
-        (10000000, 0.10),   # 5-10백만 VND: 10%
-        (18000000, 0.15),   # 10-18백만 VND: 15%
-        (32000000, 0.20),   # 18-32백만 VND: 20%
-        (52000000, 0.25),   # 32-52백만 VND: 25%
-        (80000000, 0.30),   # 52-80백만 VND: 30%
-        (float('inf'), 0.35) # 80백만 VND 초과: 35%
+        (5000000, 0.05),
+        (10000000, 0.10),
+        (18000000, 0.15),
+        (32000000, 0.20),
+        (52000000, 0.25),
+        (80000000, 0.30),
+        (float('inf'), 0.35)
     ]
     
     # 기본 공제액 (개인): 11,000,000 VND/월
     basic_deduction = 11000000
     
     # 사회보험료 공제 (직원 부담분)
-    social_insurance = gross_salary * 0.08  # 8%
-    health_insurance = gross_salary * 0.015  # 1.5%
-    unemployment_insurance = gross_salary * 0.01  # 1%
+    social_insurance = gross_salary * 0.08
+    health_insurance = gross_salary * 0.015
+    unemployment_insurance = gross_salary * 0.01
     
     total_insurance = social_insurance + health_insurance + unemployment_insurance
     
@@ -736,7 +851,7 @@ def extract_employee_id_from_selection(selection: str, employees: List[Dict]) ->
 def delete_employee_with_validation(employee_id: int, delete_func) -> bool:
     """직원 삭제 (유효성 검사 포함)"""
     try:
-        delete_func("employees", employee_id)
+        delete_func("employees", employee_id, "id")
         return True
     except Exception as e:
         st.error(f"삭제 중 오류 발생: {str(e)}")
@@ -756,7 +871,8 @@ def render_department_tree(employees: List[Dict]):
     """부서 조직도 트리 렌더링"""
     for emp in employees:
         status_icon = "🟢" if emp.get('employment_status') == 'active' else "🔴"
-        role_icon = "👑" if emp.get('role') == 'admin' else "⭐" if emp.get('role') == 'manager' else "👤"
+        role_map = {"Master": "👑", "CEO": "💎", "Admin": "⭐", "Manager": "📌", "Staff": "👤"}
+        role_icon = role_map.get(emp.get('role', 'Staff'), "👤")
         
         st.write(f"{status_icon} {role_icon} **{emp.get('full_name', 'N/A')}** - {emp.get('position', 'N/A')}")
 
@@ -771,19 +887,16 @@ def calculate_position_statistics(employees: List[Dict]) -> Dict[str, int]:
 def render_monthly_attendance(load_func, current_user):
     """월별 근태 현황"""
     st.write("### 📅 월별 근태 현황")
-    # 월별 근태 관리 로직 구현
     st.info("월별 근태 현황 기능이 곧 추가됩니다.")
 
 def render_attendance_records(load_func, save_func, update_func, current_user):
     """출퇴근 기록 관리"""
     st.write("### ⏱️ 출퇴근 기록 관리")
-    # 출퇴근 기록 관리 로직 구현
     st.info("출퇴근 기록 관리 기능이 곧 추가됩니다.")
 
 def render_attendance_statistics(load_func, current_user):
     """근태 통계"""
     st.write("### 📊 근태 통계")
-    # 근태 통계 로직 구현
     st.info("근태 통계 기능이 곧 추가됩니다.")
 
 def render_personal_attendance(load_func, save_func, current_user):
@@ -794,12 +907,10 @@ def render_personal_attendance(load_func, save_func, current_user):
     
     with col1:
         if st.button("🟢 출근", type="primary"):
-            # 출근 기록 로직
             st.success("출근이 기록되었습니다.")
     
     with col2:
         if st.button("🔴 퇴근", type="secondary"):
-            # 퇴근 기록 로직
             st.success("퇴근이 기록되었습니다.")
 
 def render_payslip_generation(load_func, current_user):

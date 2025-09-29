@@ -18,14 +18,14 @@ class AuthManager:
         """AuthManager 초기화"""
         self.db = db_operations
     
-    def login_user(self, username, password):
+    def login_user(self, employee_id, password):
         """
-        사용자 로그인 (기존 login_user)
-        User login authentication
+        사용자 로그인 (employee_id 사용)
+        User login authentication using employee_id
         """
         try:
-            if not username or not password:
-                st.error("사용자명과 비밀번호를 입력해주세요.")
+            if not employee_id or not password:
+                st.error("사번과 비밀번호를 입력해주세요.")
                 return False
             
             # 직원 정보 조회
@@ -34,9 +34,9 @@ class AuthManager:
                 st.error("직원 정보를 불러올 수 없습니다.")
                 return False
             
-            # 사용자 인증
+            # 사용자 인증 (employee_id로 변경)
             for employee in employees:
-                if (employee.get("username") == username and 
+                if (employee.get("employee_id") == employee_id and 
                     employee.get("password") == password):
                     
                     # 활성 계정 확인
@@ -54,7 +54,7 @@ class AuthManager:
                     return True
             
             # 인증 실패
-            st.error("잘못된 사용자명 또는 비밀번호입니다.")
+            st.error("잘못된 사번 또는 비밀번호입니다.")
             return False
             
         except Exception as e:
@@ -63,7 +63,7 @@ class AuthManager:
     
     def logout_user(self):
         """
-        사용자 로그아웃 (기존 logout_user)
+        사용자 로그아웃
         User logout
         """
         try:
@@ -89,7 +89,7 @@ class AuthManager:
     
     def get_current_user(self):
         """
-        현재 로그인된 사용자 정보 반환 (기존 get_current_user)
+        현재 로그인된 사용자 정보 반환
         Get current logged-in user information
         """
         return st.session_state.get("user_info")
@@ -100,7 +100,7 @@ class AuthManager:
     
     def check_permission(self, required_role=None, required_permissions=None):
         """
-        권한 확인
+        권한 확인 (master, admin, manager 지원)
         Check user permissions
         """
         current_user = self.get_current_user()
@@ -110,7 +110,10 @@ class AuthManager:
         # 역할 기반 권한 확인
         if required_role:
             user_role = current_user.get('role', 'employee')
-            if user_role != required_role and user_role != 'manager':
+            # Master는 모든 권한, CEO와 Admin도 높은 권한
+            if user_role == 'Master':
+                return True
+            if user_role != required_role and user_role not in ['CEO', 'Admin']:
                 return False
         
         # 특정 권한 확인 (향후 확장용)
@@ -134,10 +137,11 @@ class AuthManager:
     
     def require_manager_role(self):
         """
-        관리자 권한 필수
+        관리자 권한 필수 (Master, CEO)
         Require manager role
         """
-        if not self.check_permission(required_role='manager'):
+        current_user = self.get_current_user()
+        if not current_user or current_user.get('role') not in ['Master', 'CEO']:
             st.warning("관리자 권한이 필요합니다.")
             return False
         return True
@@ -284,10 +288,10 @@ class AuthManager:
 
 
 # 하위 호환성을 위한 래퍼 함수들
-def login_user(username, password, auth_manager=None):
-    """하위 호환성 래퍼 함수"""
+def login_user(employee_id, password, auth_manager=None):
+    """하위 호환성 래퍼 함수 (employee_id 사용)"""
     if auth_manager:
-        return auth_manager.login_user(username, password)
+        return auth_manager.login_user(employee_id, password)
     else:
         st.warning("AuthManager 인스턴스가 필요합니다.")
         return False

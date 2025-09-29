@@ -386,34 +386,26 @@ class PrintFormGenerator:
         
         st.subheader("🖨️ 지출요청서 프린트")
         
-        # 직원 정보를 딕셔너리로 변환 (타입 안전 처리)
+        # 직원 정보를 딕셔너리로 변환
         employee_dict = {}
         if employees:
             for emp in employees:
                 emp_id = emp.get('id')
-                if emp_id is not None:
-                    # 정수형으로 통일
-                    employee_dict[int(emp_id)] = emp
+                if emp_id:
+                    employee_dict[emp_id] = emp
         
         # 요청자 정보
         requester_id = expense.get('requester')
-        if requester_id is not None:
-            requester_id = int(requester_id)
-        
         requester_info = employee_dict.get(requester_id, {})
         requester_name = requester_info.get('name', '알 수 없음')
         requester_emp_id = requester_info.get('employee_id', 'N/A')
         
-        # 승인자 정보 (수정된 부분)
+        # 승인자 정보
         approver_name = 'N/A'
         approver_date = ''
-        
-        approved_by = expense.get('approved_by')
-        if approved_by is not None:
-            approved_by = int(approved_by)
-            approver_info = employee_dict.get(approved_by, {})
-            if approver_info:
-                approver_name = approver_info.get('name', 'N/A')
+        if expense.get('approved_by'):
+            approver_info = employee_dict.get(expense['approved_by'], {})
+            approver_name = approver_info.get('name', '알 수 없음')
         
         if expense.get('approved_at'):
             try:
@@ -465,12 +457,12 @@ class PrintFormGenerator:
         
         approver_signature = ''
         approver_signature_class = ''
-        approver_date_text = '날짜:'
+        approver_date_text = '날짜 (Date):'
         approver_date_class = ''
         
         if status in ['approved', 'rejected']:
             approver_signature = f'<div style="margin-top: 20px; font-weight: bold;">{approver_name}</div>'
-            approver_date_text = f'날짜: {approver_date}'
+            approver_date_text = f'날짜 (Date): {approver_date}'
             if status == 'approved':
                 approver_signature_class = 'approved-signature'
                 approver_date_class = 'approved-signature'
@@ -527,61 +519,61 @@ class PrintFormGenerator:
                 help="HTML 파일로 저장하여 브라우저에서 열어 프린트할 수 있습니다."
             )
         with col2:
-            # 반려 사유 텍스트 (조건부)
-            rejection_text = ''
-            if status == 'rejected' and expense.get('approval_comment'):
-                rejection_text = f"[반려 사유]\n{expense.get('approval_comment', '')}\n\n"
-            
-            # CEO 이름 (조건부)
-            ceo_name_text = ''
-            ceo_date_text = ''
-            if status in ['approved', 'rejected']:
-                ceo_name_text = approver_name
-                ceo_date_text = approver_date
-            
-            text_content = f"""
-═══════════════════════════════════════════════════════
-                CÔNG TY TNHH YUMOLD VIỆT NAM
-            지출 요청서 (EXPENSE REQUEST FORM)
-═══════════════════════════════════════════════════════
+                    # 반려 사유 텍스트 (조건부)
+                    rejection_text = ''
+                    if status == 'rejected' and expense.get('approval_comment'):
+                        rejection_text = f"[반려 사유]\n{expense.get('approval_comment', '')}\n\n"
+                    
+                    # CEO 이름 (조건부)
+                    ceo_name_text = ''
+                    ceo_date_text = ''
+                    if status in ['approved', 'rejected']:
+                        ceo_name_text = approver_name
+                        ceo_date_text = approver_date
+                    
+                    text_content = f"""
+        ═══════════════════════════════════════════════════════
+                    CÔNG TY TNHH YUMOLD VIỆT NAM
+                지출 요청서 (EXPENSE REQUEST FORM)
+        ═══════════════════════════════════════════════════════
 
-[문서 상태] {status_emoji} {status_description}
+        [문서 상태] {status_emoji} {status_description}
 
-[기본 정보]
-요청자: {requester_name} ({requester_emp_id})
-요청일: {request_date}
-부서: {expense.get('department', 'N/A')}
-지출일: {expense.get('expense_date', 'N/A')}
-지출 유형: {expense.get('expense_type', 'N/A')}
-금액: {expense.get('amount', 0):,} {currency}
-결제 방법: {expense.get('payment_method', 'N/A')}
-긴급도: {expense.get('urgency', '보통')}
-공급업체: {expense.get('vendor', 'N/A')}
-영수증 번호: {expense.get('receipt_number', 'N/A')}
+        [기본 정보]
+        요청자: {requester_name} ({requester_emp_id})
+        요청일: {request_date}
+        부서: {expense.get('department', 'N/A')}
+        지출일: {expense.get('expense_date', 'N/A')}
+        지출 유형: {expense.get('expense_type', 'N/A')}
+        금액: {expense.get('amount', 0):,} {currency}
+        결제 방법: {expense.get('payment_method', 'N/A')}
+        긴급도: {expense.get('urgency', '보통')}
+        공급업체: {expense.get('vendor', 'N/A')}
+        영수증 번호: {expense.get('receipt_number', 'N/A')}
 
-[지출 내역]
-{expense.get('description', '내용 없음')}
+        [지출 내역]
+        {expense.get('description', '내용 없음')}
 
-[사업 목적]
-{expense.get('business_purpose') or expense.get('purpose', '내용 없음')}
+        [사업 목적]
+        {expense.get('business_purpose') or expense.get('purpose', '내용 없음')}
 
-{rejection_text}───────────────────────────────────────────────────────
-결재란
-신청자: {requester_name}       팀장:              CEO: {ceo_name_text}
+        {rejection_text}───────────────────────────────────────────────────────
+        결재란
+        신청자: {requester_name}       팀장:              CEO: {ceo_name_text}
 
-날짜: {request_date}                              날짜: {ceo_date_text}
+        날짜: {request_date}                              날짜: {ceo_date_text}
 
-═══════════════════════════════════════════════════════
-Document ID: EXP-{expense.get('id', 'N/A')}
-Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
-            """
-            st.download_button(
-                label="📝 텍스트 다운로드",
-                data=text_content,
-                file_name=f"expense_request_{expense.get('id', 'unknown')}.txt",
-                mime="text/plain",
-                help="텍스트 형식으로 저장합니다."
-            )
+        ═══════════════════════════════════════════════════════
+        Document ID: EXP-{expense.get('id', 'N/A')}
+        Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
+                    """
+                    st.download_button(
+                        label="📝 텍스트 다운로드",
+                        data=text_content,
+                        file_name=f"expense_request_{expense.get('id', 'unknown')}.txt",
+                        mime="text/plain",
+                        help="텍스트 형식으로 저장합니다."
+                    )
         with col3:
             st.info("💡 HTML을 다운로드하여\n브라우저에서 열고\n프린트하세요!")
         

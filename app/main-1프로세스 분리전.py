@@ -1,5 +1,5 @@
 """
-YMV 관리 프로그램 v4.1 - Step 19: 고객 관리 통합 및 메뉴 UI 개선 
+YMV 관리 프로그램 v4.1 - Step 19: 고객 관리 통합 및 메뉴 UI 개선
 YMV Business Management System v4.1 - Step 19: Customer management integration and menu UI improvement
 """
 
@@ -72,18 +72,18 @@ def show_login_page():
     st.subheader("로그인")
     
     with st.form("login_form"):
-        employee_id = st.text_input("사번 (Employee ID)")
+        username = st.text_input("사용자명")
         password = st.text_input("비밀번호", type="password")
         submitted = st.form_submit_button("로그인")
         
         if submitted:
-            if employee_id and password:
-                if auth_manager.login_user(employee_id, password):
+            if username and password:
+                if auth_manager.login_user(username, password):
                     st.success("로그인되었습니다!")
                     time.sleep(1)
                     st.rerun()
             else:
-                st.error("사번과 비밀번호를 입력해주세요.")
+                st.error("사용자명과 비밀번호를 입력해주세요.")
 
 # ===========================================
 # 페이지 함수들 (컴포넌트 호출)
@@ -96,10 +96,12 @@ def show_dashboard():
 def show_expense_management_page():
     """지출 관리 페이지"""
     show_expense_management(
+        # DB 함수들
         db_operations.load_data,
         db_operations.save_data,
         db_operations.update_data,
         db_operations.delete_data,
+        # 유틸리티 함수들
         auth_manager.get_current_user,
         get_approval_status_info,
         calculate_expense_statistics,
@@ -181,7 +183,7 @@ def show_purchase_management():
     st.title("🛒 구매품 관리")
     
     current_user = auth_manager.get_current_user()
-    user_role = current_user.get('role', 'Staff') if current_user else 'Staff'
+    user_role = current_user.get('role', 'employee') if current_user else 'employee'
     
     # 탭 구성
     tab1, tab2 = st.tabs(["📝 구매 요청 등록", "📋 구매 요청 목록"])
@@ -261,8 +263,8 @@ def render_purchase_list(current_user, user_role):
         st.info("등록된 구매품이 없습니다.")
         return
     
-    # 권한별 필터링 (Master, CEO, Admin, Manager는 전체 조회)
-    if user_role not in ['Master', 'CEO', 'Admin', 'Manager']:
+    # 권한별 필터링
+    if user_role != 'manager':
         purchases = [p for p in purchases if p.get('requester') == current_user['id']]
     
     st.write(f"📦 총 {len(purchases)}건의 구매 요청")
@@ -303,7 +305,7 @@ def show_code_management():
 
 def show_multilingual_input():
     """다국어 입력 페이지"""
-    st.title("🌍 다국어 입력 시스템")
+    st.title("🌐 다국어 입력 시스템")
     ml_input = MultilingualInputComponent(init_supabase())
     
     # 언어 우선순위 정보 표시
@@ -422,7 +424,7 @@ def main():
             st.session_state.current_page = "코드 관리"
             st.rerun()
             
-        if st.button("🌍 다국어 입력", use_container_width=True,
+        if st.button("🌐 다국어 입력", use_container_width=True,
                     type="primary" if st.session_state.current_page == "다국어 입력" else "secondary"):
             st.session_state.current_page = "다국어 입력"
             st.rerun()

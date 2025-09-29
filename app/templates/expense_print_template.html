@@ -1,0 +1,411 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>지출요청서 - {expense_id}</title>
+    <style>
+        * {{
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }}
+        
+        body {{
+            font-family: 'Malgun Gothic', Arial, sans-serif;
+            background-color: #f5f5f5;
+            padding: 20px;
+        }}
+        
+        .print-container {{
+            width: 210mm;
+            min-height: 297mm;
+            max-height: 297mm;
+            background: white;
+            margin: 0 auto;
+            padding: 12mm;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+        }}
+        
+        .status-badge {{
+            text-align: center;
+            padding: 6px;
+            margin-bottom: 10px;
+            background-color: {status_bg};
+            border-radius: 5px;
+            border: 2px solid {status_color};
+        }}
+        
+        .status-badge h2 {{
+            font-size: 13px;
+            color: #000;
+            margin: 0;
+        }}
+        
+        .company-header {{
+            text-align: center;
+            border-bottom: 2px solid #000;
+            padding-bottom: 8px;
+            margin-bottom: 12px;
+        }}
+        
+        .company-name {{
+            font-size: 15px;
+            font-weight: bold;
+            margin-bottom: 4px;
+            color: #000;
+        }}
+        
+        .company-info {{
+            font-size: 8px;
+            color: #333;
+            line-height: 1.3;
+        }}
+        
+        .tax-code {{
+            font-weight: bold;
+            margin-bottom: 2px;
+        }}
+        
+        .document-title {{
+            text-align: center;
+            margin-bottom: 12px;
+        }}
+        
+        .document-title h1 {{
+            font-size: 20px;
+            font-weight: bold;
+            margin-bottom: 3px;
+            color: #000;
+        }}
+        
+        .document-title p {{
+            font-size: 10px;
+            color: #666;
+        }}
+        
+        .info-table {{
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 12px;
+            font-size: 9px;
+        }}
+        
+        .info-table th,
+        .info-table td {{
+            border: 1px solid #333;
+            padding: 5px 8px;
+            text-align: left;
+        }}
+        
+        .info-table th {{
+            background-color: #e9ecef;
+            font-weight: bold;
+            width: 25%;
+        }}
+        
+        .info-table td {{
+            background-color: white;
+        }}
+        
+        .info-table small {{
+            font-size: 7px;
+        }}
+        
+        .amount-cell {{
+            font-size: 12px;
+            font-weight: bold;
+            color: #d63031;
+        }}
+        
+        .expense-details {{
+            margin-bottom: 12px;
+        }}
+        
+        .expense-details h3 {{
+            font-size: 10px;
+            font-weight: bold;
+            margin-bottom: 5px;
+            padding: 5px;
+            background-color: #e9ecef;
+            border-left: 3px solid #0984e3;
+        }}
+        
+        .expense-details .content {{
+            border: 1px solid #333;
+            padding: 10px;
+            min-height: 50px;
+            background-color: white;
+            line-height: 1.4;
+            font-size: 9px;
+            white-space: pre-wrap;
+        }}
+        
+        .rejection-reason {{
+            margin-bottom: 12px;
+            padding: 10px;
+            background-color: #fff0f0;
+            border: 2px solid #d63031;
+            border-radius: 5px;
+        }}
+        
+        .rejection-reason h3 {{
+            font-size: 10px;
+            font-weight: bold;
+            margin-bottom: 5px;
+            color: #d63031;
+        }}
+        
+        .rejection-reason .content {{
+            font-size: 9px;
+            line-height: 1.4;
+            color: #333;
+            white-space: pre-wrap;
+        }}
+        
+        .approval-section {{
+            margin-top: 15px;
+            page-break-inside: avoid;
+        }}
+        
+        .approval-section h3 {{
+            font-size: 11px;
+            font-weight: bold;
+            margin-bottom: 8px;
+            text-align: center;
+        }}
+        
+        .approval-table {{
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 9px;
+        }}
+        
+        .approval-table th,
+        .approval-table td {{
+            border: 1px solid #333;
+            padding: 8px;
+            text-align: center;
+        }}
+        
+        .approval-table th {{
+            background-color: #e9ecef;
+            font-weight: bold;
+        }}
+        
+        .approval-table small {{
+            font-size: 7px;
+        }}
+        
+        .signature-space {{
+            height: 50px;
+            background-color: white;
+        }}
+        
+        .date-space {{
+            height: 25px;
+            background-color: #f8f9fa;
+            font-size: 8px;
+        }}
+        
+        .approved-signature {{
+            background-color: #e8f5e9;
+            font-weight: bold;
+        }}
+        
+        .document-footer {{
+            margin-top: 15px;
+            text-align: center;
+            font-size: 7px;
+            color: #666;
+            border-top: 1px solid #ddd;
+            padding-top: 8px;
+        }}
+        
+        .document-footer p {{
+            margin: 2px 0;
+        }}
+        
+        .no-print {{
+            text-align: center;
+            margin: 20px 0;
+        }}
+        
+        .print-button {{
+            background-color: #0984e3;
+            color: white;
+            border: none;
+            padding: 12px 30px;
+            font-size: 14px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 0 10px;
+        }}
+        
+        .print-button:hover {{
+            background-color: #0770c9;
+        }}
+        
+        .download-button {{
+            background-color: #00b894;
+            color: white;
+            border: none;
+            padding: 12px 30px;
+            font-size: 14px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 0 10px;
+        }}
+        
+        .download-button:hover {{
+            background-color: #019874;
+        }}
+        
+        @media print {{
+            body {{
+                background-color: white;
+                padding: 0;
+            }}
+            
+            .print-container {{
+                width: 100%;
+                box-shadow: none;
+                margin: 0;
+                padding: 12mm;
+                max-height: none;
+            }}
+            
+            .no-print {{
+                display: none !important;
+            }}
+            
+            @page {{
+                size: A4;
+                margin: 0;
+            }}
+        }}
+    </style>
+</head>
+<body>
+    <div class="no-print">
+        <button class="print-button" onclick="window.print()">🖨️ 프린트</button>
+        <button class="download-button" onclick="downloadAsPDF()">📄 PDF 저장</button>
+    </div>
+    
+    <div class="print-container">
+        <div class="status-badge">
+            <h2>{status_emoji} 문서 상태: {status_description}</h2>
+        </div>
+        
+        <div class="company-header">
+            <div class="company-name">CÔNG TY TNHH YUMOLD VIỆT NAM</div>
+            <div class="company-info">
+                <div class="tax-code">Tax Code (MST): 0111146237</div>
+                <div>Hanoi Accounting Office: Room 1201-2, 12th Floor, Keangnam Hanoi Landmark 72, E6 Area, Yen Hoa Ward, Hanoi City</div>
+                <div>Bac Ninh Sales Office: 6th Floor, No. 255 Le Thanh Tong Street, Vo Cuong Ward, Bac Ninh Province</div>
+            </div>
+        </div>
+        
+        <div class="document-title">
+            <h1>지출 요청서</h1>
+            <p>EXPENSE REQUEST FORM</p>
+        </div>
+        
+        <table class="info-table">
+            <tr>
+                <th>요청자<br><small>Requester</small></th>
+                <td>{requester_name} ({requester_emp_id})</td>
+                <th>요청일<br><small>Request Date</small></th>
+                <td>{request_date}</td>
+            </tr>
+            <tr>
+                <th>부서<br><small>Department</small></th>
+                <td>{department}</td>
+                <th>지출일<br><small>Expense Date</small></th>
+                <td>{expense_date}</td>
+            </tr>
+            <tr>
+                <th>지출 유형<br><small>Expense Type</small></th>
+                <td>{expense_type}</td>
+                <th>금액<br><small>Amount</small></th>
+                <td class="amount-cell">{amount} {currency}</td>
+            </tr>
+            <tr>
+                <th>결제 방법<br><small>Payment Method</small></th>
+                <td>{payment_method}</td>
+                <th>긴급도<br><small>Urgency</small></th>
+                <td>{urgency}</td>
+            </tr>
+            <tr>
+                <th>공급업체<br><small>Vendor</small></th>
+                <td>{vendor}</td>
+                <th>영수증 번호<br><small>Receipt No.</small></th>
+                <td>{receipt_number}</td>
+            </tr>
+        </table>
+        
+        <div class="expense-details">
+            <h3>지출 내역 (Expense Description)</h3>
+            <div class="content">{description}</div>
+        </div>
+        
+        <div class="expense-details">
+            <h3>사업 목적 (Business Purpose)</h3>
+            <div class="content">{business_purpose}</div>
+        </div>
+        
+        {rejection_reason}
+        
+        <div class="approval-section">
+            <h3>결 재 란 (Approval Section)</h3>
+            <table class="approval-table">
+                <thead>
+                    <tr>
+                        <th style="width: 33%;">신청자<br><small>Requester</small></th>
+                        <th style="width: 33%;">팀장<br><small>Team Leader</small></th>
+                        <th style="width: 34%;">CEO<br><small>Chief Executive Officer</small></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td class="signature-space">
+                            {requester_signature}
+                        </td>
+                        <td class="signature-space"></td>
+                        <td class="signature-space {approver_signature_class}">
+                            {approver_signature}
+                        </td>
+                    </tr>
+                    <tr>
+                        <td class="date-space">날짜 (Date): {request_date}</td>
+                        <td class="date-space">날짜 (Date):</td>
+                        <td class="date-space {approver_date_class}">
+                            {approver_date_text}
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+        
+        <div class="document-footer">
+            <p>본 지출요청서는 회사 규정에 따라 작성되었으며, 승인 후 처리됩니다.</p>
+            <p>This expense request form is prepared according to company regulations and will be processed after approval.</p>
+            <p style="margin-top: 5px;">Document ID: EXP-{expense_id} | Generated: {generated_time}</p>
+        </div>
+    </div>
+    
+    <script>
+        function downloadAsPDF() {{
+            alert('프린트 대화상자에서 "PDF로 저장" 옵션을 선택하세요.\\n\\n1. 대상: PDF로 저장\\n2. 용지 크기: A4\\n3. 여백: 기본값');
+            window.print();
+        }}
+        
+        document.addEventListener('keydown', function(e) {{
+            if (e.ctrlKey && e.key === 'p') {{
+                e.preventDefault();
+                window.print();
+            }}
+        }});
+    </script>
+</body>
+</html>
