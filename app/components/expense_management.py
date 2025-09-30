@@ -417,7 +417,7 @@ def render_expense_list(load_data_func, update_data_func, delete_data_func,
         with row_cols[6]:
             st.write("▼ 상세")
         # 여기에 검정 실선 추가
-        st.markdown("<hr style='margin: 10px 0; border: none; border-top: 1px solid #000;'>", unsafe_allow_html=True)
+        st.markdown("<hr style='margin: 2px 0; border: none; border-top: 1px solid #000;'>", unsafe_allow_html=True)
         
         # expander를 행 아래 전체 너비로 배치
         with st.expander("", expanded=False):
