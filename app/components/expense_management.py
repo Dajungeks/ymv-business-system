@@ -225,7 +225,7 @@ def render_expense_form(load_data_func, save_data_func, update_data_func, get_cu
 def render_expense_list(load_data_func, update_data_func, delete_data_func, 
                        get_current_user_func, get_approval_status_info_func, 
                        create_csv_download_func, render_print_form_func):
-    """지출요청서 목록 관리 (개선된 버전)"""
+    """지출요청서 목록 관리 (테이블형 레이아웃 - 배경색 없음)"""
     
     # 프린트 모드 확인 (최우선)
     if st.session_state.get('print_expense'):
@@ -236,7 +236,7 @@ def render_expense_list(load_data_func, update_data_func, delete_data_func,
         if st.button("← 목록으로 돌아가기", type="primary"):
             del st.session_state['print_expense']
             st.rerun()
-        return  # 프린트 모드에서는 목록 표시 안 함
+        return
     
     # 데이터 로드
     expenses = load_data_func("expenses")
@@ -277,7 +277,6 @@ def render_expense_list(load_data_func, update_data_func, delete_data_func,
         )
     
     with col3:
-        # master, admin은 전체 조회 가능
         if user_role in ['Master', 'CEO', 'Admin']:
             employee_filter_options = ["전체"]
             for emp in employees:
@@ -352,8 +351,22 @@ def render_expense_list(load_data_func, update_data_func, delete_data_func,
                 mime="text/csv"
             )
     
-    # 지출요청서 목록 표시
-    for idx, expense in enumerate(filtered_expenses):
+    st.markdown("---")
+    
+    # 테이블 헤더
+    header_cols = st.columns([0.5, 1.5, 1.5, 1.5, 2, 1.5, 1])
+    header_cols[0].markdown("**No**")
+    header_cols[1].markdown("**날짜**")
+    header_cols[2].markdown("**유형**")
+    header_cols[3].markdown("**요청자**")
+    header_cols[4].markdown("**금액**")
+    header_cols[5].markdown("**상태**")
+    header_cols[6].markdown("**액션**")
+    
+    st.markdown("---")
+    
+    # 지출요청서 목록 표시 (테이블형 - 배경색 없음)
+    for idx, expense in enumerate(filtered_expenses, 1):
         # 직원 정보
         requester_id = expense.get('requester')
         employee_info = employee_dict.get(requester_id, {})
@@ -365,27 +378,52 @@ def render_expense_list(load_data_func, update_data_func, delete_data_func,
         if expense.get('created_at'):
             try:
                 dt = datetime.fromisoformat(str(expense['created_at']).replace('Z', '+00:00'))
-                request_date = dt.strftime('%Y-%m-%d')
+                request_date = dt.strftime('%m-%d')
             except:
-                request_date = str(expense['created_at'])[:10]
+                request_date = str(expense['created_at'])[5:10]
         
         # 상태 정보
         expense_status = expense.get('status', 'pending')
         status_info = get_approval_status_info_func(expense_status)
         status_emoji = status_info.get('emoji', '❓')
+        status_description = status_info.get('description', '알 수 없음')
         
-        # 지출요청서 카드
+        # 지출요청서 정보
         expense_type = expense.get('expense_type', '기타')
         amount = expense.get('amount', 0)
         currency = expense.get('currency', 'VND')
         
-        with st.expander(
-            f"{status_emoji} [{request_date}] {employee_name} - {expense_type} ({amount:,} {currency})",
-            expanded=False
-        ):
-            col1, col2 = st.columns([2, 1])
+        # 테이블 행 (배경색 없음)
+        row_cols = st.columns([0.5, 1.5, 1.5, 1.5, 2, 1.5, 1])
+        
+        with row_cols[0]:
+            st.write(idx)
+        
+        with row_cols[1]:
+            st.write(request_date)
+        
+        with row_cols[2]:
+            st.write(expense_type)
+        
+        with row_cols[3]:
+            st.write(employee_name)
+        
+        with row_cols[4]:
+            st.markdown(f"**{amount:,} {currency}**")
+        
+        with row_cols[5]:
+            st.write(f"{status_emoji} {status_description}")
+        
+        with row_cols[6]:
+            st.write("▼ 상세")
+        # 여기에 검정 실선 추가
+        st.markdown("<hr style='margin: 10px 0; border: none; border-top: 1px solid #000;'>", unsafe_allow_html=True)
+        
+        # expander를 행 아래 전체 너비로 배치
+        with st.expander("", expanded=False):
+            detail_cols = st.columns([2, 1])
             
-            with col1:
+            with detail_cols[0]:
                 st.write("**기본 정보**")
                 st.write(f"• 요청자: {employee_name} ({employee_id})")
                 st.write(f"• 부서: {expense.get('department', 'N/A')}")
@@ -418,52 +456,45 @@ def render_expense_list(load_data_func, update_data_func, delete_data_func,
                         else:
                             st.write(f"• 처리 의견: {expense.get('approval_comment')}")
             
-            with col2:
-                status_description = status_info.get('description', '알 수 없음')
-                st.write(f"**상태**: {status_emoji} {status_description}")
+            with detail_cols[1]:
+                st.write("**액션**")
                 
-                # 액션 버튼들
-                button_col1, button_col2 = st.columns(2)
+                # 프린트 버튼
+                if st.button("🖨️ 프린트", key=f"print_{expense.get('id', idx)}", use_container_width=True):
+                    st.session_state['print_expense'] = expense
+                    st.rerun()
                 
-                with button_col1:
-                    # 프린트 버튼 - 세션 상태에 저장
-                    if st.button("🖨️ 프린트", key=f"print_{expense.get('id', idx)}"):
-                        st.session_state['print_expense'] = expense
-                        st.rerun()
+                # 삭제 버튼
+                if user_role == 'Master':
+                    if st.button("🗑️ 삭제", key=f"delete_{expense.get('id', idx)}", use_container_width=True):
+                        if delete_data_func("expenses", expense.get('id'), "id"):
+                            st.success("지출요청서가 삭제되었습니다.")
+                            st.rerun()
+                        else:
+                            st.error("삭제에 실패했습니다.")
+                elif user_role == 'Admin' and expense.get('requester') == current_user_id and expense_status == 'pending':
+                    if st.button("🗑️ 삭제", key=f"delete_{expense.get('id', idx)}", use_container_width=True):
+                        if delete_data_func("expenses", expense.get('id'), "id"):
+                            st.success("지출요청서가 삭제되었습니다.")
+                            st.rerun()
+                        else:
+                            st.error("삭제에 실패했습니다.")
                 
-                with button_col2:
-                    # Master는 모든 항목 삭제 가능
-                    if user_role == 'Master':
-                        if st.button("🗑️ 삭제", key=f"delete_{expense.get('id', idx)}"):
-                            if delete_data_func("expenses", expense.get('id'), "id"):
-                                st.success("지출요청서가 삭제되었습니다.")
-                                st.rerun()
-                            else:
-                                st.error("삭제에 실패했습니다.")
-                    # Admin은 본인이 작성한 pending 항목만 삭제 가능
-                    elif user_role == 'Admin' and expense.get('requester') == current_user_id and expense_status == 'pending':
-                        if st.button("🗑️ 삭제", key=f"delete_{expense.get('id', idx)}"):
-                            if delete_data_func("expenses", expense.get('id'), "id"):
-                                st.success("지출요청서가 삭제되었습니다.")
-                                st.rerun()
-                            else:
-                                st.error("삭제에 실패했습니다.")
-                
-                # 수정 버튼 (Master는 모든 항목, Admin은 본인의 rejected 항목만)
+                # 수정 버튼
                 can_edit = False
                 if user_role == 'Master':
                     can_edit = True
                 elif user_role == 'Admin' and expense.get('requester') == current_user_id and expense_status == 'rejected':
                     can_edit = True
-                                
+                
                 if can_edit:
-                    if st.button("✏️ 수정", key=f"edit_{expense.get('id', idx)}", type="primary"):
+                    if st.button("✏️ 수정", key=f"edit_{expense.get('id', idx)}", type="primary", use_container_width=True):
                         st.session_state['edit_expense'] = expense
                         st.rerun()
                 
-                # 재신청 버튼 (rejected 상태이고 본인이 작성한 경우)
+                # 재신청 버튼
                 if expense_status == 'rejected' and expense.get('requester') == current_user_id:
-                    if st.button("🔄 재신청", key=f"resubmit_{expense.get('id', idx)}"):
+                    if st.button("🔄 재신청", key=f"resubmit_{expense.get('id', idx)}", use_container_width=True):
                         resubmit_data = {
                             'id': expense.get('id'),
                             'status': 'pending',
@@ -477,6 +508,8 @@ def render_expense_list(load_data_func, update_data_func, delete_data_func,
                             st.rerun()
                         else:
                             st.error("재신청에 실패했습니다.")
+        
+        st.markdown("---")
 
 def render_expense_statistics(load_data_func, calculate_expense_statistics_func):
     """지출 통계 표시"""
@@ -500,10 +533,10 @@ def render_expense_statistics(load_data_func, calculate_expense_statistics_func)
         st.metric("총 지출요청", f"{stats.get('total_count', 0)}건")
     
     with col2:
-        st.metric("총 요청금액", f"{stats.get('total_amount', 0):,}원")
+        st.metric("총 요청금액", f"{stats.get('total_amount', 0):,}VND")
     
     with col3:
-        st.metric("승인된 금액", f"{stats.get('approved_amount', 0):,}원")
+        st.metric("승인된 금액", f"{stats.get('approved_amount', 0):,}VND")
     
     with col4:
         total_count = stats.get('total_count', 0)
@@ -537,7 +570,7 @@ def render_expense_statistics(load_data_func, calculate_expense_statistics_func)
                 if isinstance(data, dict):
                     count = data.get('count', 0)
                     amount = data.get('amount', 0)
-                    st.write(f"• {category}: {count}건 ({amount:,}원)")
+                    st.write(f"• {category}: {count}건 ({amount:,}VND)")
     
     # 월별 통계
     monthly_stats = stats.get('monthly_stats', {})
