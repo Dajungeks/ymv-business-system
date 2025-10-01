@@ -485,9 +485,13 @@ class PrintFormGenerator:
             st.error("❌ 프린트 템플릿 파일을 찾을 수 없습니다. templates/expense_print_template.html 파일이 있는지 확인하세요.")
             return
         
+        # 문서번호
+        document_number = expense.get('document_number', 'N/A')
+
         # 템플릿 변수 치환
         print_html = template.format(
             expense_id=expense.get('id', 'N/A'),
+            document_number=document_number,
             status_bg=status_bg,
             status_color=status_color,
             status_emoji=status_emoji,
