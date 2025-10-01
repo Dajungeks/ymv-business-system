@@ -594,44 +594,6 @@ Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
         st.markdown("### 📋 프린트 미리보기")
         st.components.v1.html(print_html, height=1400, scrolling=True)
 
-        # 바로 프린트 버튼 추가
-        st.markdown("---")
-        import html as html_module
-        escaped_html = html_module.escape(print_html)
-
-        print_js = f"""
-        <script>
-        function printDocument() {{
-            var printWindow = window.open('', '_blank', 'width=800,height=900');
-            var htmlContent = `{escaped_html}`;
-            var parser = new DOMParser();
-            var doc = parser.parseFromString(htmlContent, 'text/html');
-            printWindow.document.open();
-            printWindow.document.write(doc.documentElement.outerHTML);
-            printWindow.document.close();
-            setTimeout(function() {{
-                printWindow.print();
-            }}, 500);
-        }}
-        </script>
-        <div style="text-align: center; padding: 20px;">
-            <button onclick="printDocument()" 
-                    style="padding: 15px 30px; background: #4CAF50; color: white; border: none; 
-                        border-radius: 8px; cursor: pointer; font-size: 18px; font-weight: bold;
-                        box-shadow: 0 4px 6px rgba(0,0,0,0.1); transition: all 0.3s;">
-                🖨️ 바로 프린트하기
-            </button>
-        </div>
-        <style>
-        button:hover {{
-            background: #45a049 !important;
-            transform: translateY(-2px);
-            box-shadow: 0 6px 8px rgba(0,0,0,0.15);
-        }}
-        </style>
-        """
-        st.components.v1.html(print_js, height=100)
-        st.caption("💡 버튼 클릭 시 새 창에서 프린트 대화상자가 열립니다.")
 
     @staticmethod
     def render_reimbursement_print(print_data, load_data_func, get_current_user_func):
@@ -701,7 +663,6 @@ Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
             html_content = html_content.replace('{{total_amount}}', f"{total_amount:,.0f}")
             html_content = html_content.replace('{{processor_name}}', current_user_name)
             html_content = html_content.replace('{{process_date}}', datetime.now().strftime('%Y-%m-%d'))
-            
             # HTML 표시
             st.components.v1.html(html_content, height=1200, scrolling=True)
 
@@ -712,46 +673,9 @@ Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
                 file_name=f"환급확인서_{emp_name}_{currency}_{datetime.now().strftime('%Y%m%d')}.html",
                 mime="text/html",
                 key=f"download_{currency}"
-            )
+            )            
 
-            # 바로 프린트 버튼 추가
-            st.markdown("---")
-            import html as html_module
-            escaped_html = html_module.escape(html_content)
-            
-            print_js = f"""
-            <script>
-            function printReimbursement_{currency}() {{{{
-                var printWindow = window.open('', '_blank', 'width=800,height=900');
-                var htmlContent = `{escaped_html}`;
-                var parser = new DOMParser();
-                var doc = parser.parseFromString(htmlContent, 'text/html');
-                printWindow.document.open();
-                printWindow.document.write(doc.documentElement.outerHTML);
-                printWindow.document.close();
-                setTimeout(function() {{{{
-                    printWindow.print();
-                }}}}, 500);
-            }}}}
-            </script>
-            <div style="text-align: center; padding: 20px;">
-                <button onclick="printReimbursement_{currency}()" 
-                        style="padding: 15px 30px; background: #2196F3; color: white; border: none; 
-                            border-radius: 8px; cursor: pointer; font-size: 18px; font-weight: bold;
-                            box-shadow: 0 4px 6px rgba(0,0,0,0.1); transition: all 0.3s;">
-                    🖨️ {currency} 바로 프린트하기
-                </button>
-            </div>
-            <style>
-            button:hover {{{{
-                background: #1976D2 !important;
-                transform: translateY(-2px);
-                box-shadow: 0 6px 8px rgba(0,0,0,0.15);
-            }}}}
-            </style>
-            """
-            st.components.v1.html(print_js, height=100)
-            st.caption("💡 버튼 클릭 시 새 창에서 프린트 대화상자가 열립니다.")
+
 
 # 하위 호환성을 위한 래퍼 함수들
 def get_approval_status_info(status):
