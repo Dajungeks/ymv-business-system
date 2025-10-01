@@ -225,7 +225,7 @@ def render_expense_form(load_data_func, save_data_func, update_data_func, get_cu
 def render_expense_list(load_data_func, update_data_func, delete_data_func, 
                        get_current_user_func, get_approval_status_info_func, 
                        create_csv_download_func, render_print_form_func):
-    """지출요청서 목록 관리 (테이블형 레이아웃 - 배경색 없음)"""
+    """지출요청서 목록 관리 (테이블형 레이아웃 - 문서번호 포함)"""
     
     # 프린트 모드 확인 (최우선)
     if st.session_state.get('print_expense'):
@@ -353,25 +353,29 @@ def render_expense_list(load_data_func, update_data_func, delete_data_func,
     
     st.markdown("---")
     
-    # 테이블 헤더
-    header_cols = st.columns([0.5, 1.5, 1.5, 1.5, 2, 1.5, 1])
-    header_cols[0].markdown("**No**")
-    header_cols[1].markdown("**날짜**")
-    header_cols[2].markdown("**유형**")
-    header_cols[3].markdown("**요청자**")
-    header_cols[4].markdown("**금액**")
-    header_cols[5].markdown("**상태**")
-    header_cols[6].markdown("**액션**")
+    # 테이블 헤더 (8개 컬럼 - 문서번호 추가)
+    header_cols = st.columns([1.2, 0.5, 1, 1, 1.2, 2, 1.2, 1])
+    header_cols[0].markdown("**문서번호**")
+    header_cols[1].markdown("**No**")
+    header_cols[2].markdown("**날짜**")
+    header_cols[3].markdown("**유형**")
+    header_cols[4].markdown("**요청자**")
+    header_cols[5].markdown("**금액**")
+    header_cols[6].markdown("**상태**")
+    header_cols[7].markdown("**액션**")
     
     st.markdown("---")
     
-    # 지출요청서 목록 표시 (테이블형 - 배경색 없음)
+    # 지출요청서 목록 표시 (테이블형)
     for idx, expense in enumerate(filtered_expenses, 1):
         # 직원 정보
         requester_id = expense.get('requester')
         employee_info = employee_dict.get(requester_id, {})
         employee_name = employee_info.get('name', '알 수 없음')
         employee_id = employee_info.get('employee_id', f"ID{requester_id}")
+        
+        # 문서번호
+        document_number = expense.get('document_number', 'N/A')
         
         # 요청일
         request_date = 'N/A'
@@ -393,30 +397,35 @@ def render_expense_list(load_data_func, update_data_func, delete_data_func,
         amount = expense.get('amount', 0)
         currency = expense.get('currency', 'VND')
         
-        # 테이블 행 (배경색 없음)
-        row_cols = st.columns([0.5, 1.5, 1.5, 1.5, 2, 1.5, 1])
+        # 테이블 행 (8개 컬럼)
+        row_cols = st.columns([1.2, 0.5, 1, 1, 1.2, 2, 1.2, 1])
         
         with row_cols[0]:
-            st.write(idx)
+            st.write(document_number)
         
         with row_cols[1]:
-            st.write(request_date)
+            st.write(idx)
         
         with row_cols[2]:
-            st.write(expense_type)
+            st.write(request_date)
         
         with row_cols[3]:
-            st.write(employee_name)
+            st.write(expense_type)
         
         with row_cols[4]:
-            st.markdown(f"**{amount:,} {currency}**")
+            st.write(employee_name)
         
         with row_cols[5]:
-            st.write(f"{status_emoji} {status_description}")
+            st.markdown(f"**{amount:,} {currency}**")
         
         with row_cols[6]:
+            st.write(f"{status_emoji} {status_description}")
+        
+        with row_cols[7]:
             st.write("▼ 상세")
-        # 여기에 검정 실선 추가
+        
+        # 구분선
+        # 구분선
         st.markdown("<hr style='margin: 2px 0; border: none; border-top: 1px solid #000;'>", unsafe_allow_html=True)
         
         # expander를 행 아래 전체 너비로 배치
@@ -425,6 +434,7 @@ def render_expense_list(load_data_func, update_data_func, delete_data_func,
             
             with detail_cols[0]:
                 st.write("**기본 정보**")
+                st.write(f"• 문서번호: {document_number}")
                 st.write(f"• 요청자: {employee_name} ({employee_id})")
                 st.write(f"• 부서: {expense.get('department', 'N/A')}")
                 st.write(f"• 지출일: {expense.get('expense_date', 'N/A')}")
@@ -508,8 +518,6 @@ def render_expense_list(load_data_func, update_data_func, delete_data_func,
                             st.rerun()
                         else:
                             st.error("재신청에 실패했습니다.")
-        
-        st.markdown("---")
 
 def render_expense_statistics(load_data_func, calculate_expense_statistics_func):
     """지출 통계 표시"""
