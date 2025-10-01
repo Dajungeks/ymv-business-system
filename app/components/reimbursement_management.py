@@ -155,25 +155,37 @@ def render_reimbursement_pending(load_data_func, update_data_func, get_current_u
                 if st.button(f"🖨️ 선택 항목 프린트 ({len(selected_expenses)}건)", 
                            key=f"print_{requester_id}", use_container_width=True):
                     
-                    # 문서번호 생성
-                    from components.document_number import generate_document_number
-                    document_number = generate_document_number('PAY', load_func=load_data_func)
-                    
-                    # 선택된 항목 상태를 'printed'로 변경 및 문서번호 저장
+                    # 임시 상태로 먼저 업데이트
                     success_count = 0
                     for exp in selected_expenses:
                         result = update_data_func("expenses", {
                             'id': exp.get('id'),
                             'reimbursement_status': 'printed',
-                            'reimbursement_document_number': document_number,
+                            'reimbursement_document_number': 'TEMP',
                             'updated_at': datetime.now().isoformat()
                         }, "id")
                         
                         if result:
                             success_count += 1
                     
-                    # 업데이트 성공 확인 후 프린트 모드로 전환
+                    # 업데이트 성공 확인
                     if success_count == len(selected_expenses):
+                        # DB 반영 대기
+                        import time
+                        time.sleep(0.5)
+                        
+                        # 문서번호 생성 (업데이트 후)
+                        from components.document_number import generate_document_number
+                        document_number = generate_document_number('PAY', load_func=load_data_func)
+                        
+                        # 실제 문서번호로 업데이트
+                        for exp in selected_expenses:
+                            update_data_func("expenses", {
+                                'id': exp.get('id'),
+                                'reimbursement_document_number': document_number,
+                                'updated_at': datetime.now().isoformat()
+                            }, "id")
+                        
                         # 통화별 그룹핑
                         grouped_by_currency = defaultdict(list)
                         for exp in selected_expenses:
@@ -186,11 +198,10 @@ def render_reimbursement_pending(load_data_func, update_data_func, get_current_u
                             'grouped_expenses': dict(grouped_by_currency),
                             'document_number': document_number
                         }
-                        st.success(f"✅ {success_count}건 프린트 준비 완료!")
+                        st.success(f"✅ {success_count}건 프린트 준비 완료! 문서번호: {document_number}")
                         st.rerun()
                     else:
                         st.error(f"⚠️ {success_count}/{len(selected_expenses)}건만 처리되었습니다.")
-
 
 def render_reimbursement_printed(load_data_func, update_data_func, get_current_user_func):
     """프린트 완료 목록 - 최종 환급 처리 대기"""
