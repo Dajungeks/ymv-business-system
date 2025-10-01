@@ -1,6 +1,6 @@
 """
-YMV 관리 프로그램 v4.1 - Step 19: 고객 관리 통합 및 메뉴 UI 개선 
-YMV Business Management System v4.1 - Step 19: Customer management integration and menu UI improvement
+YMV 관리 프로그램 v4.3 - Step 29: 파일 정리 (accounting_management.py 제거)
+YMV Business Management System v4.3 - Step 29: File cleanup
 """
 
 # 표준 라이브러리
@@ -24,12 +24,14 @@ from components.code_management import CodeManagementComponent
 from components.multilingual_input import MultilingualInputComponent
 from components.quotation_management import show_quotation_management
 from components.expense_management import show_expense_management
+# from components.accounting_management import show_accounting_management  # 제거됨
 from components.dashboard import show_dashboard_main
 from components.employee_management import show_employee_management
 from components.sales_process_main import show_sales_process_management
 from components.product_management import show_product_management
 from components.supplier_management import show_supplier_management
 from components.customer_management import show_customer_management
+from components.reimbursement_management import show_reimbursement_management
 
 # 유틸리티 모듈
 from utils.database import create_database_operations
@@ -105,6 +107,23 @@ def show_expense_management_page():
         calculate_expense_statistics,
         create_csv_download,
         render_print_form
+    )
+
+# show_accounting_management_page() 함수 제거됨
+
+def show_reimbursement_management_page():
+    """환급 관리 페이지"""
+    current_user = auth_manager.get_current_user()
+    user_role = current_user.get('role', 'Staff') if current_user else 'Staff'
+    
+    if user_role not in ['Admin', 'CEO', 'Master']:
+        st.warning("⚠️ 환급 관리 권한이 없습니다.")
+        return
+    
+    show_reimbursement_management(
+        db_operations.load_data,
+        db_operations.update_data,
+        auth_manager.get_current_user
     )
 
 def show_employee_management_page():
@@ -297,13 +316,13 @@ def show_quotation_management_page():
 
 def show_code_management():
     """코드 관리 페이지"""
-    st.title("🔢 코드 관리")
+    st.title("📢 코드 관리")
     code_manager = CodeManagementComponent(init_supabase())
     code_manager.render_code_management_page()
 
 def show_multilingual_input():
     """다국어 입력 페이지"""
-    st.title("🌍 다국어 입력 시스템")
+    st.title("🌐 다국어 입력 시스템")
     ml_input = MultilingualInputComponent(init_supabase())
     
     # 언어 우선순위 정보 표시
@@ -334,7 +353,7 @@ def show_multilingual_input():
 # ===========================================
 
 def main():
-    """메인 애플리케이션 (개선된 메뉴 UI)"""
+    """메인 애플리케이션"""
     
     # 세션 상태 초기화
     if 'logged_in' not in st.session_state:
@@ -416,13 +435,22 @@ def main():
             st.session_state.current_page = "지출 요청서"
             st.rerun()
         
+        # 회계 확인 메뉴 제거됨 (expense_management.py 탭으로 통합)
+
+        # 환급 관리 메뉴 (권한 있는 사용자만)
+        if current_user and current_user.get('role') in ['Admin', 'CEO', 'Master']:
+            if st.button("💰 환급 관리", use_container_width=True,
+                        type="primary" if st.session_state.current_page == "환급 관리" else "secondary"):
+                st.session_state.current_page = "환급 관리"
+                st.rerun()
+        
         st.subheader("⚙️ 시스템 설정")
-        if st.button("🔢 코드 관리", use_container_width=True,
+        if st.button("📢 코드 관리", use_container_width=True,
                     type="primary" if st.session_state.current_page == "코드 관리" else "secondary"):
             st.session_state.current_page = "코드 관리"
             st.rerun()
             
-        if st.button("🌍 다국어 입력", use_container_width=True,
+        if st.button("🌐 다국어 입력", use_container_width=True,
                     type="primary" if st.session_state.current_page == "다국어 입력" else "secondary"):
             st.session_state.current_page = "다국어 입력"
             st.rerun()
@@ -449,6 +477,10 @@ def main():
         show_employee_management_page()
     elif current_page == "지출 요청서":
         show_expense_management_page()
+    # elif current_page == "회계 확인": 라우팅 제거됨
+    #     show_accounting_management_page()
+    elif current_page == "환급 관리":
+         show_reimbursement_management_page()
     elif current_page == "코드 관리":
         show_code_management()
     elif current_page == "다국어 입력":
