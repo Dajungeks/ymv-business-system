@@ -3,7 +3,7 @@ from datetime import datetime
 def generate_document_number(doc_type, save_func=None, load_func=None):
     """문서 번호 생성 - DOC-YYMMDD-001 형식"""
     
-    today = datetime.now().strftime('%y%m%d')  # 6자리 (YYMMDD)
+    today = datetime.now().strftime('%y%m%d')
     prefix = f"{doc_type}-{today}"
     
     # doc_type에 따라 조회할 컬럼 결정
@@ -21,7 +21,9 @@ def generate_document_number(doc_type, save_func=None, load_func=None):
             today_docs = [
                 exp.get(column_name, '') 
                 for exp in expenses 
-                if exp.get(column_name, '').startswith(prefix)
+                if exp.get(column_name, '') and 
+                   exp.get(column_name, '').startswith(prefix) and
+                   exp.get(column_name, '') != 'TEMP'  # TEMP 제외
             ]
             
             if today_docs:
