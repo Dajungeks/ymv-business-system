@@ -31,7 +31,7 @@ def show_expense_management(load_data_func, save_data_func, update_data_func, de
     # 탭 구성 - Admin/CEO/Master는 화던 발행 확인 탭 추가
     if user_role in ['Admin', 'CEO', 'Master']:
         approval_tab_name = f"👨‍💼 승인 관리 ({pending_approval_count})" if pending_approval_count > 0 else "👨‍💼 승인 관리"
-        invoice_tab_name = f"🧾 화던 발행 확인 ({pending_invoice_count})" if pending_invoice_count > 0 else "🧾 화던 발행 확인"
+        invoice_tab_name = f"🧾 화던 확인 대기 항목 ({pending_invoice_count})" if pending_invoice_count > 0 else "🧾 화던 발행 확인"
         
         tab1, tab2, tab3, tab4, tab5 = st.tabs([
             "📝 지출요청서 작성", 
