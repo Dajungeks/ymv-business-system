@@ -530,17 +530,22 @@ def render_expense_list(load_data_func, update_data_func, delete_data_func,
                 cols[5].write(f"{status_emoji} {status_desc}")
                 cols[6].write(f"{invoice_icon} {invoice_text}")
                 
-                with cols[7]:
-                    # 화던 확인 버튼 (승인되었고 화던 미확인 항목만)
+                with cols[6]:
+                    # 화던 대기 버튼 (클릭 가능)
                     if expense_status == 'approved' and not accounting_confirmed and user_role in ['Admin', 'CEO', 'Master']:
-                        if st.button("✅ 화던확인", key=f"invoice_{expense.get('id')}", use_container_width=True):
+                        if st.button(f"{invoice_icon} {invoice_text}", key=f"invoice_{expense.get('id')}", use_container_width=True):
                             if confirm_invoice_expense(expense.get('id'), current_user.get('id'), update_data_func, load_data_func):
                                 st.success("화던 발행 확인 완료!")
                                 st.rerun()
                     else:
-                        if st.button("📄 상세", key=f"detail_{expense.get('id')}", use_container_width=True):
-                            st.session_state[f'show_detail_{expense.get("id")}'] = True
-                            st.rerun()
+                        # 화던 완료 또는 해당없음은 텍스트만
+                        st.write(f"{invoice_icon} {invoice_text}")
+
+                with cols[7]:
+                    # 상세 버튼은 항상 표시
+                    if st.button("📄 상세", key=f"detail_{expense.get('id')}", use_container_width=True):
+                        st.session_state[f'show_detail_{expense.get("id")}'] = True
+                        st.rerun()
                 
                 # 상세 정보 (클릭 시 표시)
                 if st.session_state.get(f'show_detail_{expense.get("id")}', False):
