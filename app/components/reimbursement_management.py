@@ -17,8 +17,10 @@ def show_reimbursement_management(load_data_func, update_data_func, get_current_
         return
     
     # 프린트 모드 확인
+    # 프린트 모드 확인
     if st.session_state.get('print_reimbursement'):
-        render_reimbursement_print(
+        from utils.helpers import PrintFormGenerator
+        PrintFormGenerator.render_reimbursement_print(
             st.session_state['print_reimbursement'],
             load_data_func,
             get_current_user_func
@@ -404,87 +406,3 @@ def render_reimbursement_completed(load_data_func, get_current_user_func):
         )
 
 
-def render_reimbursement_print(print_data, load_data_func, get_current_user_func):
-    """환급 프린트 화면 (템플릿 사용)"""
-    
-    employee_id = print_data['employee_id']
-    grouped_expenses = print_data['grouped_expenses']
-    document_number = print_data.get('document_number', 'N/A')
-    
-    # 직원 정보 조회
-    employees = load_data_func("employees")
-    employee_dict = {emp.get('id'): emp for emp in employees if emp.get('id')}
-    emp_info = employee_dict.get(employee_id, {})
-    emp_name = emp_info.get('name', '알 수 없음')
-    emp_employee_id = emp_info.get('employee_id', 'N/A')
-    emp_department = emp_info.get('department', 'N/A')
-    
-    current_user = get_current_user_func()
-    current_user_name = current_user.get('name', '알 수 없음') if current_user else '알 수 없음'
-    
-    # 템플릿 로드
-    import os
-
-    current_dir = os.path.dirname(os.path.abspath(__file__))
-    app_dir = os.path.dirname(current_dir)
-    template_path = os.path.join(app_dir, 'templates', 'reimbursement_print_template.html')
-
-    try:
-        with open(template_path, 'r', encoding='utf-8') as f:
-            template = f.read()
-    except FileNotFoundError:
-        st.error(f"템플릿 파일을 찾을 수 없습니다: {template_path}")
-        return
-    
-    # 통화별로 프린트
-    for currency, expenses in grouped_expenses.items():
-        st.markdown("---")
-        st.subheader(f"환급 지급 확인서 - {currency}")
-        
-        # 지출 내역 행 생성
-        expense_rows = ""
-        total_amount = 0
-        
-        for idx, exp in enumerate(expenses, 1):
-            amount = exp.get('amount', 0)
-            total_amount += amount
-            
-            expense_rows += f"""
-            <tr>
-                <td class="text-center">{idx}</td>
-                <td class="text-center">{exp.get('document_number', 'N/A')}</td>
-                <td class="text-center">{exp.get('expense_date', 'N/A')}</td>
-                <td>{exp.get('description', '')}</td>
-                <td class="text-right">{amount:,.0f}</td>
-            </tr>
-            """
-        
-        # 템플릿 치환
-        html_content = template.replace('{{document_number}}', document_number)
-        html_content = html_content.replace('{{employee_name}}', emp_name)
-        html_content = html_content.replace('{{employee_id}}', emp_employee_id)
-        html_content = html_content.replace('{{department}}', emp_department)
-        html_content = html_content.replace('{{reimbursement_date}}', datetime.now().strftime('%Y년 %m월 %d일'))
-        html_content = html_content.replace('{{currency}}', currency)
-        html_content = html_content.replace('{{expense_rows}}', expense_rows)
-        html_content = html_content.replace('{{total_amount}}', f"{total_amount:,.0f}")
-        html_content = html_content.replace('{{processor_name}}', current_user_name)
-        html_content = html_content.replace('{{process_date}}', datetime.now().strftime('%Y-%m-%d'))
-        
-        # HTML 표시
-        st.components.v1.html(html_content, height=1200, scrolling=True)
-
-        # 프린트용 HTML 다운로드 버튼
-        st.download_button(
-            label="프린트용 HTML 다운로드",
-            data=html_content,
-            file_name=f"환급확인서_{emp_name}_{currency}_{datetime.now().strftime('%Y%m%d')}.html",
-            mime="text/html",
-            key=f"download_{currency}"
-        )
-
-        st.info("💡 다운로드한 HTML 파일을 브라우저로 열어서 Ctrl+P로 프린트하세요")
-
-        # 프린트 버튼 추가
-        if st.button("🖨️ 프린트하기", key=f"print_btn_{currency}"):
-            st.info("💡 브라우저 프린트: Ctrl+P (Windows) / Cmd+P (Mac)")
