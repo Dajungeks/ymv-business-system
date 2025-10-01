@@ -528,7 +528,6 @@ def render_expense_list(load_data_func, update_data_func, delete_data_func,
                 
                 cols[4].write(f"**{amount:,} {currency}**")
                 cols[5].write(f"{status_emoji} {status_desc}")
-                cols[6].write(f"{invoice_icon} {invoice_text}")
                 
                 with cols[6]:
                     # 화던 대기 버튼 (클릭 가능)
