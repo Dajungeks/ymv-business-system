@@ -25,6 +25,7 @@
             margin: 0 auto;
             padding: 12mm;
             box-shadow: 0 0 10px rgba(0,0,0,0.1);
+            position: relative;
         }}
         
         .status-badge {{
@@ -82,6 +83,13 @@
         .document-title p {{
             font-size: 10px;
             color: #666;
+        }}
+        
+        .document-number {{
+            font-size: 11px;
+            font-weight: bold;
+            color: #0984e3;
+            margin-top: 5px;
         }}
         
         .info-table {{
@@ -164,7 +172,10 @@
         }}
         
         .approval-section {{
-            margin-top: 15px;
+            position: absolute;
+            bottom: 50mm;
+            left: 12mm;
+            right: 12mm;
             page-break-inside: avoid;
         }}
         
@@ -206,6 +217,8 @@
             height: 25px;
             background-color: #f8f9fa;
             font-size: 8px;
+            text-align: left !important;
+            padding-left: 10px;
         }}
         
         .approved-signature {{
@@ -215,6 +228,10 @@
         
         .document-footer {{
             margin-top: 15px;
+            position: absolute;
+            bottom: 12mm;
+            left: 12mm;
+            right: 12mm;
             text-align: center;
             font-size: 7px;
             color: #666;
@@ -301,14 +318,13 @@
             <div class="company-name">CÔNG TY TNHH YUMOLD VIỆT NAM</div>
             <div class="company-info">
                 <div class="tax-code">Tax Code (MST): 0111146237</div>
-                <div>Hanoi Accounting Office: Room 1201-2, 12th Floor, Keangnam Hanoi Landmark 72, E6 Area, Yen Hoa Ward, Hanoi City</div>
-                <div>Bac Ninh Sales Office: 6th Floor, No. 255 Le Thanh Tong Street, Vo Cuong Ward, Bac Ninh Province</div>
             </div>
         </div>
         
         <div class="document-title">
             <h1>지출 요청서</h1>
             <p>EXPENSE REQUEST FORM</p>
+            <p class="document-number">문서번호: {document_number}</p>
         </div>
         
         <table class="info-table">
@@ -377,8 +393,8 @@
                         </td>
                     </tr>
                     <tr>
-                        <td class="date-space">날짜 (Date): {request_date}</td>
-                        <td class="date-space">날짜 (Date):</td>
+                        <td class="date-space">날짜: {request_date}</td>
+                        <td class="date-space">날짜:</td>
                         <td class="date-space {approver_date_class}">
                             {approver_date_text}
                         </td>
@@ -390,7 +406,7 @@
         <div class="document-footer">
             <p>본 지출요청서는 회사 규정에 따라 작성되었으며, 승인 후 처리됩니다.</p>
             <p>This expense request form is prepared according to company regulations and will be processed after approval.</p>
-            <p style="margin-top: 5px;">Document ID: EXP-{expense_id} | Generated: {generated_time}</p>
+            <p style="margin-top: 5px;">Document ID: {document_number} | Generated: {generated_time}</p>
         </div>
     </div>
     
