@@ -6,7 +6,7 @@ Logistics-related database functions
 import streamlit as st
 import json
 from datetime import datetime, timedelta
-from utils.database import get_supabase_client  # Import
+from database import get_supabase_client  # Import
 
 
 # ==========================================
