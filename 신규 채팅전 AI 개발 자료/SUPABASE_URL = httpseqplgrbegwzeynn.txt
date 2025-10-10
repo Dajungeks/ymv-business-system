@@ -1,8 +1,0 @@
-SUPABASE_URL = "https://eqplgrbegwzeynnbcuep.supabase.co"
-SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVxcGxncmJlZ3d6ZXlubmJjdWVwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTgzNjU2MTEsImV4cCI6MjA3Mzk0MTYxMX0.wDSRvnb0BBi3qkrHIguL835Np4Kc-K0u_radUe6AixU"
-
-DB_USERNAME = "myuser"
-DB_TOKEN = "abcdef"
-
-[some_section]
-some_key = 1234

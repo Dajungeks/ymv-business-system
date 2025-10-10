@@ -1,11 +1,12 @@
 """
-YMV 관리 프로그램 v4.3 - Step 29: 파일 정리 (accounting_management.py 제거)
-YMV Business Management System v4.3 - Step 29: File cleanup
+YMV 관리 프로그램 v4.4 - 폴더 구조 정리 완료
+YMV Business Management System v4.4 - Folder Structure Organized
 """
 
 # 표준 라이브러리
 import streamlit as st
 import time
+from datetime import datetime, date
 
 # 페이지 설정 (최우선 실행)
 st.set_page_config(
@@ -19,19 +20,39 @@ st.set_page_config(
 import supabase
 from supabase import create_client, Client
 
-# 내부 컴포넌트
-from components.code_management import CodeManagementComponent
-from components.multilingual_input import MultilingualInputComponent
-from components.quotation_management import show_quotation_management
-from components.expense_management import show_expense_management
-# from components.accounting_management import show_accounting_management  # 제거됨
-from components.dashboard import show_dashboard_main
-from components.employee_management import show_employee_management
-from components.sales_process_main import show_sales_process_management
-from components.product_management import show_product_management
-from components.supplier_management import show_supplier_management
-from components.customer_management import show_customer_management
-from components.reimbursement_management import show_reimbursement_management
+# 내부 컴포넌트 - Sales
+from components.sales.customer_management import show_customer_management
+from components.sales.quotation_management import show_quotation_management
+from components.sales.sales_process_main import show_sales_process_management
+
+# 내부 컴포넌트 - Finance
+from components.finance.expense_management import show_expense_management
+from components.finance.reimbursement_management import show_reimbursement_management
+
+# 내부 컴포넌트 - HR
+from components.hr.employee_management import show_employee_management
+
+# 내부 컴포넌트 - Supplier
+from components.supplier.supplier_management import show_supplier_management
+
+# 내부 컴포넌트 - Product
+from components.product.product_management import show_product_management
+from components.product.product_code_management import show_product_code_management
+
+# 내부 컴포넌트 - Logistics
+from components.logistics.lead_time_management import lead_time_management_page
+from components.logistics.delay_reasons_management import delay_reasons_management_page
+from components.logistics.delivery_management import delivery_management_page
+from components.logistics.fsc_rules_management import fsc_rules_management_page
+from components.logistics.trucking_rules_management import trucking_rules_management_page
+from components.logistics.rate_table_management import rate_table_management_page
+
+# 내부 컴포넌트 - Dashboard
+from components.dashboard.dashboard import show_dashboard_main
+
+# 내부 컴포넌트 - System
+from components.system.code_management import CodeManagementComponent
+from components.system.multilingual_input import MultilingualInputComponent
 
 # 유틸리티 모듈
 from utils.database import create_database_operations
@@ -57,6 +78,11 @@ def init_supabase():
 def init_managers():
     """매니저 클래스들 초기화"""
     supabase_client = init_supabase()
+    
+    # session_state에 supabase 저장 (물류 함수에서 사용)
+    if 'supabase' not in st.session_state:
+        st.session_state.supabase = supabase_client
+    
     db_ops = create_database_operations(supabase_client)
     auth_manager = AuthManager(db_ops)
     return db_ops, auth_manager
@@ -109,8 +135,6 @@ def show_expense_management_page():
         render_print_form
     )
 
-# show_accounting_management_page() 함수 제거됨
-
 def show_reimbursement_management_page():
     """환급 관리 페이지"""
     current_user = auth_manager.get_current_user()
@@ -142,6 +166,19 @@ def show_employee_management_page():
         render_print_form
     )
 
+def show_product_code_management_page():
+    """제품 코드 관리 페이지"""
+    try:
+        show_product_code_management(
+            load_func=db_operations.load_data,
+            save_func=db_operations.save_data,
+            update_func=db_operations.update_data,
+            delete_func=db_operations.delete_data
+        )
+    except Exception as e:
+        st.error(f"제품 코드 관리 페이지 로드 중 오류가 발생했습니다: {str(e)}")
+        st.info("시스템 관리자에게 문의해주세요.")
+        
 def show_product_management_page():
     """제품 관리 페이지"""
     try:
@@ -316,13 +353,13 @@ def show_quotation_management_page():
 
 def show_code_management():
     """코드 관리 페이지"""
-    st.title("📢 코드 관리")
+    st.title("🔢 코드 관리")
     code_manager = CodeManagementComponent(init_supabase())
     code_manager.render_code_management_page()
 
 def show_multilingual_input():
     """다국어 입력 페이지"""
-    st.title("🌐 다국어 입력 시스템")
+    st.title("🌍 다국어 입력 시스템")
     ml_input = MultilingualInputComponent(init_supabase())
     
     # 언어 우선순위 정보 표시
@@ -362,10 +399,13 @@ def main():
         st.session_state.current_page = "대시보드"
     
     # 공통 날짜/시간 설정
-    from datetime import datetime, date
     st.session_state.today = date.today()
     st.session_state.now = datetime.now().isoformat()
     
+    # 물류 시스템용 Supabase 연결 보장
+    if 'supabase' not in st.session_state:
+        st.session_state.supabase = init_supabase()
+
     # 로그인 확인
     if not auth_manager.is_logged_in():
         show_login_page()
@@ -409,6 +449,11 @@ def main():
             st.rerun()
         
         st.subheader("🏭 운영 관리")
+        if st.button("🏷️ 제품 코드 관리", use_container_width=True,
+                    type="primary" if st.session_state.current_page == "제품 코드 관리" else "secondary"):
+            st.session_state.current_page = "제품 코드 관리"
+            st.rerun()
+            
         if st.button("📦 제품 관리", use_container_width=True,
                     type="primary" if st.session_state.current_page == "제품 관리" else "secondary"):
             st.session_state.current_page = "제품 관리"
@@ -424,6 +469,22 @@ def main():
             st.session_state.current_page = "구매품 관리"
             st.rerun()
         
+        st.subheader("🚚 물류 관리")
+        logistics_pages = {
+            "표준 리드타임": "표준 리드타임",
+            "지연 사유": "지연 사유",
+            "납기 관리": "납기 관리",
+            "FSC 규칙": "FSC 규칙",
+            "Trucking 규칙": "Trucking 규칙",
+            "물류사 요금표": "물류사 요금표"
+        }
+        
+        for menu_name, page_name in logistics_pages.items():
+            if st.button(f"📦 {menu_name}", use_container_width=True,
+                        type="primary" if st.session_state.current_page == page_name else "secondary"):
+                st.session_state.current_page = page_name
+                st.rerun()
+        
         st.subheader("👤 인사 관리")
         if st.button("👨‍💼 직원 관리", use_container_width=True,
                     type="primary" if st.session_state.current_page == "직원 관리" else "secondary"):
@@ -435,8 +496,6 @@ def main():
             st.session_state.current_page = "지출 요청서"
             st.rerun()
         
-        # 회계 확인 메뉴 제거됨 (expense_management.py 탭으로 통합)
-
         # 환급 관리 메뉴 (권한 있는 사용자만)
         if current_user and current_user.get('role') in ['Admin', 'CEO', 'Master']:
             if st.button("💰 환급 관리", use_container_width=True,
@@ -445,12 +504,12 @@ def main():
                 st.rerun()
         
         st.subheader("⚙️ 시스템 설정")
-        if st.button("📢 코드 관리", use_container_width=True,
+        if st.button("🔢 코드 관리", use_container_width=True,
                     type="primary" if st.session_state.current_page == "코드 관리" else "secondary"):
             st.session_state.current_page = "코드 관리"
             st.rerun()
             
-        if st.button("🌐 다국어 입력", use_container_width=True,
+        if st.button("🌍 다국어 입력", use_container_width=True,
                     type="primary" if st.session_state.current_page == "다국어 입력" else "secondary"):
             st.session_state.current_page = "다국어 입력"
             st.rerun()
@@ -467,18 +526,30 @@ def main():
         show_quotation_management_page()
     elif current_page == "영업 프로세스":
         show_sales_process_management_page()
+    elif current_page == "제품 코드 관리":
+        show_product_code_management_page()
     elif current_page == "제품 관리":
         show_product_management_page()
     elif current_page == "공급업체 관리":
         show_supplier_management_page()
     elif current_page == "구매품 관리":
         show_purchase_management()
+    elif current_page == "표준 리드타임":
+        lead_time_management_page()
+    elif current_page == "지연 사유":
+        delay_reasons_management_page()
+    elif current_page == "납기 관리":
+        delivery_management_page()
+    elif current_page == "FSC 규칙":
+        fsc_rules_management_page()
+    elif current_page == "Trucking 규칙":
+        trucking_rules_management_page()
+    elif current_page == "물류사 요금표":
+        rate_table_management_page()
     elif current_page == "직원 관리":
         show_employee_management_page()
     elif current_page == "지출 요청서":
         show_expense_management_page()
-    # elif current_page == "회계 확인": 라우팅 제거됨
-    #     show_accounting_management_page()
     elif current_page == "환급 관리":
          show_reimbursement_management_page()
     elif current_page == "코드 관리":

@@ -263,3 +263,349 @@ def delete_data_from_supabase(table, item_id, id_field="id", db_ops=None):
     else:
         st.warning("DatabaseOperations 인스턴스가 필요합니다.")
         return False
+
+# ============================================
+# 물류 관리 함수 (Supabase 기반)
+# ============================================
+
+def get_supabase_client():
+    """Supabase 클라이언트 가져오기"""
+    if 'supabase' not in st.session_state:
+        st.error("Supabase 연결이 초기화되지 않았습니다.")
+        return None
+    return st.session_state.supabase
+
+
+# ============================================
+# FSC 규칙 관리 함수
+# ============================================
+
+def get_fsc_rules(search_query=None, status_filter=None):
+    """FSC 규칙 목록 조회"""
+    client = get_supabase_client()
+    if not client:
+        return []
+    
+    try:
+        query = client.table('fsc_rules').select('*')
+        
+        if search_query:
+            query = query.ilike('rule_name', f'%{search_query}%')
+        
+        if status_filter == "활성":
+            query = query.eq('is_active', True)
+        elif status_filter == "비활성":
+            query = query.eq('is_active', False)
+        
+        query = query.order('created_at', desc=True)
+        
+        response = query.execute()
+        return response.data if response.data else []
+    except Exception as e:
+        st.error(f"FSC 규칙 조회 실패: {str(e)}")
+        return []
+
+
+def get_fsc_rule_by_id(rule_id):
+    """특정 FSC 규칙 조회"""
+    client = get_supabase_client()
+    if not client:
+        return None
+    
+    try:
+        response = client.table('fsc_rules').select('*').eq('rule_id', rule_id).execute()
+        return response.data[0] if response.data else None
+    except Exception as e:
+        st.error(f"FSC 규칙 조회 실패: {str(e)}")
+        return None
+
+
+def save_fsc_rule(rule_name, min_charge, brackets_json):
+    """새 FSC 규칙 저장"""
+    client = get_supabase_client()
+    if not client:
+        return False, "Supabase 연결 실패"
+    
+    try:
+        data = {
+            'rule_name': rule_name,
+            'min_charge': min_charge,
+            'brackets': brackets_json,
+            'is_active': True
+        }
+        
+        response = client.table('fsc_rules').insert(data).execute()
+        
+        if response.data:
+            return True, response.data[0]['rule_id']
+        return False, "저장 실패"
+    except Exception as e:
+        return False, str(e)
+
+
+def update_fsc_rule(rule_id, rule_name, min_charge, brackets_json):
+    """FSC 규칙 수정"""
+    client = get_supabase_client()
+    if not client:
+        return False, "Supabase 연결 실패"
+    
+    try:
+        data = {
+            'rule_name': rule_name,
+            'min_charge': min_charge,
+            'brackets': brackets_json
+        }
+        
+        response = client.table('fsc_rules').update(data).eq('rule_id', rule_id).execute()
+        
+        if response.data:
+            return True, "수정 완료"
+        return False, "수정 실패"
+    except Exception as e:
+        return False, str(e)
+
+
+def delete_fsc_rule(rule_id):
+    """FSC 규칙 삭제(비활성화)"""
+    client = get_supabase_client()
+    if not client:
+        return False
+    
+    try:
+        response = client.table('fsc_rules').update({'is_active': False}).eq('rule_id', rule_id).execute()
+        return True if response.data else False
+    except Exception as e:
+        st.error(f"FSC 규칙 삭제 실패: {str(e)}")
+        return False
+
+
+def calculate_fsc(rule_id, weight):
+    """FSC 금액 계산"""
+    rule = get_fsc_rule_by_id(rule_id)
+    
+    if not rule:
+        return None, "규칙을 찾을 수 없습니다"
+    
+    if not rule.get('is_active'):
+        return None, "비활성 규칙입니다"
+    
+    min_charge = float(rule['min_charge'])
+    brackets = rule['brackets']
+    
+    # JSON 파싱
+    import json
+    brackets_dict = json.loads(brackets) if isinstance(brackets, str) else brackets
+    
+    # 적용 구간 찾기
+    applied_bracket = None
+    unit_price = 0
+    
+    for bracket_range, price in brackets_dict.items():
+        if '+' in bracket_range:
+            min_weight = int(bracket_range.replace('+', ''))
+            if weight >= min_weight:
+                applied_bracket = bracket_range
+                unit_price = float(price)
+                break
+        else:
+            parts = bracket_range.split('-')
+            min_weight = int(parts[0])
+            max_weight = int(parts[1])
+            if min_weight <= weight <= max_weight:
+                applied_bracket = bracket_range
+                unit_price = float(price)
+                break
+    
+    if applied_bracket is None:
+        return None, "적용 가능한 구간이 없습니다"
+    
+    calculated_fsc = weight * unit_price
+    final_fsc = max(calculated_fsc, min_charge)
+    
+    return {
+        'weight': weight,
+        'applied_bracket': applied_bracket,
+        'unit_price': unit_price,
+        'calculated_fsc': calculated_fsc,
+        'min_charge': min_charge,
+        'final_fsc': final_fsc,
+        'min_charge_applied': final_fsc == min_charge
+    }, None
+
+
+# ============================================
+# Trucking 규칙 관리 함수
+# ============================================
+
+def get_trucking_rules(search_query=None, type_filter=None, status_filter=None):
+    """Trucking 규칙 목록 조회"""
+    client = get_supabase_client()
+    if not client:
+        return []
+    
+    try:
+        query = client.table('trucking_rules').select('*')
+        
+        if search_query:
+            query = query.ilike('rule_name', f'%{search_query}%')
+        
+        if type_filter and type_filter != "전체":
+            query = query.eq('charge_type', type_filter)
+        
+        if status_filter == "활성":
+            query = query.eq('is_active', True)
+        elif status_filter == "비활성":
+            query = query.eq('is_active', False)
+        
+        query = query.order('charge_type').order('created_at', desc=True)
+        
+        response = query.execute()
+        return response.data if response.data else []
+    except Exception as e:
+        st.error(f"Trucking 규칙 조회 실패: {str(e)}")
+        return []
+
+
+def get_trucking_rule_by_id(rule_id):
+    """특정 Trucking 규칙 조회"""
+    client = get_supabase_client()
+    if not client:
+        return None
+    
+    try:
+        response = client.table('trucking_rules').select('*').eq('rule_id', rule_id).execute()
+        return response.data[0] if response.data else None
+    except Exception as e:
+        st.error(f"Trucking 규칙 조회 실패: {str(e)}")
+        return None
+
+
+def save_trucking_rule(rule_name, charge_type, calculation_method, fixed_charge=None, weight_brackets=None):
+    """새 Trucking 규칙 저장"""
+    client = get_supabase_client()
+    if not client:
+        return False, "Supabase 연결 실패"
+    
+    try:
+        data = {
+            'rule_name': rule_name,
+            'charge_type': charge_type,
+            'calculation_method': calculation_method,
+            'fixed_charge': fixed_charge,
+            'weight_brackets': weight_brackets,
+            'is_active': True
+        }
+        
+        response = client.table('trucking_rules').insert(data).execute()
+        
+        if response.data:
+            return True, response.data[0]['rule_id']
+        return False, "저장 실패"
+    except Exception as e:
+        return False, str(e)
+
+
+def update_trucking_rule(rule_id, rule_name, charge_type, calculation_method, fixed_charge=None, weight_brackets=None):
+    """Trucking 규칙 수정"""
+    client = get_supabase_client()
+    if not client:
+        return False, "Supabase 연결 실패"
+    
+    try:
+        data = {
+            'rule_name': rule_name,
+            'charge_type': charge_type,
+            'calculation_method': calculation_method,
+            'fixed_charge': fixed_charge,
+            'weight_brackets': weight_brackets
+        }
+        
+        response = client.table('trucking_rules').update(data).eq('rule_id', rule_id).execute()
+        
+        if response.data:
+            return True, "수정 완료"
+        return False, "수정 실패"
+    except Exception as e:
+        return False, str(e)
+
+
+def delete_trucking_rule(rule_id):
+    """Trucking 규칙 삭제(비활성화)"""
+    client = get_supabase_client()
+    if not client:
+        return False
+    
+    try:
+        response = client.table('trucking_rules').update({'is_active': False}).eq('rule_id', rule_id).execute()
+        return True if response.data else False
+    except Exception as e:
+        st.error(f"Trucking 규칙 삭제 실패: {str(e)}")
+        return False
+
+
+def calculate_trucking(rule_id, weight):
+    """Trucking 금액 계산"""
+    rule = get_trucking_rule_by_id(rule_id)
+    
+    if not rule:
+        return None, "규칙을 찾을 수 없습니다"
+    
+    if not rule.get('is_active'):
+        return None, "비활성 규칙입니다"
+    
+    rule_name = rule['rule_name']
+    charge_type = rule['charge_type']
+    calculation_method = rule['calculation_method']
+    fixed_charge = rule.get('fixed_charge')
+    weight_brackets = rule.get('weight_brackets')
+    
+    # 고정 요금
+    if calculation_method == 'FIXED':
+        return {
+            'rule_name': rule_name,
+            'charge_type': charge_type,
+            'calculation_method': '고정요금',
+            'weight': weight,
+            'final_charge': fixed_charge,
+            'details': f'고정요금: ${fixed_charge:,.2f}'
+        }, None
+    
+    # 중량 기반
+    import json
+    brackets_dict = json.loads(weight_brackets) if isinstance(weight_brackets, str) else weight_brackets
+    
+    # 적용 구간 찾기
+    applied_bracket = None
+    unit_price = 0
+    
+    for bracket_range, price in brackets_dict.items():
+        if '+' in bracket_range:
+            min_weight = int(bracket_range.replace('+', ''))
+            if weight >= min_weight:
+                applied_bracket = bracket_range
+                unit_price = float(price)
+                break
+        else:
+            parts = bracket_range.split('-')
+            min_weight = int(parts[0])
+            max_weight = int(parts[1])
+            if min_weight <= weight <= max_weight:
+                applied_bracket = bracket_range
+                unit_price = float(price)
+                break
+    
+    if applied_bracket is None:
+        return None, "적용 가능한 구간이 없습니다"
+    
+    calculated_charge = weight * unit_price
+    
+    return {
+        'rule_name': rule_name,
+        'charge_type': charge_type,
+        'calculation_method': '중량기반',
+        'weight': weight,
+        'applied_bracket': applied_bracket,
+        'unit_price': unit_price,
+        'final_charge': calculated_charge,
+        'details': f'{applied_bracket}kg 구간: ${unit_price}/kg × {weight}kg'
+    }, None
