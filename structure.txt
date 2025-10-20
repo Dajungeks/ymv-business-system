@@ -1,0 +1,237 @@
+D:.
+│  .env
+│  .evn.example
+│  .gitignore
+│  city_mapping.csv
+│  city_mapping_full.csv
+│  Customer List_YUVN_VR02-1.csv
+│  customers_20251010.csv
+│  del
+│  gitignore_v4.txt
+│  requirements.txt
+│  rmdir
+│  structure.txt
+│  
+├─.streamlit
+│      secrets.toml
+│      
+├─app
+│  │  main.py
+│  │  requirements_supabase.txt
+│  │  requirements_txt.txt
+│  │  __init__.py
+│  │  
+│  ├─assets
+│  │      stamp.png
+│  │      
+│  ├─components
+│  │  │  dir
+│  │  │  _init.py
+│  │  │  
+│  │  ├─dashboard
+│  │  │  │  dashboard.py
+│  │  │  │  __init__.py
+│  │  │  │  
+│  │  │  └─__pycache__
+│  │  │          dashboard.cpython-310.pyc
+│  │  │          __init__.cpython-310.pyc
+│  │  │          
+│  │  ├─finance
+│  │  │  │  expense_management - 분리 및 승인 개선전.py
+│  │  │  │  expense_management - 완성본 백업.py
+│  │  │  │  expense_management.py
+│  │  │  │  profit_analysis.py
+│  │  │  │  reimbursement_management.py
+│  │  │  │  __init__.py
+│  │  │  │  
+│  │  │  └─__pycache__
+│  │  │          expense_management.cpython-310.pyc
+│  │  │          profit_analysis.cpython-310.pyc
+│  │  │          reimbursement_management.cpython-310.pyc
+│  │  │          __init__.cpython-310.pyc
+│  │  │          
+│  │  ├─hr
+│  │  │  │  employee_management.py
+│  │  │  │  __init__.py
+│  │  │  │  
+│  │  │  └─__pycache__
+│  │  │          employee_management.cpython-310.pyc
+│  │  │          __init__.cpython-310.pyc
+│  │  │          
+│  │  ├─inventory
+│  │  │  │  inventory_management.py
+│  │  │  │  purchase_order_management.py
+│  │  │  │  __init__.py
+│  │  │  │  
+│  │  │  └─__pycache__
+│  │  │          inventory_management.cpython-310.pyc
+│  │  │          purchase_order_management.cpython-310.pyc
+│  │  │          __init__.cpython-310.pyc
+│  │  │          
+│  │  ├─logistics
+│  │  │  │  delay_reasons_management.py
+│  │  │  │  delivery_management.py
+│  │  │  │  fsc_rules_management.py
+│  │  │  │  lead_time_management.py
+│  │  │  │  rate_table_management.py
+│  │  │  │  trucking_rules_management.py
+│  │  │  │  __init__.py
+│  │  │  │  
+│  │  │  └─__pycache__
+│  │  │          delay_reasons_management.cpython-310.pyc
+│  │  │          delivery_management.cpython-310.pyc
+│  │  │          fsc_rules_management.cpython-310.pyc
+│  │  │          lead_time_management.cpython-310.pyc
+│  │  │          rate_table_management.cpython-310.pyc
+│  │  │          trucking_rules_management.cpython-310.pyc
+│  │  │          __init__.cpython-310.pyc
+│  │  │          
+│  │  ├─product
+│  │  │  │  product_code_management.py
+│  │  │  │  product_management.py
+│  │  │  │  __init__.py
+│  │  │  │  
+│  │  │  └─__pycache__
+│  │  │          product_code_management.cpython-310.pyc
+│  │  │          product_management.cpython-310.pyc
+│  │  │          __init__.cpython-310.pyc
+│  │  │          
+│  │  ├─sales
+│  │  │  │  customer_management.py
+│  │  │  │  quotation_conversion.py
+│  │  │  │  quotation_management.py
+│  │  │  │  sales_order_management.py
+│  │  │  │  sales_process_dashboard.py
+│  │  │  │  sales_process_main.py
+│  │  │  │  sales_process_management-백업- 함수 분리전.py
+│  │  │  │  __init__.py
+│  │  │  │  
+│  │  │  └─__pycache__
+│  │  │          customer_management.cpython-310.pyc
+│  │  │          quotation_management.cpython-310.pyc
+│  │  │          sales_process_dashboard.cpython-310.pyc
+│  │  │          sales_process_main.cpython-310.pyc
+│  │  │          __init__.cpython-310.pyc
+│  │  │          
+│  │  ├─specifications
+│  │  │  │  customer_section.py
+│  │  │  │  gate_section.py
+│  │  │  │  hot_runner_order_sheet.py
+│  │  │  │  language_config.py
+│  │  │  │  technical_section.py
+│  │  │  │  __init__.py
+│  │  │  │  
+│  │  │  └─__pycache__
+│  │  │          customer_section.cpython-310.pyc
+│  │  │          gate_section.cpython-310.pyc
+│  │  │          hot_runner_order_sheet.cpython-310.pyc
+│  │  │          technical_section.cpython-310.pyc
+│  │  │          __init__.cpython-310.pyc
+│  │  │          
+│  │  ├─supplier
+│  │  │  │  supplier_management.py
+│  │  │  │  __init__.py
+│  │  │  │  
+│  │  │  └─__pycache__
+│  │  │          supplier_management.cpython-310.pyc
+│  │  │          __init__.cpython-310.pyc
+│  │  │          
+│  │  ├─system
+│  │  │  │  code_management-코드 변경전.py
+│  │  │  │  code_management.py
+│  │  │  │  code_management_ui.py
+│  │  │  │  document_number.py
+│  │  │  │  multilingual_input.py
+│  │  │  │  __init__.py
+│  │  │  │  
+│  │  │  └─__pycache__
+│  │  │          code_management.cpython-310.pyc
+│  │  │          code_management_ui.cpython-310.pyc
+│  │  │          document_number.cpython-310.pyc
+│  │  │          multilingual_input.cpython-310.pyc
+│  │  │          __init__.cpython-310.pyc
+│  │  │          
+│  │  └─__pycache__
+│  │          accounting_management.cpython-310.pyc
+│  │          code_management.cpython-310.pyc
+│  │          code_management_ui.cpython-310.pyc
+│  │          customer_management.cpython-310.pyc
+│  │          dashboard.cpython-310.pyc
+│  │          document_number.cpython-310.pyc
+│  │          employee_management.cpython-310.pyc
+│  │          expense_management.cpython-310.pyc
+│  │          inventory_management.cpython-310.pyc
+│  │          multilingual_input.cpython-310.pyc
+│  │          product_management.cpython-310.pyc
+│  │          profit_analysis.cpython-310.pyc
+│  │          purchase_order_management.cpython-310.pyc
+│  │          quotation_conversion.cpython-310.pyc
+│  │          quotation_management.cpython-310.pyc
+│  │          reimbursement_management.cpython-310.pyc
+│  │          sales_process_dashboard.cpython-310.pyc
+│  │          sales_process_main.cpython-310.pyc
+│  │          sales_process_management.cpython-310.pyc
+│  │          supplier_management.cpython-310.pyc
+│  │          
+│  ├─config
+│  │      config_constants.py
+│  │      config_init.py
+│  │      config_settings.py
+│  │      __init__.py
+│  │      
+│  ├─images
+│  │      Stemp-sign.png
+│  │      
+│  ├─modules
+│  │      __init__.py
+│  │      
+│  ├─pages
+│  │      __init__.py
+│  │      
+│  ├─shared
+│  │      shared_database.py
+│  │      shared_init.py
+│  │      shared_utils.py
+│  │      __init__.py
+│  │      
+│  ├─static
+│  │  └─css
+│  │          css_styles.css
+│  │          
+│  ├─templates
+│  │      expense_print_template - 원본-2.html
+│  │      expense_print_template - 원본.html
+│  │      expense_print_template.html
+│  │      hot_runner_order_template.html
+│  │      reimbursement_print_template.html
+│  │      
+│  ├─utils
+│  │  │  auth.py
+│  │  │  database.py
+│  │  │  database_logistics.py
+│  │  │  helpers.py
+│  │  │  html_templates.py
+│  │  │  init.py
+│  │  │  language_config.py
+│  │  │  
+│  │  └─__pycache__
+│  │          auth.cpython-310.pyc
+│  │          database.cpython-310.pyc
+│  │          database_logistics.cpython-310.pyc
+│  │          helpers.cpython-310.pyc
+│  │          html_templates.cpython-310.pyc
+│  │          language_config.cpython-310.pyc
+│  │          
+│  └─__pycache__
+│          main.cpython-310.pyc
+│          
+├─data
+│      employees.json
+│      expenses.json
+│      purchases.json
+│      
+├─exports
+├─fonts
+├─logs
+├─tests
+└─uploads

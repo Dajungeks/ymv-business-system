@@ -51,8 +51,10 @@ from components.logistics.rate_table_management import rate_table_management_pag
 from components.dashboard.dashboard import show_dashboard_main
 
 # 내부 컴포넌트 - System
-from components.system.code_management import CodeManagementComponent
 from components.system.multilingual_input import MultilingualInputComponent
+
+# 내부 컴포넌트 - Specifications
+from components.specifications.hot_runner_order_sheet import show_hot_runner_order_management
 
 # 유틸리티 모듈
 from utils.database import create_database_operations
@@ -351,15 +353,9 @@ def show_quotation_management_page():
         db_operations.delete_data
     )
 
-def show_code_management():
-    """코드 관리 페이지"""
-    st.title("🔢 코드 관리")
-    code_manager = CodeManagementComponent(init_supabase())
-    code_manager.render_code_management_page()
-
 def show_multilingual_input():
     """다국어 입력 페이지"""
-    st.title("🌍 다국어 입력 시스템")
+    st.title("🌐 다국어 입력 시스템")
     ml_input = MultilingualInputComponent(init_supabase())
     
     # 언어 우선순위 정보 표시
@@ -384,6 +380,15 @@ def show_multilingual_input():
             formatted_data = ml_input.format_multilingual_data(name_en, name_vn)
             st.success("입력이 완료되었습니다!")
             st.json(formatted_data)
+
+def show_hot_runner_order_sheet_page():
+    """Hot Runner Order Sheet 페이지"""
+    show_hot_runner_order_management(
+        db_operations.load_data,
+        db_operations.save_data,
+        db_operations.update_data,
+        auth_manager.get_current_user()
+    )
 
 # ===========================================
 # 메인 애플리케이션
@@ -463,10 +468,15 @@ def main():
                     type="primary" if st.session_state.current_page == "공급업체 관리" else "secondary"):
             st.session_state.current_page = "공급업체 관리"
             st.rerun()
-            
+                        
         if st.button("🛒 구매품 관리", use_container_width=True,
                     type="primary" if st.session_state.current_page == "구매품 관리" else "secondary"):
             st.session_state.current_page = "구매품 관리"
+            st.rerun()
+
+        if st.button("🔥 Hot Runner Order Sheet", use_container_width=True,
+                    type="primary" if st.session_state.current_page == "Hot Runner Order Sheet" else "secondary"):
+            st.session_state.current_page = "Hot Runner Order Sheet"
             st.rerun()
         
         st.subheader("🚚 물류 관리")
@@ -504,12 +514,7 @@ def main():
                 st.rerun()
         
         st.subheader("⚙️ 시스템 설정")
-        if st.button("🔢 코드 관리", use_container_width=True,
-                    type="primary" if st.session_state.current_page == "코드 관리" else "secondary"):
-            st.session_state.current_page = "코드 관리"
-            st.rerun()
-            
-        if st.button("🌍 다국어 입력", use_container_width=True,
+        if st.button("🌐 다국어 입력", use_container_width=True,
                     type="primary" if st.session_state.current_page == "다국어 입력" else "secondary"):
             st.session_state.current_page = "다국어 입력"
             st.rerun()
@@ -552,8 +557,8 @@ def main():
         show_expense_management_page()
     elif current_page == "환급 관리":
          show_reimbursement_management_page()
-    elif current_page == "코드 관리":
-        show_code_management()
+    elif current_page == "Hot Runner Order Sheet":
+        show_hot_runner_order_sheet_page()
     elif current_page == "다국어 입력":
         show_multilingual_input()
 

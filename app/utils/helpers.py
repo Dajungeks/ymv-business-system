@@ -674,8 +674,174 @@ Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
                 mime="text/html",
                 key=f"download_{currency}"
             )            
+     
 
 
+    # ← 여기에 추가 시작! (들여쓰기 4칸, PrintFormGenerator 클래스 안)
+    @staticmethod
+    def render_hot_runner_print(order, load_data_func):
+        """
+        Hot Runner Order Sheet 프린트 화면
+        """
+        import os
+        import json
+        
+        # 템플릿 로드
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        app_dir = os.path.dirname(current_dir)
+        template_path = os.path.join(app_dir, 'templates', 'hot_runner_order_template.html')
+        
+        try:
+            with open(template_path, 'r', encoding='utf-8') as f:
+                template = f.read()
+        except FileNotFoundError:
+            st.error("❌ 템플릿 파일을 찾을 수 없습니다.")
+            st.info("app/templates/hot_runner_order_template.html 파일이 있는지 확인하세요.")
+            return
+        
+        # JSON 필드 파싱
+        try:
+            base_dimensions = json.loads(order.get('base_dimensions', '{}')) if isinstance(order.get('base_dimensions'), str) else order.get('base_dimensions', {})
+            nozzle_specs = json.loads(order.get('nozzle_specs', '{}')) if isinstance(order.get('nozzle_specs'), str) else order.get('nozzle_specs', {})
+            timer_connector = json.loads(order.get('timer_connector', '{}')) if isinstance(order.get('timer_connector'), str) else order.get('timer_connector', {})
+            heater_connector = json.loads(order.get('heater_connector', '{}')) if isinstance(order.get('heater_connector'), str) else order.get('heater_connector', {})
+            gate_data = json.loads(order.get('gate_data', '{}')) if isinstance(order.get('gate_data'), str) else order.get('gate_data', {})
+        except:
+            base_dimensions = {}
+            nozzle_specs = {}
+            timer_connector = {}
+            heater_connector = {}
+            gate_data = {}
+        
+        # 직원 정보 (영업담당)
+        employees = load_data_func('employees')
+        employee_dict = {int(emp.get('id')): emp for emp in employees if emp.get('id')}
+        
+        sales_contact_id = order.get('sales_contact')
+        sales_contact_name = 'N/A'
+        if sales_contact_id:
+            sales_info = employee_dict.get(int(sales_contact_id), {})
+            sales_contact_name = sales_info.get('name', 'N/A')
+        
+        # 템플릿 변수 치환
+        print_html = template.format(
+            order_number=order.get('order_number', ''),
+            customer_name=order.get('customer_name', ''),
+            delivery_to=order.get('delivery_to', ''),
+            project_name=order.get('project_name', ''),
+            part_name=order.get('part_name', ''),
+            mold_no=order.get('mold_no', ''),
+            ymv_no=order.get('ymv_no', ''),
+            sales_contact=sales_contact_name,
+            injection_ton=order.get('injection_ton', ''),
+            resin=order.get('resin', ''),
+            additive=order.get('additive', ''),
+            color_change='YES' if order.get('color_change') else 'NO',
+            order_type=order.get('order_type', 'SYSTEM'),
+            
+            # BASE
+            plate_width=base_dimensions.get('plate', {}).get('width', ''),
+            plate_length=base_dimensions.get('plate', {}).get('length', ''),
+            plate_height=base_dimensions.get('plate', {}).get('height', ''),
+            top_width=base_dimensions.get('top', {}).get('width', ''),
+            top_length=base_dimensions.get('top', {}).get('length', ''),
+            top_height=base_dimensions.get('top', {}).get('height', ''),
+            space_width=base_dimensions.get('space', {}).get('width', ''),
+            space_length=base_dimensions.get('space', {}).get('length', ''),
+            space_height=base_dimensions.get('space', {}).get('height', ''),
+            holding_width=base_dimensions.get('holding', {}).get('width', ''),
+            holding_length=base_dimensions.get('holding', {}).get('length', ''),
+            holding_height=base_dimensions.get('holding', {}).get('height', ''),
+            base_processor=order.get('base_processor', ''),
+            cooling_pt_tap=order.get('cooling_pt_tap', ''),
+            
+            # NOZZLE
+            nozzle_type=nozzle_specs.get('type', ''),
+            gate_close=nozzle_specs.get('gate_close', 'STRAIGHT'),
+            nozzle_qty=nozzle_specs.get('qty', ''),
+            ht_type=nozzle_specs.get('ht_type', 'COIL'),
+            nozzle_length=nozzle_specs.get('length', ''),
+            
+            # MANIFOLD
+            manifold_type=order.get('manifold_type', 'H'),
+            manifold_standard=order.get('manifold_standard', 'ISO'),
+            
+            # CYLINDER/SENSOR
+            cylinder_type=order.get('cylinder_type', ''),
+            sensor_type=order.get('sensor_type', 'J(I.C)'),
+            
+            # TIMER
+            sol_volt=timer_connector.get('sol_volt', 'AC220V'),
+            sol_control=timer_connector.get('sol_control', 'Individual'),
+            timer_pin_type=timer_connector.get('type', '24PIN'),
+            timer_buried='YES' if timer_connector.get('buried') else 'NO',
+            timer_location=timer_connector.get('location', 'G'),
+            
+            # HEATER
+            heater_pin_type=heater_connector.get('type', '24PIN'),
+            con_type=heater_connector.get('con_type', 'BOX'),
+            heater_buried='YES' if heater_connector.get('buried') else 'NO',
+            heater_location=heater_connector.get('location', 'G'),
+            
+            # ID CARD & NL
+            id_card_type=order.get('id_card_type', 'Domestic'),
+            nl_phi=order.get('nl_phi', ''),
+            nl_sr=order.get('nl_sr', ''),
+            locate_ring=order.get('locate_ring', ''),
+            
+            # GATE (G1~G10)
+            g1_phi=gate_data.get('G1', {}).get('gate_phi', ''),
+            g1_length=gate_data.get('G1', {}).get('length', ''),
+            g2_phi=gate_data.get('G2', {}).get('gate_phi', ''),
+            g2_length=gate_data.get('G2', {}).get('length', ''),
+            g3_phi=gate_data.get('G3', {}).get('gate_phi', ''),
+            g3_length=gate_data.get('G3', {}).get('length', ''),
+            g4_phi=gate_data.get('G4', {}).get('gate_phi', ''),
+            g4_length=gate_data.get('G4', {}).get('length', ''),
+            g5_phi=gate_data.get('G5', {}).get('gate_phi', ''),
+            g5_length=gate_data.get('G5', {}).get('length', ''),
+            g6_phi=gate_data.get('G6', {}).get('gate_phi', ''),
+            g6_length=gate_data.get('G6', {}).get('length', ''),
+            g7_phi=gate_data.get('G7', {}).get('gate_phi', ''),
+            g7_length=gate_data.get('G7', {}).get('length', ''),
+            g8_phi=gate_data.get('G8', {}).get('gate_phi', ''),
+            g8_length=gate_data.get('G8', {}).get('length', ''),
+            g9_phi=gate_data.get('G9', {}).get('gate_phi', ''),
+            g9_length=gate_data.get('G9', {}).get('length', ''),
+            g10_phi=gate_data.get('G10', {}).get('gate_phi', ''),
+            g10_length=gate_data.get('G10', {}).get('length', ''),
+            
+            # 기타
+            spare_list=order.get('spare_list', ''),
+            special_notes=order.get('special_notes', ''),
+            generated_time=datetime.now().strftime('%Y-%m-%d %H:%M')
+        )
+        
+        # 다운로드 옵션
+        col1, col2, col3 = st.columns(3)
+        
+        with col1:
+            st.download_button(
+                label="📄 HTML 다운로드",
+                data=print_html,
+                file_name=f"hot_runner_order_{order.get('order_number', 'unknown')}.html",
+                mime="text/html",
+                help="HTML 파일로 저장하여 브라우저에서 열어 프린트할 수 있습니다."
+            )
+        
+        with col2:
+            st.button("🖨️ 프린트", key="print_button_hot_runner", help="브라우저의 인쇄 기능을 사용하세요 (Ctrl+P)")
+        
+        with col3:
+            st.info("💡 HTML을 다운로드하여 브라우저에서 열고 프린트하세요!")
+        
+        # 프린트 미리보기
+        st.markdown("---")
+        st.markdown("### 📋 프린트 미리보기")
+        st.components.v1.html(print_html, height=1400, scrolling=True)
+
+
+# 하위 호환성을 위한 래퍼 함수들  ← 이 줄은 그대로 유지!
 
 # 하위 호환성을 위한 래퍼 함수들
 def get_approval_status_info(status):

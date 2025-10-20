@@ -1,0 +1,716 @@
+<!DOCTYPE html>
+<html lang="ko">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hot Runner System Order Sheet - {order_number}</title>
+    <style>
+        @page {
+                {
+                size: A4;
+                margin: 10mm;
+            }
+        }
+
+        * {
+                {
+                margin: 0;
+                padding: 0;
+                box-sizing: border-box;
+            }
+        }
+
+        body {
+                {
+                font-family: 'Malgun Gothic', Arial, sans-serif;
+                font-size: 9pt;
+                line-height: 1.2;
+            }
+        }
+
+        .container {
+                {
+                width: 100%;
+                max-width: 100%;
+            }
+        }
+
+        /* 헤더 */
+        .header {
+                {
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                border: 2px solid #000;
+                padding: 10px;
+                margin-bottom: 0;
+            }
+        }
+
+        .header-left {
+                {
+                font-size: 18pt;
+                font-weight: bold;
+                text-decoration: underline;
+            }
+        }
+
+        .header-right {
+                {
+                text-align: right;
+            }
+        }
+
+        .header-right .company {
+                {
+                font-size: 18pt;
+                font-weight: bold;
+            }
+        }
+
+        .header-right .country {
+                {
+                font-size: 11pt;
+            }
+        }
+
+        /* 테이블 공통 */
+        table {
+                {
+                width: 100%;
+                border-collapse: collapse;
+                border: 1px solid #000;
+            }
+        }
+
+        td,
+        th {
+                {
+                border: 1px solid #000;
+                padding: 4px 6px;
+                text-align: center;
+                vertical-align: middle;
+                font-size: 9pt;
+            }
+        }
+
+        .label {
+                {
+                background-color: #D3D3D3;
+                font-weight: normal;
+            }
+        }
+
+        .yellow {
+                {
+                background-color: #FFFF99;
+            }
+        }
+
+        .white {
+                {
+                background-color: #FFFFFF;
+            }
+        }
+
+        /* 메인 레이아웃 */
+        .main-layout {
+                {
+                display: flex;
+                gap: 0;
+            }
+        }
+
+        .left-section {
+                {
+                width: 50%;
+            }
+        }
+
+        .right-section {
+                {
+                width: 50%;
+            }
+        }
+
+        /* Machine View */
+        .machine-view-container {
+                {
+                position: relative;
+                width: 100%;
+                height: 350px;
+                padding: 10px;
+            }
+        }
+
+        .machine-box {
+                {
+                position: absolute;
+                left: 20%;
+                top: 15%;
+                width: 60%;
+                height: 60%;
+                border: 2px solid #000;
+            }
+        }
+
+        .machine-circle {
+                {
+                position: absolute;
+                left: 50%;
+                top: 50%;
+                transform: translate(-50%, -50%);
+                width: 30px;
+                height: 50px;
+                border: 2px solid #000;
+                border-radius: 50%;
+            }
+        }
+
+        .label-pos {
+                {
+                position: absolute;
+                font-size: 10pt;
+                font-weight: bold;
+            }
+        }
+
+        .pos-g {
+                {
+                top: 12%;
+                left: 10%;
+            }
+        }
+
+        .pos-h {
+                {
+                top: 12%;
+                left: 48%;
+            }
+        }
+
+        .pos-i {
+                {
+                top: 12%;
+                right: 10%;
+            }
+        }
+
+        .pos-f {
+                {
+                top: 40%;
+                left: 5%;
+            }
+        }
+
+        .pos-j {
+                {
+                top: 40%;
+                right: 5%;
+            }
+        }
+
+        .pos-e {
+                {
+                top: 55%;
+                left: 5%;
+            }
+        }
+
+        .pos-k {
+                {
+                top: 55%;
+                right: 5%;
+            }
+        }
+
+        .pos-d {
+                {
+                bottom: 25%;
+                left: 5%;
+            }
+        }
+
+        .pos-l {
+                {
+                bottom: 25%;
+                right: 5%;
+            }
+        }
+
+        .pos-c {
+                {
+                bottom: 10%;
+                left: 10%;
+            }
+        }
+
+        .pos-b {
+                {
+                bottom: 10%;
+                left: 48%;
+            }
+        }
+
+        .pos-a {
+                {
+                bottom: 10%;
+                right: 10%;
+            }
+        }
+
+        .machine-step {
+                {
+                position: absolute;
+                bottom: 15%;
+                right: 8%;
+                width: 25px;
+                height: 30px;
+                border: 2px solid #000;
+                border-bottom: none;
+                border-right: none;
+            }
+        }
+
+        .machine-step::after {
+                {
+                content: '';
+                position: absolute;
+                bottom: -2px;
+                right: -2px;
+                width: 15px;
+                height: 18px;
+                border-left: 2px solid #000;
+                border-top: 2px solid #000;
+            }
+        }
+
+        .machine-view-label {
+                {
+                position: absolute;
+                bottom: 5%;
+                left: 50%;
+                transform: translateX(-50%);
+                border: 1px solid #000;
+                padding: 3px 15px;
+                background: white;
+                font-size: 9pt;
+            }
+        }
+
+        /* 노즐 다이어그램 */
+        .nozzle-diagram {
+                {
+                position: relative;
+                width: 100%;
+                height: 100px;
+                padding: 10px;
+            }
+        }
+
+        .nozzle-parts {
+                {
+                position: absolute;
+                left: 25%;
+                bottom: 10px;
+                width: 40%;
+            }
+        }
+
+        .nozzle-base {
+                {
+                width: 100%;
+                height: 12px;
+                border: 2px solid #000;
+                background: white;
+            }
+        }
+
+        .nozzle-middle {
+                {
+                width: 120%;
+                height: 8px;
+                border: 2px solid #000;
+                background: white;
+                margin: -2px 0 -2px -10%;
+            }
+        }
+
+        .nozzle-top {
+                {
+                width: 80%;
+                height: 12px;
+                border: 2px solid #000;
+                background: white;
+                margin: -2px 0 0 10%;
+            }
+        }
+
+        .nozzle-arrow {
+                {
+                position: absolute;
+                left: 45%;
+                top: 15px;
+                width: 0;
+                height: 0;
+                border-left: 8px solid transparent;
+                border-right: 8px solid transparent;
+                border-bottom: 18px solid #000;
+            }
+        }
+
+        .length-indicator {
+                {
+                position: absolute;
+                right: 20%;
+                top: 20%;
+                font-size: 9pt;
+            }
+        }
+
+        .up-box {
+                {
+                border: 1px solid #000;
+                padding: 5px 30px;
+                display: inline-block;
+                margin: 5px;
+            }
+        }
+
+        @media print {
+                {
+                body {
+                        {
+                        print-color-adjust: exact;
+                        -webkit-print-color-adjust: exact;
+                    }
+                }
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <!-- 헤더 -->
+        <div class="header">
+            <div class="header-left">Hot Runner System Order Sheet</div>
+            <div class="header-right">
+                <div class="company">YUMOLD</div>
+                <div class="country">Vietnam</div>
+            </div>
+        </div>
+
+        <!-- 메인 레이아웃 -->
+        <div class="main-layout">
+            <!-- 좌측 -->
+            <div class="left-section">
+                <table>
+                    <tr>
+                        <td class="label" style="width: 15%;">고객사</td>
+                        <td class="yellow" colspan="3">{customer_name}</td>
+                        <td class="label" style="width: 18%;">CUSTOMER</td>
+                        <td class="yellow" colspan="3">{customer_name}</td>
+                    </tr>
+                    <tr>
+                        <td class="label">고객담당자</td>
+                        <td class="yellow" colspan="3">{sales_contact}</td>
+                        <td class="label">납품처</td>
+                        <td class="yellow" colspan="3">{delivery_to}</td>
+                    </tr>
+                    <tr>
+                        <td class="label">E-mail</td>
+                        <td class="yellow" colspan="3"></td>
+                        <td class="label">PJT NAME</td>
+                        <td class="yellow" colspan="3">{project_name}</td>
+                    </tr>
+                    <tr>
+                        <td class="label">수주일자/납기일자</td>
+                        <td class="yellow" colspan="3"></td>
+                        <td class="label">PART NAME</td>
+                        <td class="yellow" colspan="3">{part_name}</td>
+                    </tr>
+                    <tr>
+                        <td class="label">Base입고 예정일</td>
+                        <td class="yellow" colspan="3"></td>
+                        <td class="label">MOLD NO.</td>
+                        <td class="yellow" colspan="3">{mold_no}</td>
+                    </tr>
+                    <tr>
+                        <td class="label">YMV NO.</td>
+                        <td class="yellow" colspan="7">{ymv_no}</td>
+                    </tr>
+                    <tr>
+                        <td class="label">영업담당/연락처</td>
+                        <td class="yellow" colspan="3">{sales_contact}</td>
+                        <td class="label" rowspan="5" style="width: 10%;">BASE</td>
+                        <td class="label">PLATE</td>
+                        <td class="white" style="width: 10%;">Width</td>
+                        <td class="white" style="width: 10%;">Length</td>
+                        <td class="white" style="width: 10%;">Height</td>
+                    </tr>
+                    <tr>
+                        <td class="label">사출기 TON</td>
+                        <td class="yellow" colspan="3">{injection_ton}</td>
+                        <td class="label">TOP</td>
+                        <td class="white">{plate_width}</td>
+                        <td class="white">{plate_length}</td>
+                        <td class="white">{plate_height}</td>
+                    </tr>
+                    <tr>
+                        <td class="label">RESIN /첨가</td>
+                        <td class="yellow" colspan="3">{resin} / {additive}</td>
+                        <td class="label">SPACE</td>
+                        <td class="white">{space_width}</td>
+                        <td class="white">{space_length}</td>
+                        <td class="white">{space_height}</td>
+                    </tr>
+                    <tr>
+                        <td class="label">COLOR /CHANGE</td>
+                        <td class="white"></td>
+                        <td class="white">YES</td>
+                        <td class="white">NO</td>
+                        <td class="label">HOLDING</td>
+                        <td class="white">{holding_width}</td>
+                        <td class="white">{holding_length}</td>
+                        <td class="white">{holding_height}</td>
+                    </tr>
+                    <tr>
+                        <td class="label">ORDER TYPE</td>
+                        <td class="white">TOTAL</td>
+                        <td class="white">SEMI</td>
+                        <td class="white">SYSTEM</td>
+                        <td class="label">BASE가공처</td>
+                        <td class="white" colspan="3">{base_processor}</td>
+                    </tr>
+                    <tr>
+                        <td class="label" rowspan="4">NOZZLE</td>
+                        <td class="label">Type</td>
+                        <td class="white" colspan="6">{nozzle_type}</td>
+                    </tr>
+                    <tr>
+                        <td class="label">Gate Close</td>
+                        <td class="white" colspan="3">{gate_close}</td>
+                        <td class="white" colspan="3">TAPPER</td>
+                    </tr>
+                    <tr>
+                        <td class="label">Q'ty</td>
+                        <td class="white" colspan="6">{nozzle_qty}</td>
+                    </tr>
+                    <tr>
+                        <td class="label">H/T Type</td>
+                        <td class="white" colspan="3" style="color: red;">{ht_type}</td>
+                        <td class="white" colspan="3" style="color: red;">ALLOY</td>
+                    </tr>
+                    <tr>
+                        <td class="label" rowspan="3">MANIFOLD</td>
+                        <td class="label">Type</td>
+                        <td class="white" colspan="6">{manifold_type}</td>
+                    </tr>
+                    <tr>
+                        <td class="label">Manifold</td>
+                        <td class="white" colspan="6">{manifold_standard}</td>
+                    </tr>
+                    <tr>
+                        <td class="label">H/T Type</td>
+                        <td class="white" colspan="6">Sheath Heater</td>
+                    </tr>
+                    <tr>
+                        <td class="label">PISTON</td>
+                        <td class="label">Type</td>
+                        <td class="white" colspan="6">{cylinder_type}</td>
+                    </tr>
+                    <tr>
+                        <td class="label">SENSOR</td>
+                        <td class="label">Type</td>
+                        <td class="white" colspan="3">K(C.A)</td>
+                        <td class="white" colspan="3">{sensor_type}</td>
+                    </tr>
+                    <tr>
+                        <td class="label" rowspan="5">TIMER &<br>CONNECTOR</td>
+                        <td class="label">Sol. Volt</td>
+                        <td class="white" colspan="3">DC24V</td>
+                        <td class="white" colspan="3">{sol_volt}</td>
+                    </tr>
+                    <tr>
+                        <td class="label">Sol. Control</td>
+                        <td class="white" colspan="3">{sol_control}</td>
+                        <td class="white" colspan="3">일체</td>
+                    </tr>
+                    <tr>
+                        <td class="label">Type</td>
+                        <td class="white" colspan="3">16PIN</td>
+                        <td class="white" colspan="3">{timer_pin_type}</td>
+                    </tr>
+                    <tr>
+                        <td class="label">매립</td>
+                        <td class="white" colspan="3">YES</td>
+                        <td class="white" colspan="3">{timer_buried}</td>
+                    </tr>
+                    <tr>
+                        <td class="label">Location</td>
+                        <td class="white" colspan="6">{timer_location}</td>
+                    </tr>
+                    <tr>
+                        <td class="label" rowspan="4">HEATER<br>CONNECTOR</td>
+                        <td class="label">Type</td>
+                        <td class="white" colspan="3">16PIN</td>
+                        <td class="white" colspan="3">{heater_pin_type}</td>
+                    </tr>
+                    <tr>
+                        <td class="label">Con. Type</td>
+                        <td class="white" colspan="3">{con_type}</td>
+                        <td class="white" colspan="3">HOUSING</td>
+                    </tr>
+                    <tr>
+                        <td class="label">매립</td>
+                        <td class="white" colspan="3">YES</td>
+                        <td class="white" colspan="3">{heater_buried}</td>
+                    </tr>
+                    <tr>
+                        <td class="label">Location</td>
+                        <td class="white" colspan="6">{heater_location}</td>
+                    </tr>
+                    <tr>
+                        <td class="label">ID CARD</td>
+                        <td class="label">Type</td>
+                        <td class="white" colspan="3">{id_card_type}</td>
+                        <td class="white" colspan="3">Global</td>
+                    </tr>
+                    <tr>
+                        <td class="label" colspan="2">SPARE LIST</td>
+                        <td class="white" colspan="6" style="height: 60px;">{spare_list}</td>
+                    </tr>
+                </table>
+            </div>
+
+            <!-- 우측 -->
+            <div class="right-section">
+                <table>
+                    <tr>
+                        <td class="label" colspan="2">냉각PT TAP</td>
+                        <td class="white" colspan="2">{cooling_pt_tap}</td>
+                    </tr>
+                    <tr>
+                        <td class="label" rowspan="2">NL</td>
+                        <td class="label">Φ</td>
+                        <td class="white" colspan="2">{nl_phi}</td>
+                    </tr>
+                    <tr>
+                        <td class="label">SR</td>
+                        <td class="white" colspan="2">{nl_sr}</td>
+                    </tr>
+                    <tr>
+                        <td class="label" colspan="2">LOCATE RING</td>
+                        <td class="white" colspan="2">{locate_ring}</td>
+                    </tr>
+                    <tr>
+                        <td class="white" colspan="4" style="text-align: center; padding: 10px;">
+                            <div class="up-box">UP</div>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td class="white" colspan="4" style="padding: 0;">
+                            <div class="machine-view-container">
+                                <span class="label-pos pos-g">G</span>
+                                <span class="label-pos pos-h">H</span>
+                                <span class="label-pos pos-i">I</span>
+                                <span class="label-pos pos-f">F</span>
+                                <span class="label-pos pos-j">J</span>
+                                <span class="label-pos pos-e">E</span>
+                                <span class="label-pos pos-k">K</span>
+                                <span class="label-pos pos-d">D</span>
+                                <span class="label-pos pos-l">L</span>
+                                <span class="label-pos pos-c">C</span>
+                                <span class="label-pos pos-b">B</span>
+                                <span class="label-pos pos-a">A</span>
+
+                                <div class="machine-box">
+                                    <div class="machine-circle"></div>
+                                </div>
+
+                                <div class="machine-step"></div>
+
+                                <div class="machine-view-label">Machine View</div>
+                            </div>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td class="white" colspan="4" style="padding: 0;">
+                            <div class="nozzle-diagram">
+                                <div class="nozzle-arrow"></div>
+                                <div class="nozzle-parts">
+                                    <div class="nozzle-top"></div>
+                                    <div class="nozzle-middle"></div>
+                                    <div class="nozzle-base"></div>
+                                </div>
+                                <span class="length-indicator">LENGTH</span>
+                            </div>
+                        </td>
+                    </tr>
+                </table>
+            </div>
+        </div>
+
+        <!-- 하단 -->
+        <table>
+            <tr>
+                <td class="label" style="width: 20%;">특이사항</td>
+                <td class="white" style="width: 8%;">NO</td>
+                <td class="white" style="width: 10%;">GATEΦ</td>
+                <td class="white" style="width: 10%;">LENGTH</td>
+                <td class="white" style="width: 8%;">NO</td>
+                <td class="white" style="width: 10%;">GATEΦ</td>
+                <td class="white" style="width: 10%;">LENGTH</td>
+            </tr>
+            <tr>
+                <td class="white" rowspan="5" style="height: 100px;">{special_notes}</td>
+                <td class="white">G1</td>
+                <td class="white">{g1_phi}</td>
+                <td class="white">{g1_length}</td>
+                <td class="white">G6</td>
+                <td class="white">{g6_phi}</td>
+                <td class="white">{g6_length}</td>
+            </tr>
+            <tr>
+                <td class="white">G2</td>
+                <td class="white">{g2_phi}</td>
+                <td class="white">{g2_length}</td>
+                <td class="white">G7</td>
+                <td class="white">{g7_phi}</td>
+                <td class="white">{g7_length}</td>
+            </tr>
+            <tr>
+                <td class="white">G3</td>
+                <td class="white">{g3_phi}</td>
+                <td class="white">{g3_length}</td>
+                <td class="white">G8</td>
+                <td class="white">{g8_phi}</td>
+                <td class="white">{g8_length}</td>
+            </tr>
+            <tr>
+                <td class="white">G4</td>
+                <td class="white">{g4_phi}</td>
+                <td class="white">{g4_length}</td>
+                <td class="white">G9</td>
+                <td class="white">{g9_phi}</td>
+                <td class="white">{g9_length}</td>
+            </tr>
+            <tr>
+                <td class="white">G5</td>
+                <td class="white">{g5_phi}</td>
+                <td class="white">{g5_length}</td>
+                <td class="white">G10</td>
+                <td class="white">{g10_phi}</td>
+                <td class="white">{g10_length}</td>
+            </tr>
+        </table>
+
+        <div style="text-align: right; margin-top: 10px; font-size: 8pt; color: #666;">
+            Generated: {generated_time}
+        </div>
+    </div>
+</body>
+
+</html>
