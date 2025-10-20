@@ -2,30 +2,31 @@
 
 import streamlit as st
 from datetime import date
+from utils.language_config import get_label
 
-def render_customer_section(load_func, save_func):
+def render_customer_section(load_func, save_func, language='EN'):
     """고객 및 프로젝트 정보 입력 섹션"""
     
-    st.markdown("### 📋 Customer & Project Information")
+    st.markdown(f"### 📋 {get_label('customer_and_project', language)}")
     
     # 견적서 선택 (옵션)
-    with st.expander("🔗 Link to Quotation (Optional)", expanded=False):
+    with st.expander(f"🔗 {get_label('link_to_quotation', language)} ({get_label('optional', language)})", expanded=False):
         quotations = load_func('quotations', {'status': 'approved'}) if load_func else []
         
         if quotations:
-            quotation_options = ["None - Manual Entry"] + [
+            quotation_options = [get_label('none_manual_entry', language)] + [
                 f"{q.get('quotation_number', q.get('id', 'N/A'))} - {q.get('customer_name', 'N/A')}"
                 for q in quotations
             ]
             
             selected_quotation = st.selectbox(
-                "Select Quotation",
+                get_label('select_quotation', language),
                 quotation_options,
                 key="selected_quotation"
             )
             
             # 견적서 선택 시 데이터 자동 입력
-            if selected_quotation != "None - Manual Entry":
+            if selected_quotation != quotation_options[0]:
                 selected_idx = quotation_options.index(selected_quotation) - 1
                 quotation_data = quotations[selected_idx]
                 
@@ -37,7 +38,7 @@ def render_customer_section(load_func, save_func):
                 st.session_state['auto_customer_name'] = ''
                 st.session_state['auto_project_name'] = ''
         else:
-            st.info("No approved quotations available")
+            st.info(get_label('no_approved_quotations', language))
     
     # 고객 정보 입력
     col1, col2 = st.columns(2)
@@ -48,16 +49,16 @@ def render_customer_section(load_func, save_func):
         
         if customers:
             customer_mode = st.radio(
-                "Customer Entry Mode",
-                ["Select Existing", "New Customer"],
+                get_label('customer_entry_mode', language),
+                [get_label('select_existing', language), get_label('new_customer', language)],
                 horizontal=True,
                 key="customer_mode"
             )
             
-            if customer_mode == "Select Existing":
+            if customer_mode == get_label('select_existing', language):
                 customer_options = [c.get('name', 'N/A') for c in customers]
                 selected_customer = st.selectbox(
-                    "🔴 Customer *",
+                    f"🔴 {get_label('customer', language)} *",
                     customer_options,
                     key="customer_select"
                 )
@@ -68,14 +69,14 @@ def render_customer_section(load_func, save_func):
                 customer_id = customer_data.get('id')
             else:
                 customer_name = st.text_input(
-                    "🔴 Customer *",
+                    f"🔴 {get_label('customer', language)} *",
                     value=st.session_state.get('auto_customer_name', ''),
                     key="customer_name_new"
                 )
                 customer_id = None
         else:
             customer_name = st.text_input(
-                "🔴 Customer *",
+                f"🔴 {get_label('customer', language)} *",
                 value=st.session_state.get('auto_customer_name', ''),
                 key="customer_name"
             )
@@ -83,33 +84,33 @@ def render_customer_section(load_func, save_func):
         
         # 프로젝트명
         project_name = st.text_input(
-            "🔴 Project Name *",
+            f"🔴 {get_label('project_name', language)} *",
             value=st.session_state.get('auto_project_name', ''),
             key="project_name"
         )
         
         # 금형번호
         mold_no = st.text_input(
-            "Mold No",
+            get_label('mold_no', language),
             key="mold_no"
         )
     
     with col2:
         # 납품처
         delivery_to = st.text_input(
-            "🔴 Delivery To *",
+            f"🔴 {get_label('delivery_to', language)} *",
             key="delivery_to"
         )
         
         # 부품명
         part_name = st.text_input(
-            "Part Name",
+            get_label('part_name', language),
             key="part_name"
         )
         
         # YMV 번호
         ymv_no = st.text_input(
-            "YMV No",
+            get_label('ymv_no', language),
             key="ymv_no"
         )
     
@@ -127,7 +128,7 @@ def render_customer_section(load_func, save_func):
             employee_options = [f"{e.get('name', 'N/A')} - {e.get('position', '')}" for e in sales_employees]
             
             selected_employee = st.selectbox(
-                "🔴 Sales Contact *",
+                f"🔴 {get_label('sales_contact', language)} *",
                 employee_options,
                 key="sales_contact"
             )
@@ -136,21 +137,21 @@ def render_customer_section(load_func, save_func):
             sales_contact_id = sales_employees[employee_options.index(selected_employee)].get('id')
         else:
             sales_contact_text = st.text_input(
-                "🔴 Sales Contact *",
+                f"🔴 {get_label('sales_contact', language)} *",
                 key="sales_contact_text"
             )
             sales_contact_id = None
         
         # Resin
         resin = st.text_input(
-            "Resin",
+            get_label('resin', language),
             key="resin"
         )
     
     with col4:
         # 사출기 TON
         injection_ton = st.number_input(
-            "Injection TON",
+            get_label('injection_ton', language),
             min_value=0,
             step=10,
             key="injection_ton"
@@ -158,27 +159,27 @@ def render_customer_section(load_func, save_func):
         
         # 첨가제
         additive = st.text_input(
-            "Additive",
+            get_label('additive', language),
             key="additive"
         )
     
     # 선택 옵션
     st.markdown("---")
-    st.markdown("### 🔧 Order Options")
+    st.markdown(f"### 🔧 {get_label('order_options', language)}")
     
     col5, col6 = st.columns(2)
     
     with col5:
         color_change = st.radio(
-            "🔴 Color Change *",
-            ["NO", "YES"],
+            f"🔴 {get_label('color_change', language)} *",
+            [get_label('no', language), get_label('yes', language)],
             horizontal=True,
             key="color_change"
         )
     
     with col6:
         order_type = st.radio(
-            "🔴 Order Type *",
+            f"🔴 {get_label('order_type', language)} *",
             ["SYSTEM", "SEMI", "TOTAL"],
             horizontal=True,
             key="order_type"
@@ -198,7 +199,7 @@ def render_customer_section(load_func, save_func):
         'injection_ton': injection_ton,
         'resin': resin,
         'additive': additive,
-        'color_change': color_change == "YES",
+        'color_change': color_change == get_label('yes', language),
         'order_type': order_type
     }
     

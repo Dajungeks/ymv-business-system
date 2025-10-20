@@ -6,17 +6,28 @@ import json
 from components.specifications.customer_section import render_customer_section, validate_customer_data
 from components.specifications.technical_section import render_technical_section
 from components.specifications.gate_section import render_gate_section, reset_gate_data
+from components.specifications.ymk_approval_interface import render_ymk_approval_interface
+from utils.language_config import get_label, get_supported_languages
 
 def show_hot_runner_order_management(load_func, save_func, update_func, current_user):
-    """규격 결정서 메인 관리 페이지"""
+    """규격 결정서 메인 관리 페이지 - 권한별 분기"""
     
+    # 권한 확인
+    current_user_role = current_user.get('role') if current_user else None
+    
+    # YMK 계정은 승인 화면으로 이동
+    if current_user_role == 'YMK':
+        render_ymk_approval_interface()
+        return
+    
+    # 일반 사용자는 기존 작성 화면
     st.title("📋 규격 결정서 (Specification Decision Sheet)")
     
     # 탭 구성
     tab1, tab2, tab3 = st.tabs([
-        "📝 New Specification",
-        "📋 Specification List",
-        "🔍 Search & Edit"
+        f"📝 {get_label('new_specification', 'EN')}",
+        f"📋 {get_label('specification_list', 'EN')}",
+        f"🔍 {get_label('search_and_edit', 'EN')}"
     ])
     
     with tab1:
@@ -28,17 +39,29 @@ def show_hot_runner_order_management(load_func, save_func, update_func, current_
     with tab3:
         render_search_edit(load_func, update_func, save_func, current_user)
 
+
 def render_order_form(load_func, save_func, current_user):
     """주문서 작성 폼"""
     
-    st.markdown("## Create New Specification Decision Sheet")
+    st.markdown(f"## {get_label('new_specification', 'EN')}")
     
-    # 언어 선택
-    col_lang1, col_lang2 = st.columns([3, 1])
+    # 언어 선택 (최상단)
+    col_lang1, col_lang2, col_lang3 = st.columns([5, 2, 1])
     
     with col_lang2:
+        # UI 표시 언어
+        supported_langs = get_supported_languages()
+        ui_language = st.selectbox(
+            f"🌍 {get_label('language', 'EN')}",
+            options=list(supported_langs.keys()),
+            format_func=lambda x: supported_langs[x],
+            key="ui_language"
+        )
+    
+    with col_lang3:
+        # 출력 언어 (DB 저장용)
         output_language = st.selectbox(
-            "Output Language",
+            get_label('output_language', ui_language),
             ["EN", "VN"],
             key="output_language"
         )
@@ -49,17 +72,17 @@ def render_order_form(load_func, save_func, current_user):
     with st.form("hot_runner_order_form"):
         
         # 1. 고객 정보
-        customer_data = render_customer_section(load_func, save_func)
+        customer_data = render_customer_section(load_func, save_func, ui_language)
         
         st.markdown("---")
         
         # 2. 기술 사양
-        technical_data = render_technical_section()
+        technical_data = render_technical_section(ui_language)
         
         st.markdown("---")
         
         # 3. Gate 정보
-        gate_data = render_gate_section()
+        gate_data = render_gate_section(ui_language)
         
         st.markdown("---")
         
@@ -68,20 +91,20 @@ def render_order_form(load_func, save_func, current_user):
         
         with col_btn1:
             submitted = st.form_submit_button(
-                "💾 Save Specification",
+                f"💾 {get_label('save', ui_language)}",
                 use_container_width=True,
                 type="primary"
             )
         
         with col_btn2:
             preview = st.form_submit_button(
-                "👁️ Preview",
+                f"👁️ {get_label('preview', ui_language)}",
                 use_container_width=True
             )
         
         with col_btn3:
             reset = st.form_submit_button(
-                "🔄 Reset",
+                f"🔄 {get_label('reset', ui_language)}",
                 use_container_width=True
             )
     
@@ -103,6 +126,7 @@ def render_order_form(load_func, save_func, current_user):
                 'language': output_language,
                 'status': 'draft',
                 'created_by': current_user.get('id') if current_user else None,
+                'company': current_user.get('company') if current_user else None,
                 'created_at': datetime.now().isoformat()
             }
             
@@ -122,62 +146,64 @@ def render_order_form(load_func, save_func, current_user):
                 result = save_func('hot_runner_orders', order_data)
                 
                 if result:
-                    st.success(f"✅ Specification saved successfully! Order No: {order_number}")
+                    st.success(f"✅ {get_label('success', ui_language)}! Order No: {order_number}")
                     st.balloons()
                     
                     # Gate 데이터 초기화
                     reset_gate_data()
                     
                     # 저장 후 출력 옵션
-                    st.info("💡 Go to 'Specification List' tab to print this specification")
+                    st.info(f"💡 Go to '{get_label('specification_list', ui_language)}' tab to print this specification")
                 else:
-                    st.error("❌ Failed to save specification")
+                    st.error(f"❌ {get_label('error', ui_language)}")
             
             except Exception as e:
-                st.error(f"❌ Error: {str(e)}")
+                st.error(f"❌ {get_label('error', ui_language)}: {str(e)}")
     
     # 미리보기 (Form 밖)
     if preview:
         st.markdown("---")
-        st.markdown("### 👁️ Preview")
+        st.markdown(f"### 👁️ {get_label('preview', ui_language)}")
         
         # 고객 정보
-        st.markdown("#### 📋 Customer Information")
+        st.markdown(f"#### 📋 {get_label('customer_and_project', ui_language)}")
         col_p1, col_p2 = st.columns(2)
         with col_p1:
-            st.write(f"**Customer:** {customer_data.get('customer_name', 'N/A')}")
-            st.write(f"**Project:** {customer_data.get('project_name', 'N/A')}")
-            st.write(f"**Mold No:** {customer_data.get('mold_no', 'N/A')}")
+            st.write(f"**{get_label('customer', ui_language)}:** {customer_data.get('customer_name', 'N/A')}")
+            st.write(f"**{get_label('project_name', ui_language)}:** {customer_data.get('project_name', 'N/A')}")
+            st.write(f"**{get_label('mold_no', ui_language)}:** {customer_data.get('mold_no', 'N/A')}")
         with col_p2:
-            st.write(f"**Delivery To:** {customer_data.get('delivery_to', 'N/A')}")
-            st.write(f"**Order Type:** {customer_data.get('order_type', 'N/A')}")
-            st.write(f"**Color Change:** {'YES' if customer_data.get('color_change') else 'NO'}")
+            st.write(f"**{get_label('delivery_to', ui_language)}:** {customer_data.get('delivery_to', 'N/A')}")
+            st.write(f"**{get_label('order_type', ui_language)}:** {customer_data.get('order_type', 'N/A')}")
+            color_value = get_label('yes', ui_language) if customer_data.get('color_change') else get_label('no', ui_language)
+            st.write(f"**{get_label('color_change', ui_language)}:** {color_value}")
         
         # 기술 사양
-        st.markdown("#### 🔧 Technical Specifications")
+        st.markdown(f"#### 🔧 {get_label('technical_specifications', ui_language)}")
         col_t1, col_t2 = st.columns(2)
         with col_t1:
-            st.write(f"**Nozzle Type:** {technical_data.get('nozzle_specs', {}).get('type', 'N/A')}")
-            st.write(f"**Nozzle Qty:** {technical_data.get('nozzle_specs', {}).get('qty', 0)}")
+            st.write(f"**{get_label('nozzle_type', ui_language)}:** {technical_data.get('nozzle_specs', {}).get('type', 'N/A')}")
+            st.write(f"**{get_label('quantity', ui_language)}:** {technical_data.get('nozzle_specs', {}).get('qty', 0)}")
         with col_t2:
-            st.write(f"**Manifold Type:** {technical_data.get('manifold_type', 'N/A')}")
-            st.write(f"**Cylinder Type:** {technical_data.get('cylinder_type', 'N/A')}")
+            st.write(f"**{get_label('manifold_type', ui_language)}:** {technical_data.get('manifold_type', 'N/A')}")
+            st.write(f"**{get_label('cylinder_type', ui_language)}:** {technical_data.get('cylinder_type', 'N/A')}")
         
         # Gate 정보
-        st.markdown("#### 🎯 Gate Information")
+        st.markdown(f"#### 🎯 {get_label('gate_information', ui_language)}")
         gates = gate_data.get('gate_data', {})
         gate_count = sum(1 for g in gates.values() if g.get('gate_phi', 0) > 0)
-        st.write(f"**Total Gates:** {gate_count}")
+        st.write(f"**{get_label('total', ui_language)} Gates:** {gate_count}")
     
     # 초기화
     if reset:
         reset_gate_data()
         st.rerun()
 
+
 def render_order_list(load_func, update_func, current_user):
-    """주문서 목록 조회"""
+    """주문서 목록 조회 - 본인 company 문서만 조회"""
     
-    st.markdown("## Specification Decision Sheet List")
+    st.markdown(f"## {get_label('specification_list', 'EN')}")
     
     # 프린트 모드 체크 (최우선)
     if st.session_state.get('print_hot_runner'):
@@ -188,23 +214,23 @@ def render_order_list(load_func, update_func, current_user):
         PrintFormGenerator.render_hot_runner_print(order, load_func)
         
         # 돌아가기 버튼
-        if st.button("← Back to List"):
+        if st.button(f"← {get_label('back', 'EN')}"):
             del st.session_state['print_hot_runner']
             st.rerun()
         
-        return  # 프린트 모드일 때는 목록 표시 안 함
+        return
     
-    # 데이터 로드 (YMK는 submitted 상태만 조회)
+    # 데이터 로드 (본인 company만 조회)
     orders = load_func('hot_runner_orders') if load_func else []
     
-    current_user_role = current_user.get('role') if current_user else None
+    # 현재 사용자 company로 필터링
+    current_user_company = current_user.get('company') if current_user else None
     
-    if current_user_role == 'YMK':
-        # YMK 계정은 submitted 상태만 조회
-        orders = [o for o in orders if o.get('status') == 'submitted']
+    if current_user_company:
+        orders = [o for o in orders if o.get('company') == current_user_company]
     
     if not orders:
-        st.info("📋 No specifications found")
+        st.info(f"📋 {get_label('no_data', 'EN')}")
         return
     
     # 필터
@@ -212,31 +238,42 @@ def render_order_list(load_func, update_func, current_user):
     
     with col_filter1:
         status_filter = st.selectbox(
-            "Status",
-            ["All", "draft", "submitted", "approved", "rejected"],
+            get_label('status', 'EN'),
+            [get_label('all', 'EN'), get_label('draft', 'EN'), get_label('submitted', 'EN'), 
+             get_label('approved', 'EN'), get_label('rejected', 'EN')],
             key="status_filter"
         )
     
     with col_filter2:
         language_filter = st.selectbox(
-            "Language",
-            ["All", "EN", "VN"],
+            get_label('language', 'EN'),
+            [get_label('all', 'EN'), "EN", "VN"],
             key="language_filter"
         )
     
     with col_filter3:
         search_query = st.text_input(
-            "Search (Order No, Customer)",
+            get_label('search', 'EN'),
             key="search_query"
         )
     
     # 필터링
     filtered_orders = orders
     
-    if status_filter != "All":
-        filtered_orders = [o for o in filtered_orders if o.get('status') == status_filter]
+    # 상태 필터 매핑
+    status_map = {
+        get_label('all', 'EN'): None,
+        get_label('draft', 'EN'): 'draft',
+        get_label('submitted', 'EN'): 'submitted',
+        get_label('approved', 'EN'): 'approved',
+        get_label('rejected', 'EN'): 'rejected'
+    }
     
-    if language_filter != "All":
+    selected_status = status_map.get(status_filter)
+    if selected_status:
+        filtered_orders = [o for o in filtered_orders if o.get('status') == selected_status]
+    
+    if language_filter != get_label('all', 'EN'):
         filtered_orders = [o for o in filtered_orders if o.get('language') == language_filter]
     
     if search_query:
@@ -247,7 +284,7 @@ def render_order_list(load_func, update_func, current_user):
         ]
     
     # 목록 표시
-    st.markdown(f"**Total: {len(filtered_orders)} specifications**")
+    st.markdown(f"**{get_label('total', 'EN')}: {len(filtered_orders)} specifications**")
     
     for order in filtered_orders:
         with st.expander(
@@ -257,124 +294,69 @@ def render_order_list(load_func, update_func, current_user):
             col_info1, col_info2, col_info3 = st.columns(3)
             
             with col_info1:
-                st.markdown(f"**Customer:** {order.get('customer_name')}")
-                st.markdown(f"**Project:** {order.get('project_name')}")
-                st.markdown(f"**Mold No:** {order.get('mold_no', 'N/A')}")
+                st.markdown(f"**{get_label('customer', 'EN')}:** {order.get('customer_name')}")
+                st.markdown(f"**{get_label('project_name', 'EN')}:** {order.get('project_name')}")
+                st.markdown(f"**{get_label('mold_no', 'EN')}:** {order.get('mold_no', 'N/A')}")
             
             with col_info2:
-                st.markdown(f"**Order Type:** {order.get('order_type')}")
-                st.markdown(f"**Status:** {order.get('status')}")
-                st.markdown(f"**Language:** {order.get('language')}")
+                st.markdown(f"**{get_label('order_type', 'EN')}:** {order.get('order_type')}")
+                
+                # 상태 표시 (다국어)
+                status_display = {
+                    'draft': get_label('draft', 'EN'),
+                    'submitted': get_label('submitted', 'EN'),
+                    'approved': get_label('approved', 'EN'),
+                    'rejected': get_label('rejected', 'EN')
+                }
+                st.markdown(f"**{get_label('status', 'EN')}:** {status_display.get(order.get('status'), order.get('status'))}")
+                st.markdown(f"**{get_label('language', 'EN')}:** {order.get('language')}")
             
             with col_info3:
                 created_at = order.get('created_at', '')
                 if created_at:
                     st.markdown(f"**Created:** {created_at[:10]}")
             
-            # 버튼 (현재 사용자 역할에 따라 다르게 표시)
+            # 버튼
             order_status = order.get('status')
             
-            if current_user_role == 'YMK':
-                # YMK 계정 전용 버튼
-                col_btn1, col_btn2, col_btn3 = st.columns(3)
-                
-                with col_btn1:
-                    if st.button("🖨️ Print", key=f"print_{order.get('id')}"):
-                        st.session_state['print_hot_runner'] = order
-                        st.rerun()
-                
-                with col_btn2:
-                    if order_status == 'submitted':
-                        if st.button("✅ Approve", key=f"approve_{order.get('id')}"):
-                            # 승인 처리
-                            update_data = {
-                                'status': 'approved',
-                                'reviewed_by': current_user.get('id'),
-                                'reviewed_at': datetime.now().isoformat()
-                            }
-                            update_func('hot_runner_orders', order.get('id'), update_data)
-                            st.success("✅ Specification approved!")
-                            st.rerun()
-                
-                with col_btn3:
-                    if order_status == 'submitted':
-                        if st.button("❌ Reject", key=f"reject_{order.get('id')}"):
-                            st.session_state[f'reject_modal_{order.get("id")}'] = True
-                            st.rerun()
-                
-                # 거부 사유 입력 모달
-                if st.session_state.get(f'reject_modal_{order.get("id")}'):
-                    with st.form(key=f"reject_form_{order.get('id')}"):
-                        st.markdown("### ❌ Rejection Reason")
-                        rejection_reason = st.text_area(
-                            "Please enter the reason for rejection:",
-                            height=150,
-                            key=f"rejection_reason_{order.get('id')}"
-                        )
-                        
-                        col_submit, col_cancel = st.columns(2)
-                        
-                        with col_submit:
-                            if st.form_submit_button("Submit Rejection", type="primary"):
-                                if rejection_reason.strip():
-                                    update_data = {
-                                        'status': 'rejected',
-                                        'reviewed_by': current_user.get('id'),
-                                        'reviewed_at': datetime.now().isoformat(),
-                                        'rejection_reason': rejection_reason
-                                    }
-                                    update_func('hot_runner_orders', order.get('id'), update_data)
-                                    del st.session_state[f'reject_modal_{order.get("id")}']
-                                    st.success("❌ Specification rejected!")
-                                    st.rerun()
-                                else:
-                                    st.error("Please enter a rejection reason")
-                        
-                        with col_cancel:
-                            if st.form_submit_button("Cancel"):
-                                del st.session_state[f'reject_modal_{order.get("id")}']
-                                st.rerun()
+            col_btn1, col_btn2, col_btn3, col_btn4 = st.columns(4)
             
-            else:
-                # 일반 사용자 버튼
-                col_btn1, col_btn2, col_btn3, col_btn4 = st.columns(4)
-                
-                with col_btn1:
-                    if st.button("🖨️ Print", key=f"print_{order.get('id')}"):
-                        st.session_state['print_hot_runner'] = order
+            with col_btn1:
+                if st.button(f"🖨️ {get_label('print', 'EN')}", key=f"print_{order.get('id')}"):
+                    st.session_state['print_hot_runner'] = order
+                    st.rerun()
+            
+            with col_btn2:
+                if st.button(f"✏️ {get_label('edit', 'EN')}", key=f"edit_{order.get('id')}"):
+                    st.session_state['edit_order_id'] = order.get('id')
+                    st.info(f"Go to '{get_label('search_and_edit', 'EN')}' tab")
+            
+            with col_btn3:
+                # 제출 또는 재제출 버튼
+                if order_status == 'draft':
+                    if st.button(f"📤 {get_label('submit', 'EN')}", key=f"submit_{order.get('id')}"):
+                        update_data = {
+                            'status': 'submitted',
+                            'submitted_at': datetime.now().isoformat()
+                        }
+                        update_func('hot_runner_orders', order.get('id'), update_data)
+                        st.success(f"📤 {get_label('success', 'EN')}!")
                         st.rerun()
                 
-                with col_btn2:
-                    if st.button("✏️ Edit", key=f"edit_{order.get('id')}"):
-                        st.session_state['edit_order_id'] = order.get('id')
-                        st.info("Go to 'Search & Edit' tab")
-                
-                with col_btn3:
-                    # 제출 또는 재제출 버튼
-                    if order_status == 'draft':
-                        if st.button("📤 Submit", key=f"submit_{order.get('id')}"):
-                            update_data = {
-                                'status': 'submitted',
-                                'submitted_at': datetime.now().isoformat()
-                            }
-                            update_func('hot_runner_orders', order.get('id'), update_data)
-                            st.success("📤 Specification submitted for approval!")
-                            st.rerun()
-                    
-                    elif order_status == 'rejected':
-                        if st.button("🔄 Resubmit", key=f"resubmit_{order.get('id')}"):
-                            update_data = {
-                                'status': 'submitted',
-                                'submitted_at': datetime.now().isoformat(),
-                                'rejection_reason': None  # 재제출 시 거부 사유 초기화
-                            }
-                            update_func('hot_runner_orders', order.get('id'), update_data)
-                            st.success("🔄 Specification resubmitted for approval!")
-                            st.rerun()
-                
-                with col_btn4:
-                    if st.button("🗑️ Delete", key=f"delete_{order.get('id')}"):
-                        st.warning("Delete functionality - to be implemented")
+                elif order_status == 'rejected':
+                    if st.button("🔄 Resubmit", key=f"resubmit_{order.get('id')}"):
+                        update_data = {
+                            'status': 'submitted',
+                            'submitted_at': datetime.now().isoformat(),
+                            'rejection_reason': None
+                        }
+                        update_func('hot_runner_orders', order.get('id'), update_data)
+                        st.success(f"🔄 {get_label('success', 'EN')}!")
+                        st.rerun()
+            
+            with col_btn4:
+                if st.button(f"🗑️ {get_label('delete', 'EN')}", key=f"delete_{order.get('id')}"):
+                    st.warning("Delete functionality - to be implemented")
             
             # 거부 사유 표시 (rejected 상태일 때)
             if order_status == 'rejected' and order.get('rejection_reason'):
@@ -384,7 +366,7 @@ def render_order_list(load_func, update_func, current_user):
 def render_search_edit(load_func, update_func, save_func, current_user):
     """주문서 검색 및 수정"""
     
-    st.markdown("## Search & Edit Specification Decision Sheet")
+    st.markdown(f"## {get_label('search_and_edit', 'EN')}")
     
     # 검색
     search_order_no = st.text_input(
@@ -394,6 +376,12 @@ def render_search_edit(load_func, update_func, save_func, current_user):
     
     if search_order_no:
         orders = load_func('hot_runner_orders', {'order_number': search_order_no}) if load_func else []
+        
+        # 본인 company만 조회 가능
+        current_user_company = current_user.get('company') if current_user else None
+        
+        if current_user_company:
+            orders = [o for o in orders if o.get('company') == current_user_company]
         
         if orders:
             order = orders[0]
@@ -406,7 +394,7 @@ def render_search_edit(load_func, update_func, save_func, current_user):
             # 간단한 정보 표시
             st.json(order)
         else:
-            st.error("❌ Specification not found")
+            st.error("❌ Specification not found or access denied")
 
 
 def generate_order_number(save_func):

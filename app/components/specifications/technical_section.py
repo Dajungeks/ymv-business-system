@@ -2,67 +2,68 @@
 
 import streamlit as st
 import json
+from utils.language_config import get_label
 
-def render_technical_section():
+def render_technical_section(language='EN'):
     """기술 사양 입력 섹션"""
     
     # BASE 정보
-    st.markdown("### 📏 BASE Information")
+    st.markdown(f"### 🏗️ {get_label('base_information', language)}")
     
-    with st.expander("BASE Dimensions", expanded=False):
-        st.markdown("#### Dimensions Table")
+    with st.expander(get_label('base_dimensions', language), expanded=False):
+        st.markdown(f"#### {get_label('dimensions_table', language)}")
         
         base_cols = st.columns(4)
         
         with base_cols[0]:
-            st.markdown("**Part**")
-            st.markdown("PLATE")
-            st.markdown("TOP")
-            st.markdown("SPACE")
-            st.markdown("HOLDING")
+            st.markdown(f"**{get_label('part', language)}**")
+            st.markdown(get_label('plate', language))
+            st.markdown(get_label('top', language))
+            st.markdown(get_label('space', language))
+            st.markdown(get_label('holding', language))
         
         with base_cols[1]:
-            st.markdown("**Width (mm)**")
+            st.markdown(f"**{get_label('width', language)} (mm)**")
             plate_w = st.number_input("", min_value=0.0, step=0.1, key="plate_width", label_visibility="collapsed")
             top_w = st.number_input("", min_value=0.0, step=0.1, key="top_width", label_visibility="collapsed")
             space_w = st.number_input("", min_value=0.0, step=0.1, key="space_width", label_visibility="collapsed")
             holding_w = st.number_input("", min_value=0.0, step=0.1, key="holding_width", label_visibility="collapsed")
         
         with base_cols[2]:
-            st.markdown("**Length (mm)**")
+            st.markdown(f"**{get_label('length', language)} (mm)**")
             plate_l = st.number_input("", min_value=0.0, step=0.1, key="plate_length", label_visibility="collapsed")
             top_l = st.number_input("", min_value=0.0, step=0.1, key="top_length", label_visibility="collapsed")
             space_l = st.number_input("", min_value=0.0, step=0.1, key="space_length", label_visibility="collapsed")
             holding_l = st.number_input("", min_value=0.0, step=0.1, key="holding_length", label_visibility="collapsed")
         
         with base_cols[3]:
-            st.markdown("**Height (mm)**")
+            st.markdown(f"**{get_label('height', language)} (mm)**")
             plate_h = st.number_input("", min_value=0.0, step=0.1, key="plate_height", label_visibility="collapsed")
             top_h = st.number_input("", min_value=0.0, step=0.1, key="top_height", label_visibility="collapsed")
             space_h = st.number_input("", min_value=0.0, step=0.1, key="space_height", label_visibility="collapsed")
             holding_h = st.number_input("", min_value=0.0, step=0.1, key="holding_height", label_visibility="collapsed")
         
-        base_processor = st.text_input("Base Processor", key="base_processor")
-        cooling_pt_tap = st.text_input("Cooling PT TAP", key="cooling_pt_tap")
+        base_processor = st.text_input(get_label('base_processor', language), key="base_processor")
+        cooling_pt_tap = st.text_input(get_label('cooling_pt_tap', language), key="cooling_pt_tap")
     
     # NOZZLE
     st.markdown("---")
-    st.markdown("### 🔩 NOZZLE Specifications")
+    st.markdown(f"### 🔩 {get_label('nozzle_specifications', language)}")
     
     nozzle_col1, nozzle_col2 = st.columns(2)
     
     with nozzle_col1:
-        nozzle_type = st.text_input("Type", key="nozzle_type")
+        nozzle_type = st.text_input(get_label('type', language), key="nozzle_type")
         
         gate_close = st.radio(
-            "Gate Close",
+            get_label('gate_close', language),
             ["STRAIGHT", "TAPPER"],
             horizontal=True,
             key="gate_close"
         )
         
         nozzle_qty = st.number_input(
-            "Quantity",
+            get_label('quantity', language),
             min_value=0,
             step=1,
             key="nozzle_qty"
@@ -70,30 +71,30 @@ def render_technical_section():
     
     with nozzle_col2:
         ht_type = st.radio(
-            "H/T Type",
+            get_label('ht_type', language),
             ["COIL", "ALLOY"],
             horizontal=True,
             key="ht_type"
         )
         
         nozzle_length = st.number_input(
-            "LENGTH (mm)",
+            f"{get_label('length', language)} (mm)",
             min_value=0.0,
             step=0.1,
             key="nozzle_length"
         )
         
-        st.info("📏 Refer to nozzle height diagram")
+        st.info(f"📏 {get_label('refer_to_nozzle_height', language)}")
     
     # MANIFOLD
     st.markdown("---")
-    st.markdown("### 🔀 MANIFOLD Specifications")
+    st.markdown(f"### 🔀 {get_label('manifold_specifications', language)}")
     
     manifold_col1, manifold_col2 = st.columns(2)
     
     with manifold_col1:
         manifold_type = st.radio(
-            "Manifold Type",
+            get_label('manifold_type', language),
             ["H", "I", "X", "T"],
             horizontal=True,
             key="manifold_type"
@@ -101,26 +102,31 @@ def render_technical_section():
     
     with manifold_col2:
         manifold_standard = st.radio(
-            "Manifold Standard",
+            get_label('manifold_standard', language),
             ["ISO", "General"],
             horizontal=True,
             key="manifold_standard"
         )
     
-    st.text_input("H/T Type (Fixed)", value="Sheath Heater", disabled=True, key="manifold_ht_fixed")
+    st.text_input(
+        f"{get_label('ht_type', language)} ({get_label('fixed', language)})",
+        value=get_label('sheath_heater', language),
+        disabled=True,
+        key="manifold_ht_fixed"
+    )
     
     # PISTON/CYLINDER
     st.markdown("---")
-    st.markdown("### 🔧 CYLINDER & SENSOR")
+    st.markdown(f"### 🔧 {get_label('cylinder_sensor', language)}")
     
     cylinder_col1, cylinder_col2 = st.columns(2)
     
     with cylinder_col1:
-        cylinder_type = st.text_input("Cylinder Type", key="cylinder_type")
+        cylinder_type = st.text_input(get_label('cylinder_type', language), key="cylinder_type")
     
     with cylinder_col2:
         sensor_type = st.radio(
-            "Sensor Type",
+            get_label('sensor_type', language),
             ["J(I.C)", "K(C.A)"],
             horizontal=True,
             key="sensor_type"
@@ -128,63 +134,63 @@ def render_technical_section():
     
     # TIMER & CONNECTOR
     st.markdown("---")
-    st.markdown("### 🔌 TIMER & CONNECTOR")
+    st.markdown(f"### 🔌 {get_label('timer_and_connector', language)}")
     
     timer_col1, timer_col2 = st.columns(2)
     
     with timer_col1:
         sol_volt = st.radio(
-            "SOL Voltage",
+            get_label('sol_volt', language),
             ["AC220V", "DC24V"],
             horizontal=True,
             key="sol_volt"
         )
         
         sol_control = st.radio(
-            "SOL Control",
-            ["Individual", "Integrated"],
+            get_label('sol_control', language),
+            [get_label('individual', language), get_label('integrated', language)],
             horizontal=True,
             key="sol_control"
         )
     
     with timer_col2:
         timer_pin_type = st.radio(
-            "PIN Type",
+            get_label('pin_type', language),
             ["24PIN", "16PIN"],
             horizontal=True,
             key="timer_pin_type"
         )
         
         timer_buried = st.radio(
-            "Buried",
-            ["NO", "YES"],
+            get_label('buried', language),
+            [get_label('no', language), get_label('yes', language)],
             horizontal=True,
             key="timer_buried"
         )
     
     # Machine View 위치 선택
     timer_location = st.selectbox(
-        "Location",
+        get_label('location', language),
         ["G", "A", "B", "C", "D", "E", "F", "H", "I", "J", "K", "L", "UP"],
         key="timer_location"
     )
     
     # HEATER CONNECTOR
     st.markdown("---")
-    st.markdown("### 🔥 HEATER CONNECTOR")
+    st.markdown(f"### 🔥 {get_label('heater_connector', language)}")
     
     heater_col1, heater_col2 = st.columns(2)
     
     with heater_col1:
         heater_pin_type = st.radio(
-            "PIN Type",
+            get_label('pin_type', language),
             ["24PIN", "16PIN"],
             horizontal=True,
             key="heater_pin_type"
         )
         
         con_type = st.radio(
-            "CON Type",
+            get_label('con_type', language),
             ["BOX", "HOUSING"],
             horizontal=True,
             key="con_type"
@@ -192,43 +198,43 @@ def render_technical_section():
     
     with heater_col2:
         heater_buried = st.radio(
-            "Buried",
-            ["NO", "YES"],
+            get_label('buried', language),
+            [get_label('no', language), get_label('yes', language)],
             horizontal=True,
             key="heater_buried"
         )
         
         heater_location = st.selectbox(
-            "Location",
+            get_label('location', language),
             ["G", "A", "B", "C", "D", "E", "F", "H", "I", "J", "K", "L", "UP"],
             key="heater_location"
         )
     
     # ID CARD
     st.markdown("---")
-    st.markdown("### 🆔 ID CARD")
+    st.markdown(f"### 🆔 {get_label('id_card', language)}")
     
     id_card_type = st.radio(
-        "ID Card",
-        ["Domestic", "Global"],
+        get_label('id_card_type', language),
+        [get_label('domestic', language), get_label('global', language)],
         horizontal=True,
         key="id_card_type"
     )
     
     # NL 정보
     st.markdown("---")
-    st.markdown("### 📐 NL Information")
+    st.markdown(f"### 📏 {get_label('nl_information', language)}")
     
     nl_col1, nl_col2, nl_col3 = st.columns(3)
     
     with nl_col1:
-        nl_phi = st.number_input("NL Φ", min_value=0.0, step=0.1, key="nl_phi")
+        nl_phi = st.number_input(get_label('nl_phi', language), min_value=0.0, step=0.1, key="nl_phi")
     
     with nl_col2:
-        nl_sr = st.number_input("NL S/R", min_value=0.0, step=0.1, key="nl_sr")
+        nl_sr = st.number_input(get_label('nl_sr', language), min_value=0.0, step=0.1, key="nl_sr")
     
     with nl_col3:
-        locate_ring = st.text_input("Locate Ring", key="locate_ring")
+        locate_ring = st.text_input(get_label('locate_ring', language), key="locate_ring")
     
     # 데이터 수집
     technical_data = {
@@ -255,13 +261,13 @@ def render_technical_section():
             'sol_volt': sol_volt,
             'sol_control': sol_control,
             'type': timer_pin_type,
-            'buried': timer_buried == "YES",
+            'buried': timer_buried == get_label('yes', language),
             'location': timer_location
         },
         'heater_connector': {
             'type': heater_pin_type,
             'con_type': con_type,
-            'buried': heater_buried == "YES",
+            'buried': heater_buried == get_label('yes', language),
             'location': heater_location
         },
         'id_card_type': id_card_type,

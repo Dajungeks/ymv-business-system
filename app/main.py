@@ -32,6 +32,8 @@ from components.finance.reimbursement_management import show_reimbursement_manag
 # 내부 컴포넌트 - HR
 from components.hr.employee_management import show_employee_management
 
+from components.company.company_management import show_company_management
+
 # 내부 컴포넌트 - Supplier
 from components.supplier.supplier_management import show_supplier_management
 
@@ -98,22 +100,79 @@ db_operations, auth_manager = init_managers()
 
 def show_login_page():
     """로그인 페이지"""
-    st.title("🏢 YMV 관리 시스템")
+    st.title("🏢 YUMOLD 관리 시스템")
     st.subheader("로그인")
     
+    # 로그인 타입 선택
+    login_type = st.radio(
+        "로그인 유형",
+        ["👨‍💼 직원 로그인", "🏢 법인 로그인"],
+        horizontal=True
+    )
+    
     with st.form("login_form"):
-        employee_id = st.text_input("사번 (Employee ID)")
-        password = st.text_input("비밀번호", type="password")
-        submitted = st.form_submit_button("로그인")
+        if login_type == "👨‍💼 직원 로그인":
+            # 직원 로그인
+            user_id = st.text_input("사번 (Employee ID)")
+            password = st.text_input("비밀번호", type="password")
+            submitted = st.form_submit_button("로그인")
+            
+            if submitted:
+                if user_id and password:
+                    if auth_manager.login_user(user_id, password, login_type="employee"):
+                        st.success("로그인되었습니다!")
+                        time.sleep(1)
+                        st.rerun()
+                    else:
+                        st.error("사번 또는 비밀번호가 일치하지 않습니다.")
+                else:
+                    st.error("사번과 비밀번호를 입력해주세요.")
         
-        if submitted:
-            if employee_id and password:
-                if auth_manager.login_user(employee_id, password):
-                    st.success("로그인되었습니다!")
-                    time.sleep(1)
-                    st.rerun()
-            else:
-                st.error("사번과 비밀번호를 입력해주세요.")
+        else:
+            # 법인 로그인
+            try:
+                companies = db_operations.load_data('companies') or []
+                
+                if not companies:
+                    st.warning("등록된 법인이 없습니다.")
+                    submitted = st.form_submit_button("로그인", disabled=True)
+                    return
+                
+                # 법인 선택
+                company_options = {f"{c.get('company_code')} - {c.get('company_name_en')}": c.get('login_id') 
+                                 for c in companies if c.get('is_active')}
+                
+                if not company_options:
+                    st.warning("활성화된 법인이 없습니다.")
+                    submitted = st.form_submit_button("로그인", disabled=True)
+                    return
+                
+                selected_company = st.selectbox(
+                    "법인 선택 *",
+                    options=list(company_options.keys())
+                )
+                
+                login_id = company_options[selected_company]
+                
+                st.info(f"💡 로그인 ID: **{login_id}**")
+                
+                password = st.text_input("비밀번호", type="password")
+                submitted = st.form_submit_button("로그인")
+                
+                if submitted:
+                    if password:
+                        if auth_manager.login_user(login_id, password, login_type="company"):
+                            st.success("법인 로그인되었습니다!")
+                            time.sleep(1)
+                            st.rerun()
+                        else:
+                            st.error("비밀번호가 일치하지 않습니다.")
+                    else:
+                        st.error("비밀번호를 입력해주세요.")
+            
+            except Exception as e:
+                st.error(f"법인 정보 로드 중 오류: {str(e)}")
+                submitted = st.form_submit_button("로그인", disabled=True)
 
 # ===========================================
 # 페이지 함수들 (컴포넌트 호출)
@@ -166,6 +225,16 @@ def show_employee_management_page():
         calculate_expense_statistics,
         create_csv_download,
         render_print_form
+    )
+
+def show_company_management_page():
+    """법인 관리 페이지"""
+    show_company_management(
+        db_operations.load_data,
+        db_operations.save_data,
+        db_operations.update_data,
+        db_operations.delete_data,
+        auth_manager.get_current_user
     )
 
 def show_product_code_management_page():
@@ -474,7 +543,7 @@ def main():
             st.session_state.current_page = "구매품 관리"
             st.rerun()
 
-        if st.button("🔥 Hot Runner Order Sheet", use_container_width=True,
+        if st.button("🔥 규격 결정서", use_container_width=True,
                     type="primary" if st.session_state.current_page == "Hot Runner Order Sheet" else "secondary"):
             st.session_state.current_page = "Hot Runner Order Sheet"
             st.rerun()
@@ -500,7 +569,12 @@ def main():
                     type="primary" if st.session_state.current_page == "직원 관리" else "secondary"):
             st.session_state.current_page = "직원 관리"
             st.rerun()
-            
+
+        if st.button("🏢 법인 관리", use_container_width=True,
+            type="primary" if st.session_state.current_page == "법인 관리" else "secondary"):
+            st.session_state.current_page = "법인 관리"
+            st.rerun()
+
         if st.button("💳 지출 요청서", use_container_width=True,
                     type="primary" if st.session_state.current_page == "지출 요청서" else "secondary"):
             st.session_state.current_page = "지출 요청서"
@@ -553,6 +627,8 @@ def main():
         rate_table_management_page()
     elif current_page == "직원 관리":
         show_employee_management_page()
+    elif current_page == "법인 관리":
+        show_company_management_page()
     elif current_page == "지출 요청서":
         show_expense_management_page()
     elif current_page == "환급 관리":

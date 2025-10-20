@@ -1,6 +1,7 @@
 """
-제품 관리 시스템 V5
-- 제품 등록 (단일 + 일괄 통합)
+제품 관리 시스템 V6
+- 제품 등록 (단일) - 코드 검색 개선
+- 일괄 등록 (별도 탭)
 - 테이블 뷰 목록
 - CSV 관리
 """
@@ -13,9 +14,10 @@ def show_product_management(load_func, save_func, update_func, delete_func):
     """제품 관리 메인 페이지"""
     st.title("📦 제품 관리")
     
-    # 탭 구성 (일괄 등록 제거)
-    tab1, tab2, tab3 = st.tabs([
+    # 탭 구성 (4개)
+    tab1, tab2, tab3, tab4 = st.tabs([
         "📝 제품 등록",
+        "📦 일괄 등록",
         "📋 제품 목록",
         "📤 CSV 관리"
     ])
@@ -24,48 +26,194 @@ def show_product_management(load_func, save_func, update_func, delete_func):
         render_product_form(save_func, load_func)
     
     with tab2:
-        render_product_list_table_view(load_func, update_func, delete_func)
+        render_bulk_registration_tab(save_func, load_func)
     
     with tab3:
+        render_product_list_table_view(load_func, update_func, delete_func)
+    
+    with tab4:
         render_product_csv_management(load_func, save_func)
 
 
 # ==========================================
-# 제품 등록 (단일 + 일괄 통합)
+# 제품 등록 (단일)
 # ==========================================
 
 def render_product_form(save_func, load_func):
-    """제품 등록 폼"""
+    """제품 등록 폼 (단일)"""
     st.header("📝 제품 등록")
     
-    # 일괄 등록 모드 체크
-    if st.session_state.get('show_bulk_registration_form', False):
-        render_bulk_registration_from_search(save_func, load_func)
+    # 제품 정보 입력 모드 체크
+    if st.session_state.get('show_product_input_form', False):
+        render_single_product_input_form(save_func, load_func)
         return
     
-    if st.button("🔍 제품 코드 검색 (단계별 선택)", use_container_width=True, type="secondary"):
-        st.session_state.show_code_search = not st.session_state.get('show_code_search', False)
+    try:
+        all_codes = load_func('product_codes') or []
+        
+        if not all_codes:
+            st.warning("등록된 제품 코드가 없습니다.")
+            return
+        
+        # 코드 필터 선택
+        st.markdown("### 🔍 제품 코드 검색")
+        st.caption("각 단계를 선택하여 코드 목록을 필터링하세요.")
+        
+        col1, col2, col3, col4, col5, col6, col7 = st.columns(7)
+        
+        with col1:
+            code01_options = get_unique_code_values(all_codes, 'code01')
+            code01 = st.selectbox("Code01", ["전체"] + code01_options, key="reg_code01")
+        
+        with col2:
+            if code01 != "전체":
+                filtered = filter_codes_by_selections(all_codes, {'code01': code01})
+                code02_options = get_unique_code_values(filtered, 'code02')
+                code02 = st.selectbox("Code02", ["전체"] + code02_options, key="reg_code02")
+            else:
+                st.selectbox("Code02", ["전체"], disabled=True, key="reg_code02_dis")
+                code02 = "전체"
+        
+        with col3:
+            if code01 != "전체" and code02 != "전체":
+                filtered = filter_codes_by_selections(all_codes, {'code01': code01, 'code02': code02})
+                code03_options = get_unique_code_values(filtered, 'code03')
+                code03 = st.selectbox("Code03", ["전체"] + code03_options, key="reg_code03")
+            else:
+                st.selectbox("Code03", ["전체"], disabled=True, key="reg_code03_dis")
+                code03 = "전체"
+        
+        with col4:
+            if code01 != "전체" and code02 != "전체" and code03 != "전체":
+                filtered = filter_codes_by_selections(all_codes, {
+                    'code01': code01, 'code02': code02, 'code03': code03
+                })
+                code04_options = get_unique_code_values(filtered, 'code04')
+                code04 = st.selectbox("Code04", ["전체"] + code04_options, key="reg_code04")
+            else:
+                st.selectbox("Code04", ["전체"], disabled=True, key="reg_code04_dis")
+                code04 = "전체"
+        
+        with col5:
+            if code04 != "전체":
+                filtered = filter_codes_by_selections(all_codes, {
+                    'code01': code01, 'code02': code02, 'code03': code03, 'code04': code04
+                })
+                code05_options = get_unique_code_values(filtered, 'code05')
+                code05 = st.selectbox("Code05", ["전체"] + code05_options, key="reg_code05")
+            else:
+                st.selectbox("Code05", ["전체"], disabled=True, key="reg_code05_dis")
+                code05 = "전체"
+        
+        with col6:
+            if code05 != "전체":
+                filtered = filter_codes_by_selections(all_codes, {
+                    'code01': code01, 'code02': code02, 'code03': code03,
+                    'code04': code04, 'code05': code05
+                })
+                code06_options = get_unique_code_values(filtered, 'code06')
+                code06 = st.selectbox("Code06", ["전체"] + code06_options, key="reg_code06")
+            else:
+                st.selectbox("Code06", ["전체"], disabled=True, key="reg_code06_dis")
+                code06 = "전체"
+        
+        with col7:
+            if code06 != "전체":
+                filtered = filter_codes_by_selections(all_codes, {
+                    'code01': code01, 'code02': code02, 'code03': code03,
+                    'code04': code04, 'code05': code05, 'code06': code06
+                })
+                code07_options = get_unique_code_values(filtered, 'code07')
+                code07 = st.selectbox("Code07", ["전체"] + code07_options, key="reg_code07")
+            else:
+                st.selectbox("Code07", ["전체"], disabled=True, key="reg_code07_dis")
+                code07 = "전체"
+        
+        # 선택값 수집
+        selections = {}
+        if code01 != "전체":
+            selections['code01'] = code01
+        if code02 != "전체":
+            selections['code02'] = code02
+        if code03 != "전체":
+            selections['code03'] = code03
+        if code04 != "전체":
+            selections['code04'] = code04
+        if code05 != "전체":
+            selections['code05'] = code05
+        if code06 != "전체":
+            selections['code06'] = code06
+        if code07 != "전체":
+            selections['code07'] = code07
+        
+        matching_codes = filter_codes_by_selections(all_codes, selections)
+        
+        st.markdown("---")
+        
+        # 필터링된 코드 테이블 표시
+        if matching_codes:
+            st.info(f"🔍 {len(matching_codes)}개 코드 매칭")
+            
+            # 테이블 생성
+            table_data = []
+            for code in matching_codes:
+                table_data.append({
+                    'ID': code.get('id', ''),
+                    'Code': code.get('full_code', ''),
+                    'Category': code.get('category', '')
+                })
+            
+            df = pd.DataFrame(table_data)
+            st.dataframe(df, use_container_width=True, hide_index=True)
+            
+            st.markdown("---")
+            
+            # 제품 등록 ID 입력
+            col1, col2, col3 = st.columns([3, 1, 3])
+            
+            with col1:
+                product_code_id_input = st.text_input("등록할 제품 코드 ID", placeholder="코드 ID 입력", key="product_code_id_input")
+            
+            with col2:
+                if st.button("➡️ 등록", use_container_width=True, type="primary"):
+                    if product_code_id_input and product_code_id_input.strip().isdigit():
+                        code_id = int(product_code_id_input.strip())
+                        selected_code = next((c for c in matching_codes if c.get('id') == code_id), None)
+                        
+                        if selected_code:
+                            st.session_state.selected_single_code = selected_code
+                            st.session_state.show_product_input_form = True
+                            st.rerun()
+                        else:
+                            st.error(f"❌ ID {code_id}를 찾을 수 없습니다.")
+                    else:
+                        st.error("❌ 올바른 ID를 입력하세요.")
+        else:
+            st.info("💡 코드 필터를 선택하여 제품 코드를 검색하세요.")
     
-    if st.session_state.get('show_code_search', False):
-        render_cascading_code_search(load_func, save_func)
-        return
+    except Exception as e:
+        st.error(f"❌ 코드 검색 중 오류: {str(e)}")
+
+def render_single_product_input_form(save_func, load_func):
+    """선택한 코드의 제품 정보 입력"""
+    selected_code = st.session_state.get('selected_single_code')
+    
+    st.success(f"📋 선택된 코드: **{selected_code.get('full_code')}**")
+    
+    if st.button("🔄 다른 코드 선택"):
+        st.session_state.pop('selected_single_code', None)
+        st.session_state.show_product_input_form = False
+        st.rerun()
     
     st.markdown("---")
     
-    # 기본 단일 등록 폼
-    with st.form("product_registration_form"):
+    with st.form("single_product_form"):
         col1, col2 = st.columns(2)
         
         with col1:
             st.subheader("📋 기본 정보")
             
-            default_code = st.session_state.get('selected_product_code', '')
-            
-            product_code = st.text_input(
-                "제품 코드 *",
-                value=default_code,
-                placeholder="예: HR-HRS-YMO-ST-20-MCC-xx-00"
-            )
+            st.text_input("제품 코드", value=selected_code.get('full_code'), disabled=True)
             
             product_name_en = st.text_input("제품명 (영문) *", placeholder="예: Hot Runner System")
             product_name_vn = st.text_input("제품명 (베트남어)", placeholder="예: Hệ thống Hot Runner")
@@ -78,13 +226,37 @@ def render_product_form(save_func, load_func):
             currency = st.selectbox("기본 통화", ["USD", "VND", "KRW"], index=0)
             cost_price_usd = st.number_input("원가 (USD)", min_value=0.0, value=0.0, step=0.01, format="%.2f")
             selling_price_usd = st.number_input("판매가 (USD)", min_value=0.0, value=0.0, step=0.01, format="%.2f")
+            logistics_cost_usd = st.number_input("물류비 (USD)", min_value=0.0, value=0.0, step=0.01, format="%.2f")
             exchange_rate = st.number_input("환율 (USD→VND)", min_value=1000.0, value=26387.45, step=100.0, format="%.2f")
             
+            # 자동 계산값 (참고용)
+            st.markdown("---")
+            st.markdown("##### 📊 자동 계산 (참고용)")
             unit_price_vnd = selling_price_usd * exchange_rate
-            st.metric("판매가 (VND)", f"{unit_price_vnd:,.0f}")
+            total_cost_usd = selling_price_usd + logistics_cost_usd
+            recommended_price_vnd = total_cost_usd * exchange_rate
             
-            if cost_price_usd > 0 and selling_price_usd > 0:
-                margin = ((selling_price_usd - cost_price_usd) / selling_price_usd) * 100
+            st.info(f"• 기본 판매가 (VND): {unit_price_vnd:,.0f}\n• 총 비용 (USD): ${total_cost_usd:,.2f}\n• 권장 판매가 (VND): {recommended_price_vnd:,.0f}")
+            
+            st.markdown("---")
+            
+            # 실제 판매가 입력
+            st.markdown("##### ✏️ 실제 판매가 (견적서용)")
+            actual_selling_price_vnd = st.number_input(
+                "실제 판매가 (VND) *",
+                min_value=0.0,
+                value=recommended_price_vnd if recommended_price_vnd > 0 else 0.0,
+                step=10000.0,
+                format="%.0f",
+                help="견적서에 표시될 실제 판매가격을 입력하세요"
+            )
+            
+            # 마진 계산 (실제 판매가 기준)
+            if cost_price_usd > 0 and actual_selling_price_vnd > 0:
+                actual_selling_usd = actual_selling_price_vnd / exchange_rate
+                total_cost_with_logistics = cost_price_usd + logistics_cost_usd
+                margin = ((actual_selling_usd - total_cost_with_logistics) / actual_selling_usd) * 100
+                
                 if margin >= 0:
                     st.success(f"📈 마진: {margin:.1f}%")
                 else:
@@ -116,13 +288,20 @@ def render_product_form(save_func, load_func):
         description = st.text_area("제품 설명", placeholder="제품의 상세 설명")
         specifications = st.text_area("제품 사양", placeholder="기술적 사양이나 특징")
         
-        submitted = st.form_submit_button("💾 제품 등록", type="primary", use_container_width=True)
+        col_submit, col_cancel = st.columns(2)
+        
+        with col_submit:
+            submitted = st.form_submit_button("💾 제품 등록", type="primary", use_container_width=True)
+        
+        with col_cancel:
+            cancel = st.form_submit_button("❌ 취소", use_container_width=True)
+        
+        if cancel:
+            st.session_state.pop('selected_single_code', None)
+            st.session_state.show_product_input_form = False
+            st.rerun()
         
         if submitted:
-            if not product_code.strip():
-                st.error("❌ 제품 코드를 입력해주세요.")
-                return
-            
             if not product_name_en.strip():
                 st.error("❌ 제품명(영문)을 입력해주세요.")
                 return
@@ -131,25 +310,25 @@ def render_product_form(save_func, load_func):
                 existing_products = load_func('products') if load_func else []
                 if existing_products:
                     existing_codes = [p.get('product_code', '') for p in existing_products]
-                    if product_code in existing_codes:
-                        st.error(f"❌ 제품 코드 '{product_code}'가 이미 존재합니다.")
+                    if selected_code.get('full_code') in existing_codes:
+                        st.error(f"❌ 제품 코드 '{selected_code.get('full_code')}'가 이미 존재합니다.")
                         return
             except Exception as e:
                 st.warning(f"중복 확인 중 오류: {str(e)}")
             
-            auto_category = st.session_state.get('selected_category', product_code.split('-')[0] if '-' in product_code else '')
-            
             product_data = {
-                'product_code': product_code.strip(),
+                'product_code': selected_code.get('full_code'),
                 'product_name': product_name_en.strip(),
                 'product_name_en': product_name_en.strip(),
                 'product_name_vn': product_name_vn.strip() if product_name_vn.strip() else None,
-                'category': auto_category,
+                'category': selected_code.get('category'),
                 'unit': unit,
                 'cost_price_usd': cost_price_usd,
                 'selling_price_usd': selling_price_usd,
+                'logistics_cost_usd': logistics_cost_usd,
                 'unit_price': selling_price_usd,
                 'unit_price_vnd': unit_price_vnd,
+                'actual_selling_price_vnd': actual_selling_price_vnd,
                 'currency': currency,
                 'exchange_rate': exchange_rate,
                 'supplier': supplier,
@@ -168,27 +347,43 @@ def render_product_form(save_func, load_func):
                     st.success("✅ 제품이 성공적으로 등록되었습니다!")
                     st.balloons()
                     
-                    if 'selected_product_code' in st.session_state:
-                        del st.session_state['selected_product_code']
-                    if 'selected_category' in st.session_state:
-                        del st.session_state['selected_category']
-                    if 'show_code_search' in st.session_state:
-                        del st.session_state['show_code_search']
-                    
+                    st.session_state.pop('selected_single_code', None)
+                    st.session_state.show_product_input_form = False
                     st.rerun()
                 else:
                     st.error("❌ 제품 등록에 실패했습니다.")
             except Exception as e:
                 st.error(f"❌ 저장 중 오류: {str(e)}")
 
-
 # ==========================================
-# 코드 검색 (다단계) - 개선 버전
+# 일괄 등록
 # ==========================================
 
-def render_cascading_code_search(load_func, save_func):
-    """다단계 연동 코드 검색 - 일괄 등록 통합"""
-    st.subheader("🔍 제품 코드 검색")
+def render_bulk_registration_tab(save_func, load_func):
+    """일괄 등록 전용 탭"""
+    st.header("📦 제품 일괄 등록")
+    
+    # 일괄 등록 폼 모드 체크
+    if st.session_state.get('show_bulk_registration_form', False):
+        render_bulk_registration_from_search(save_func, load_func)
+        return
+    
+    # 코드 검색 모드 체크
+    if st.session_state.get('show_code_search_bulk', False):
+        render_code_search_bulk(load_func, save_func)
+        return
+    
+    # 시작 화면
+    st.info("💡 여러 제품을 동시에 등록할 수 있습니다.")
+    
+    if st.button("🔍 제품 코드 검색 시작", use_container_width=True, type="primary"):
+        st.session_state.show_code_search_bulk = True
+        st.rerun()
+
+
+def render_code_search_bulk(load_func, save_func):
+    """일괄 등록용 코드 검색 (필터링 + 다중 선택)"""
+    st.subheader("🔍 제품 코드 검색 (일괄 등록)")
     
     try:
         all_codes = load_func('product_codes') or []
@@ -197,121 +392,121 @@ def render_cascading_code_search(load_func, save_func):
             st.warning("등록된 제품 코드가 없습니다.")
             return
         
-        # Step 1: 코드 패턴 선택
-        st.markdown("### Step 1: 코드 패턴 선택")
-        st.caption("각 단계를 순서대로 선택하면 다음 단계 옵션이 자동 필터링됩니다.")
+        # Step 1: 단계별 필터 선택
+        st.markdown("### Step 1: 코드 필터 선택")
+        st.caption("각 단계를 선택하여 코드 목록을 필터링하세요.")
         
         col1, col2, col3, col4, col5, col6, col7 = st.columns(7)
         
         with col1:
             code01_options = get_unique_code_values(all_codes, 'code01')
-            code01 = st.selectbox("Code01", ["선택"] + code01_options, key="sel_code01")
+            code01 = st.selectbox("Code01", ["전체"] + code01_options, key="bulk_code01")
         
         with col2:
-            if code01 != "선택":
+            if code01 != "전체":
                 filtered = filter_codes_by_selections(all_codes, {'code01': code01})
                 code02_options = get_unique_code_values(filtered, 'code02')
-                code02 = st.selectbox("Code02", ["선택"] + code02_options, key="sel_code02")
+                code02 = st.selectbox("Code02", ["전체"] + code02_options, key="bulk_code02")
             else:
-                st.selectbox("Code02", ["선택"], disabled=True, key="sel_code02_dis")
-                code02 = "선택"
+                st.selectbox("Code02", ["전체"], disabled=True, key="bulk_code02_dis")
+                code02 = "전체"
         
         with col3:
-            if code01 != "선택" and code02 != "선택":
+            if code01 != "전체" and code02 != "전체":
                 filtered = filter_codes_by_selections(all_codes, {'code01': code01, 'code02': code02})
                 code03_options = get_unique_code_values(filtered, 'code03')
-                code03 = st.selectbox("Code03", ["선택"] + code03_options, key="sel_code03")
+                code03 = st.selectbox("Code03", ["전체"] + code03_options, key="bulk_code03")
             else:
-                st.selectbox("Code03", ["선택"], disabled=True, key="sel_code03_dis")
-                code03 = "선택"
+                st.selectbox("Code03", ["전체"], disabled=True, key="bulk_code03_dis")
+                code03 = "전체"
         
         with col4:
-            if code01 != "선택" and code02 != "선택" and code03 != "선택":
+            if code01 != "전체" and code02 != "전체" and code03 != "전체":
                 filtered = filter_codes_by_selections(all_codes, {
                     'code01': code01, 'code02': code02, 'code03': code03
                 })
                 code04_options = get_unique_code_values(filtered, 'code04')
-                code04 = st.selectbox("Code04", ["선택"] + code04_options, key="sel_code04")
+                code04 = st.selectbox("Code04", ["전체"] + code04_options, key="bulk_code04")
             else:
-                st.selectbox("Code04", ["선택"], disabled=True, key="sel_code04_dis")
-                code04 = "선택"
+                st.selectbox("Code04", ["전체"], disabled=True, key="bulk_code04_dis")
+                code04 = "전체"
         
         with col5:
-            if code04 != "선택":
+            if code04 != "전체":
                 filtered = filter_codes_by_selections(all_codes, {
                     'code01': code01, 'code02': code02, 'code03': code03, 'code04': code04
                 })
                 code05_options = get_unique_code_values(filtered, 'code05')
-                code05 = st.selectbox("Code05", ["선택"] + code05_options, key="sel_code05")
+                code05 = st.selectbox("Code05", ["전체"] + code05_options, key="bulk_code05")
             else:
-                st.selectbox("Code05", ["선택"], disabled=True, key="sel_code05_dis")
-                code05 = "선택"
+                st.selectbox("Code05", ["전체"], disabled=True, key="bulk_code05_dis")
+                code05 = "전체"
         
         with col6:
-            if code05 != "선택":
+            if code05 != "전체":
                 filtered = filter_codes_by_selections(all_codes, {
                     'code01': code01, 'code02': code02, 'code03': code03,
                     'code04': code04, 'code05': code05
                 })
                 code06_options = get_unique_code_values(filtered, 'code06')
-                code06 = st.selectbox("Code06", ["선택"] + code06_options, key="sel_code06")
+                code06 = st.selectbox("Code06", ["전체"] + code06_options, key="bulk_code06")
             else:
-                st.selectbox("Code06", ["선택"], disabled=True, key="sel_code06_dis")
-                code06 = "선택"
+                st.selectbox("Code06", ["전체"], disabled=True, key="bulk_code06_dis")
+                code06 = "전체"
         
         with col7:
-            if code06 != "선택":
+            if code06 != "전체":
                 filtered = filter_codes_by_selections(all_codes, {
                     'code01': code01, 'code02': code02, 'code03': code03,
                     'code04': code04, 'code05': code05, 'code06': code06
                 })
                 code07_options = get_unique_code_values(filtered, 'code07')
-                code07 = st.selectbox("Code07", ["선택"] + code07_options, key="sel_code07")
+                code07 = st.selectbox("Code07", ["전체"] + code07_options, key="bulk_code07")
             else:
-                st.selectbox("Code07", ["선택"], disabled=True, key="sel_code07_dis")
-                code07 = "선택"
+                st.selectbox("Code07", ["전체"], disabled=True, key="bulk_code07_dis")
+                code07 = "전체"
         
         # 선택값 수집
         selections = {}
-        if code01 != "선택":
+        if code01 != "전체":
             selections['code01'] = code01
-        if code02 != "선택":
+        if code02 != "전체":
             selections['code02'] = code02
-        if code03 != "선택":
+        if code03 != "전체":
             selections['code03'] = code03
-        if code04 != "선택":
+        if code04 != "전체":
             selections['code04'] = code04
-        if code05 != "선택":
+        if code05 != "전체":
             selections['code05'] = code05
-        if code06 != "선택":
+        if code06 != "전체":
             selections['code06'] = code06
-        if code07 != "선택":
+        if code07 != "전체":
             selections['code07'] = code07
         
         matching_codes = filter_codes_by_selections(all_codes, selections)
         
-        if not selections:
-            st.info("Code01부터 순서대로 선택하세요.")
-            return
+        st.markdown("---")
+        
+        # Step 2: 필터링된 코드 목록 표시
+        st.markdown(f"### Step 2: 필터링된 코드 목록 ({len(matching_codes)}개)")
         
         if not matching_codes:
             st.warning("⚠️ 매칭되는 코드가 없습니다.")
+            if st.button("◀ 돌아가기"):
+                st.session_state.show_code_search_bulk = False
+                st.rerun()
             return
         
-        # Step 2: 매칭 결과 확인
-        st.markdown("---")
-        st.markdown(f"### Step 2: 매칭 결과 확인 ({len(matching_codes)}개)")
-        
-        # Full Code 리스트 표시
+        # 코드 목록 표시
         with st.container():
-            st.caption("📋 검색된 코드 목록:")
-            code_display = "\n".join([code.get('full_code', '') for code in matching_codes])
+            st.caption("📋 필터링된 코드 목록:")
+            code_display = "\n".join([f"ID {code.get('id')}: {code.get('full_code', '')}" for code in matching_codes])
             st.text_area("", value=code_display, height=200, disabled=True, label_visibility="collapsed")
         
         st.markdown("---")
         
-        # ID 선택 영역
-        st.markdown("### 📋 ID 선택 (다중 선택 가능)")
+        # Step 3: ID 다중 선택
+        st.markdown("### Step 3: ID 선택 (다중 선택 가능)")
         
         # 세션 상태 초기화
         if 'selected_code_ids_bulk' not in st.session_state:
@@ -320,10 +515,22 @@ def render_cascading_code_search(load_func, save_func):
         # 전체 선택/해제
         col_all, _ = st.columns([1, 5])
         with col_all:
-            select_all = st.checkbox("전체 선택", key="select_all_codes_bulk")
+            # 현재 전체 선택 상태 확인
+            all_ids = [c.get('id') for c in matching_codes]
+            is_all_selected = len(st.session_state.selected_code_ids_bulk) == len(all_ids) and \
+                            all(code_id in st.session_state.selected_code_ids_bulk for code_id in all_ids)
+            
+            select_all = st.checkbox("전체 선택", value=is_all_selected, key="select_all_codes_bulk")
         
-        if select_all:
+        # 전체 선택/해제 토글
+        if select_all and not is_all_selected:
+            # 전체 선택
             st.session_state.selected_code_ids_bulk = [c.get('id') for c in matching_codes]
+            st.rerun()
+        elif not select_all and is_all_selected:
+            # 전체 해제
+            st.session_state.selected_code_ids_bulk = []
+            st.rerun()
         
         # ID 체크박스 (한 줄에 10개씩)
         ids_per_row = 10
@@ -363,46 +570,25 @@ def render_cascading_code_search(load_func, save_func):
                     # 선택한 코드들을 세션에 저장
                     selected_codes = [c for c in matching_codes if c.get('id') in st.session_state.selected_code_ids_bulk]
                     st.session_state.bulk_registration_codes = selected_codes
-                    st.session_state.show_code_search = False
+                    st.session_state.show_code_search_bulk = False
                     st.session_state.show_bulk_registration_form = True
                     st.rerun()
             
             with col_cancel:
                 if st.button("❌ 취소", use_container_width=True):
                     st.session_state.selected_code_ids_bulk = []
-                    st.session_state.show_code_search = False
+                    st.session_state.show_code_search_bulk = False
                     st.rerun()
         else:
             st.info("ID를 선택하세요.")
+            
+            if st.button("◀ 돌아가기"):
+                st.session_state.show_code_search_bulk = False
+                st.rerun()
     
     except Exception as e:
         st.error(f"❌ 코드 검색 중 오류: {str(e)}")
 
-
-def get_unique_code_values(codes, level):
-    """특정 레벨의 고유값 추출"""
-    values = sorted(set([
-        str(c.get(level, ''))
-        for c in codes
-        if c.get(level)
-    ]))
-    return values
-
-
-def filter_codes_by_selections(codes, selections):
-    """선택값으로 코드 필터링"""
-    filtered = codes.copy()
-    
-    for level, value in selections.items():
-        if value and value != "선택" and value != "전체":
-            filtered = [c for c in filtered if str(c.get(level, '')) == value]
-    
-    return filtered
-
-
-# ==========================================
-# 일괄 등록 폼
-# ==========================================
 
 def render_bulk_registration_from_search(save_func, load_func):
     """선택한 코드들 일괄 등록"""
@@ -452,11 +638,27 @@ def render_bulk_registration_from_search(save_func, load_func):
         with col_price1:
             bulk_cost_usd = st.number_input("원가 (USD)", min_value=0.0, value=0.0, step=0.01, format="%.2f")
             bulk_selling_usd = st.number_input("판매가 (USD)", min_value=0.0, value=0.0, step=0.01, format="%.2f")
+            bulk_logistics_usd = st.number_input("물류비 (USD)", min_value=0.0, value=0.0, step=0.01, format="%.2f")
         
         with col_price2:
             bulk_exchange = st.number_input("환율", min_value=1000.0, value=26387.45, step=100.0, format="%.2f")
+            
+            # 자동 계산값
+            st.markdown("##### 📊 자동 계산 (참고용)")
             bulk_price_vnd = bulk_selling_usd * bulk_exchange
-            st.metric("판매가 (VND)", f"{bulk_price_vnd:,.0f}")
+            bulk_total_cost = bulk_selling_usd + bulk_logistics_usd
+            bulk_recommended_vnd = bulk_total_cost * bulk_exchange
+            
+            st.info(f"• 기본 판매가 (VND): {bulk_price_vnd:,.0f}\n• 총 비용 (USD): ${bulk_total_cost:,.2f}\n• 권장 판매가 (VND): {bulk_recommended_vnd:,.0f}")
+            
+            st.markdown("##### ✏️ 실제 판매가")
+            bulk_actual_vnd = st.number_input(
+                "실제 판매가 (VND)",
+                min_value=0.0,
+                value=bulk_recommended_vnd if bulk_recommended_vnd > 0 else 0.0,
+                step=10000.0,
+                format="%.0f"
+            )
         
         st.markdown("### 재고 정보")
         col_stock1, col_stock2, col_stock3 = st.columns(3)
@@ -514,8 +716,10 @@ def render_bulk_registration_from_search(save_func, load_func):
                         'unit': 'EA',
                         'cost_price_usd': bulk_cost_usd,
                         'selling_price_usd': bulk_selling_usd,
+                        'logistics_cost_usd': bulk_logistics_usd,
                         'unit_price': bulk_selling_usd,
                         'unit_price_vnd': bulk_price_vnd,
+                        'actual_selling_price_vnd': bulk_actual_vnd,
                         'currency': 'USD',
                         'exchange_rate': bulk_exchange,
                         'stock_quantity': bulk_stock,
@@ -557,6 +761,31 @@ def render_bulk_registration_from_search(save_func, load_func):
                 st.error("❌ 모든 제품 등록에 실패했습니다.")
 
 
+# ==========================================
+# 공통 함수
+# ==========================================
+
+def get_unique_code_values(codes, level):
+    """특정 레벨의 고유값 추출"""
+    values = sorted(set([
+        str(c.get(level, ''))
+        for c in codes
+        if c.get(level)
+    ]))
+    return values
+
+
+def filter_codes_by_selections(codes, selections):
+    """선택값으로 코드 필터링"""
+    filtered = codes.copy()
+    
+    for level, value in selections.items():
+        if value and value != "선택" and value != "전체":
+            filtered = [c for c in filtered if str(c.get(level, '')) == value]
+    
+    return filtered
+
+
 def apply_pattern(pattern, code):
     """패턴에 코드 값 치환"""
     result = pattern
@@ -592,7 +821,7 @@ def render_product_list_table_view(load_func, update_func, delete_func):
         if 'editing_product_id' not in st.session_state:
             st.session_state.editing_product_id = None
         
-        render_search_filters_product(products)
+        render_search_filters_product(products, load_func)
         render_edit_delete_controls_product(load_func, update_func, delete_func)
         
         if st.session_state.show_edit_form_product and st.session_state.get('editing_product_data'):
@@ -605,8 +834,142 @@ def render_product_list_table_view(load_func, update_func, delete_func):
         st.error(f"❌ 제품 목록 로드 중 오류: {str(e)}")
 
 
-def render_search_filters_product(products):
-    """검색 필터"""
+def render_search_filters_product(products, load_func):
+    """검색 필터 - 제품 등록과 동일한 방식"""
+    
+    st.markdown("### 🔍 제품 검색")
+    
+    # 검색 방식 선택
+    search_mode = st.radio(
+        "검색 방식",
+        ["단계별 코드 선택", "텍스트 검색"],
+        horizontal=True,
+        key="product_list_search_mode"
+    )
+    
+    if search_mode == "단계별 코드 선택":
+        render_cascading_search_filters(load_func)
+    else:
+        render_text_search_filters(products)
+    
+    st.markdown("---")
+
+
+def render_cascading_search_filters(load_func):
+    """단계별 코드 선택 검색 (제품 등록과 동일)"""
+    
+    try:
+        all_codes = load_func('product_codes') or []
+        
+        if not all_codes:
+            st.warning("등록된 제품 코드가 없습니다.")
+            st.session_state.product_code_search_selections = {}
+            return
+        
+        st.caption("각 단계를 순서대로 선택하면 다음 단계 옵션이 자동 필터링됩니다.")
+        
+        col1, col2, col3, col4, col5, col6, col7 = st.columns(7)
+        
+        with col1:
+            code01_options = get_unique_code_values(all_codes, 'code01')
+            code01 = st.selectbox("Code01", ["전체"] + code01_options, key="list_code01")
+        
+        with col2:
+            if code01 != "전체":
+                filtered = filter_codes_by_selections(all_codes, {'code01': code01})
+                code02_options = get_unique_code_values(filtered, 'code02')
+                code02 = st.selectbox("Code02", ["전체"] + code02_options, key="list_code02")
+            else:
+                st.selectbox("Code02", ["전체"], disabled=True, key="list_code02_dis")
+                code02 = "전체"
+        
+        with col3:
+            if code01 != "전체" and code02 != "전체":
+                filtered = filter_codes_by_selections(all_codes, {'code01': code01, 'code02': code02})
+                code03_options = get_unique_code_values(filtered, 'code03')
+                code03 = st.selectbox("Code03", ["전체"] + code03_options, key="list_code03")
+            else:
+                st.selectbox("Code03", ["전체"], disabled=True, key="list_code03_dis")
+                code03 = "전체"
+        
+        with col4:
+            if code01 != "전체" and code02 != "전체" and code03 != "전체":
+                filtered = filter_codes_by_selections(all_codes, {
+                    'code01': code01, 'code02': code02, 'code03': code03
+                })
+                code04_options = get_unique_code_values(filtered, 'code04')
+                code04 = st.selectbox("Code04", ["전체"] + code04_options, key="list_code04")
+            else:
+                st.selectbox("Code04", ["전체"], disabled=True, key="list_code04_dis")
+                code04 = "전체"
+        
+        with col5:
+            if code04 != "전체":
+                filtered = filter_codes_by_selections(all_codes, {
+                    'code01': code01, 'code02': code02, 'code03': code03, 'code04': code04
+                })
+                code05_options = get_unique_code_values(filtered, 'code05')
+                code05 = st.selectbox("Code05", ["전체"] + code05_options, key="list_code05")
+            else:
+                st.selectbox("Code05", ["전체"], disabled=True, key="list_code05_dis")
+                code05 = "전체"
+        
+        with col6:
+            if code05 != "전체":
+                filtered = filter_codes_by_selections(all_codes, {
+                    'code01': code01, 'code02': code02, 'code03': code03,
+                    'code04': code04, 'code05': code05
+                })
+                code06_options = get_unique_code_values(filtered, 'code06')
+                code06 = st.selectbox("Code06", ["전체"] + code06_options, key="list_code06")
+            else:
+                st.selectbox("Code06", ["전체"], disabled=True, key="list_code06_dis")
+                code06 = "전체"
+        
+        with col7:
+            if code06 != "전체":
+                filtered = filter_codes_by_selections(all_codes, {
+                    'code01': code01, 'code02': code02, 'code03': code03,
+                    'code04': code04, 'code05': code05, 'code06': code06
+                })
+                code07_options = get_unique_code_values(filtered, 'code07')
+                code07 = st.selectbox("Code07", ["전체"] + code07_options, key="list_code07")
+            else:
+                st.selectbox("Code07", ["전체"], disabled=True, key="list_code07_dis")
+                code07 = "전체"
+        
+        # 선택값 저장
+        selections = {}
+        if code01 != "전체":
+            selections['code01'] = code01
+        if code02 != "전체":
+            selections['code02'] = code02
+        if code03 != "전체":
+            selections['code03'] = code03
+        if code04 != "전체":
+            selections['code04'] = code04
+        if code05 != "전체":
+            selections['code05'] = code05
+        if code06 != "전체":
+            selections['code06'] = code06
+        if code07 != "전체":
+            selections['code07'] = code07
+        
+        st.session_state.product_code_search_selections = selections
+        
+        # 매칭 결과 표시
+        if selections:
+            matching_codes = filter_codes_by_selections(all_codes, selections)
+            st.info(f"🔍 {len(matching_codes)}개 코드 패턴 매칭")
+        
+    except Exception as e:
+        st.error(f"❌ 코드 검색 오류: {str(e)}")
+        st.session_state.product_code_search_selections = {}
+
+
+def render_text_search_filters(products):
+    """텍스트 검색 (기존 방식)"""
+    
     col1, col2, col3, col4 = st.columns([3, 1.5, 1.5, 1])
     
     with col1:
@@ -625,6 +988,9 @@ def render_search_filters_product(products):
         if st.button("📥 CSV", use_container_width=True):
             csv_data = generate_products_csv(products)
             st.download_button("다운로드", csv_data, f"products_{datetime.now().strftime('%Y%m%d')}.csv", "text/csv")
+    
+    # 코드 선택 초기화
+    st.session_state.product_code_search_selections = {}
 
 
 def render_edit_delete_controls_product(load_func, update_func, delete_func):
@@ -747,21 +1113,38 @@ def render_edit_form_expandable_product(update_func):
 
 
 def get_filtered_products(products):
-    """필터 적용"""
+    """필터 적용 - 코드 선택 방식 추가"""
     filtered = products.copy()
     
-    search_term = st.session_state.get('product_search_term', '')
-    if search_term:
-        filtered = [
-            p for p in filtered
-            if search_term.lower() in str(p.get('product_code', '')).lower()
-            or search_term.lower() in str(p.get('product_name_en', '')).lower()
-        ]
+    # 검색 방식 확인
+    search_mode = st.session_state.get('product_list_search_mode', '텍스트 검색')
     
-    category = st.session_state.get('product_selected_category', '전체')
-    if category != '전체':
-        filtered = [p for p in filtered if p.get('category') == category]
+    if search_mode == "단계별 코드 선택":
+        # 코드 선택 방식
+        selections = st.session_state.get('product_code_search_selections', {})
+        
+        if selections:
+            # 선택된 코드로 필터링
+            for level, value in selections.items():
+                filtered = [
+                    p for p in filtered
+                    if value in str(p.get('product_code', ''))
+                ]
+    else:
+        # 텍스트 검색 방식 (기존)
+        search_term = st.session_state.get('product_search_term', '')
+        if search_term:
+            filtered = [
+                p for p in filtered
+                if search_term.lower() in str(p.get('product_code', '')).lower()
+                or search_term.lower() in str(p.get('product_name_en', '')).lower()
+            ]
+        
+        category = st.session_state.get('product_selected_category', '전체')
+        if category != '전체':
+            filtered = [p for p in filtered if p.get('category') == category]
     
+    # 상태 필터 (공통)
     status = st.session_state.get('product_status_filter', '전체')
     if status == "활성":
         filtered = [p for p in filtered if p.get('is_active')]

@@ -17,50 +17,89 @@ class AuthManager:
     def __init__(self, db_operations):
         """AuthManager 초기화"""
         self.db = db_operations
-    
-    def login_user(self, employee_id, password):
+
+    def login_user(self, employee_id, password, login_type="employee"):
         """
-        사용자 로그인 (employee_id 사용)
-        User login authentication using employee_id
+        사용자 로그인 (직원 또는 법인)
+        User login authentication (employee or company)
         """
         try:
             if not employee_id or not password:
-                st.error("사번과 비밀번호를 입력해주세요.")
+                st.error("아이디와 비밀번호를 입력해주세요.")
                 return False
             
-            # 직원 정보 조회
-            employees = self.db.load_data("employees")
-            if not employees:
-                st.error("직원 정보를 불러올 수 없습니다.")
+            if login_type == "employee":
+                # 직원 로그인
+                employees = self.db.load_data("employees")
+                if not employees:
+                    st.error("직원 정보를 불러올 수 없습니다.")
+                    return False
+                
+                # 사용자 인증
+                for employee in employees:
+                    if (employee.get("employee_id") == employee_id and 
+                        employee.get("password") == password):
+                        
+                        # 활성 계정 확인
+                        if not employee.get('is_active', True):
+                            st.error("비활성화된 계정입니다.")
+                            return False
+                        
+                        # 세션에 사용자 정보 저장
+                        st.session_state.logged_in = True
+                        st.session_state.user_info = employee
+                        st.session_state.user_type = "employee"
+                        
+                        # 로그인 시간 기록
+                        self._record_login_activity(employee.get('id'))
+                        
+                        return True
+                
+                # 인증 실패
+                st.error("잘못된 사번 또는 비밀번호입니다.")
                 return False
             
-            # 사용자 인증 (employee_id로 변경)
-            for employee in employees:
-                if (employee.get("employee_id") == employee_id and 
-                    employee.get("password") == password):
-                    
-                    # 활성 계정 확인
-                    if not employee.get('is_active', True):
-                        st.error("비활성화된 계정입니다.")
-                        return False
-                    
-                    # 세션에 사용자 정보 저장
-                    st.session_state.logged_in = True
-                    st.session_state.user_info = employee
-                    
-                    # 로그인 시간 기록
-                    self._record_login_activity(employee.get('id'))
-                    
-                    return True
-            
-            # 인증 실패
-            st.error("잘못된 사번 또는 비밀번호입니다.")
-            return False
-            
+            elif login_type == "company":
+                # 법인 로그인
+                companies = self.db.load_data("companies")
+                if not companies:
+                    st.error("법인 정보를 불러올 수 없습니다.")
+                    return False
+                
+                # 법인 인증
+                for company in companies:
+                    if (company.get("login_id") == employee_id and 
+                        company.get("login_password") == password):
+                        
+                        # 활성 계정 확인
+                        if not company.get('is_active', True):
+                            st.error("비활성화된 법인입니다.")
+                            return False
+                        
+                        # 세션에 법인 정보 저장 (직원 형식으로 변환)
+                        st.session_state.logged_in = True
+                        st.session_state.user_info = {
+                            'id': company.get('id'),
+                            'name': company.get('company_name'),
+                            'employee_id': company.get('login_id'),
+                            'role': 'Company',
+                            'department': company.get('company_name_en'),
+                            'company_code': company.get('company_code'),
+                            'company_role': company.get('role'),
+                            'is_active': company.get('is_active', True)
+                        }
+                        st.session_state.user_type = "company"
+                        
+                        return True
+                
+                # 인증 실패
+                st.error("잘못된 로그인 ID 또는 비밀번호입니다.")
+                return False
+                
         except Exception as e:
             st.error(f"로그인 오류: {str(e)}")
             return False
-    
+        
     def logout_user(self):
         """
         사용자 로그아웃
