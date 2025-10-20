@@ -474,7 +474,7 @@ def main():
             st.session_state.current_page = "구매품 관리"
             st.rerun()
 
-        if st.button("🔥 Hot Runner Order Sheet", use_container_width=True,
+        if st.button("🔥 규격 결정서", use_container_width=True,
                     type="primary" if st.session_state.current_page == "Hot Runner Order Sheet" else "secondary"):
             st.session_state.current_page = "Hot Runner Order Sheet"
             st.rerun()
