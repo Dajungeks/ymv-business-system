@@ -24,6 +24,7 @@ from supabase import create_client, Client
 from components.sales.customer_management import show_customer_management
 from components.sales.quotation_management import show_quotation_management
 from components.sales.sales_process_main import show_sales_process_management
+from components.sales.performance_management import show_performance_management  # 👈 추가
 
 # 내부 컴포넌트 - Finance
 from components.finance.expense_management import show_expense_management
@@ -42,12 +43,8 @@ from components.product.product_management import show_product_management
 from components.product.product_code_management import show_product_code_management
 
 # 내부 컴포넌트 - Logistics
-from components.logistics.lead_time_management import lead_time_management_page
-from components.logistics.delay_reasons_management import delay_reasons_management_page
-from components.logistics.delivery_management import delivery_management_page
-from components.logistics.fsc_rules_management import fsc_rules_management_page
-from components.logistics.trucking_rules_management import trucking_rules_management_page
-from components.logistics.rate_table_management import rate_table_management_page
+from components.logistics.logistics_management import show_logistics_management  # 👈 새로운 물류사 관리만
+
 
 # 내부 컴포넌트 - Dashboard
 from components.dashboard.dashboard import show_dashboard_main
@@ -516,7 +513,12 @@ def main():
                     type="primary" if st.session_state.current_page == "견적서 관리" else "secondary"):
             st.session_state.current_page = "견적서 관리"
             st.rerun()
-            
+
+        if st.button("📊 실적 관리", use_container_width=True,
+                    type="primary" if st.session_state.current_page == "실적 관리" else "secondary"):
+            st.session_state.current_page = "실적 관리"
+            st.rerun()    
+
         if st.button("🎯 영업 프로세스", use_container_width=True,
                     type="primary" if st.session_state.current_page == "영업 프로세스" else "secondary"):
             st.session_state.current_page = "영업 프로세스"
@@ -548,21 +550,12 @@ def main():
             st.session_state.current_page = "Hot Runner Order Sheet"
             st.rerun()
         
+
         st.subheader("🚚 물류 관리")
-        logistics_pages = {
-            "표준 리드타임": "표준 리드타임",
-            "지연 사유": "지연 사유",
-            "납기 관리": "납기 관리",
-            "FSC 규칙": "FSC 규칙",
-            "Trucking 규칙": "Trucking 규칙",
-            "물류사 요금표": "물류사 요금표"
-        }
-        
-        for menu_name, page_name in logistics_pages.items():
-            if st.button(f"📦 {menu_name}", use_container_width=True,
-                        type="primary" if st.session_state.current_page == page_name else "secondary"):
-                st.session_state.current_page = page_name
-                st.rerun()
+        if st.button("🚚 물류사 관리", use_container_width=True,
+                    type="primary" if st.session_state.current_page == "물류사 관리" else "secondary"):
+            st.session_state.current_page = "물류사 관리"
+            st.rerun()
         
         st.subheader("👤 인사 관리")
         if st.button("👨‍💼 직원 관리", use_container_width=True,
@@ -603,6 +596,8 @@ def main():
         show_customer_management_page()
     elif current_page == "견적서 관리":
         show_quotation_management_page()
+    elif current_page == "실적 관리":  # 👈 추가
+        show_performance_management(db_operations.load_data, db_operations.update_data)
     elif current_page == "영업 프로세스":
         show_sales_process_management_page()
     elif current_page == "제품 코드 관리":
@@ -613,18 +608,9 @@ def main():
         show_supplier_management_page()
     elif current_page == "구매품 관리":
         show_purchase_management()
-    elif current_page == "표준 리드타임":
-        lead_time_management_page()
-    elif current_page == "지연 사유":
-        delay_reasons_management_page()
-    elif current_page == "납기 관리":
-        delivery_management_page()
-    elif current_page == "FSC 규칙":
-        fsc_rules_management_page()
-    elif current_page == "Trucking 규칙":
-        trucking_rules_management_page()
-    elif current_page == "물류사 요금표":
-        rate_table_management_page()
+    elif current_page == "물류사 관리":
+            show_logistics_management(db_operations.load_data, db_operations.save_data, 
+                                    db_operations.update_data, db_operations.delete_data)
     elif current_page == "직원 관리":
         show_employee_management_page()
     elif current_page == "법인 관리":

@@ -196,6 +196,8 @@ def render_product_form(save_func, load_func):
 
 def render_single_product_input_form(save_func, load_func):
     """선택한 코드의 제품 정보 입력"""
+    import math
+    
     selected_code = st.session_state.get('selected_single_code')
     
     st.success(f"📋 선택된 코드: **{selected_code.get('full_code')}**")
@@ -223,44 +225,59 @@ def render_single_product_input_form(save_func, load_func):
         with col2:
             st.subheader("💰 가격 정보")
             
-            currency = st.selectbox("기본 통화", ["USD", "VND", "KRW"], index=0)
+            # 환율 고정
+            exchange_rate = 26387.45
+            st.info(f"💱 적용 환율: {exchange_rate:,.2f} VND/USD")
+            
             cost_price_usd = st.number_input("원가 (USD)", min_value=0.0, value=0.0, step=0.01, format="%.2f")
             selling_price_usd = st.number_input("판매가 (USD)", min_value=0.0, value=0.0, step=0.01, format="%.2f")
             logistics_cost_usd = st.number_input("물류비 (USD)", min_value=0.0, value=0.0, step=0.01, format="%.2f")
-            exchange_rate = st.number_input("환율 (USD→VND)", min_value=1000.0, value=26387.45, step=100.0, format="%.2f")
             
             # 자동 계산값 (참고용)
             st.markdown("---")
             st.markdown("##### 📊 자동 계산 (참고용)")
-            unit_price_vnd = selling_price_usd * exchange_rate
-            total_cost_usd = selling_price_usd + logistics_cost_usd
-            recommended_price_vnd = total_cost_usd * exchange_rate
             
-            st.info(f"• 기본 판매가 (VND): {unit_price_vnd:,.0f}\n• 총 비용 (USD): ${total_cost_usd:,.2f}\n• 권장 판매가 (VND): {recommended_price_vnd:,.0f}")
-            
-            st.markdown("---")
-            
-            # 실제 판매가 입력
-            st.markdown("##### ✏️ 실제 판매가 (견적서용)")
-            actual_selling_price_vnd = st.number_input(
-                "실제 판매가 (VND) *",
-                min_value=0.0,
-                value=recommended_price_vnd if recommended_price_vnd > 0 else 0.0,
-                step=10000.0,
-                format="%.0f",
-                help="견적서에 표시될 실제 판매가격을 입력하세요"
-            )
-            
-            # 마진 계산 (실제 판매가 기준)
-            if cost_price_usd > 0 and actual_selling_price_vnd > 0:
-                actual_selling_usd = actual_selling_price_vnd / exchange_rate
-                total_cost_with_logistics = cost_price_usd + logistics_cost_usd
-                margin = ((actual_selling_usd - total_cost_with_logistics) / actual_selling_usd) * 100
+            if selling_price_usd > 0:
+                # 총 원가 USD
+                total_cost_usd = selling_price_usd + logistics_cost_usd
                 
-                if margin >= 0:
-                    st.success(f"📈 마진: {margin:.1f}%")
-                else:
-                    st.error(f"📉 손실: {abs(margin):.1f}%")
+                # 판매가격 VND 계산 (만 단위 올림)
+                selling_price_vnd_raw = total_cost_usd * exchange_rate
+                selling_price_vnd_auto = math.ceil(selling_price_vnd_raw / 10000) * 10000
+                
+                st.info(f"• 총 비용 (USD): ${total_cost_usd:,.2f}\n• 자동 계산 판매가 (VND): {selling_price_vnd_auto:,.0f}")
+                
+                st.markdown("---")
+                
+                # 실제 판매가 입력 (자동 계산값을 기본값으로)
+                st.markdown("##### ✏️ 실제 판매가 (견적서용)")
+                actual_selling_price_vnd = st.number_input(
+                    "실제 판매가 (VND) *",
+                    min_value=0.0,
+                    value=float(selling_price_vnd_auto),
+                    step=10000.0,
+                    format="%.0f",
+                    help="자동 계산된 값이 기본 설정됩니다. 필요시 수정 가능합니다."
+                )
+                
+                # 마진 계산
+                if actual_selling_price_vnd > 0:
+                    cost_vnd = total_cost_usd * exchange_rate
+                    margin_vnd = actual_selling_price_vnd - cost_vnd
+                    margin_rate = (margin_vnd / actual_selling_price_vnd) * 100
+                    
+                    if margin_rate >= 0:
+                        st.success(f"📈 마진: {margin_vnd:,.0f} VND ({margin_rate:.1f}%)")
+                    else:
+                        st.error(f"📉 손실: {abs(margin_vnd):,.0f} VND ({abs(margin_rate):.1f}%)")
+            else:
+                actual_selling_price_vnd = st.number_input(
+                    "실제 판매가 (VND) *",
+                    min_value=0.0,
+                    value=0.0,
+                    step=10000.0,
+                    format="%.0f"
+                )
         
         st.subheader("📦 재고 및 추가 정보")
         
@@ -306,6 +323,14 @@ def render_single_product_input_form(save_func, load_func):
                 st.error("❌ 제품명(영문)을 입력해주세요.")
                 return
             
+            if selling_price_usd <= 0:
+                st.error("❌ 판매가(USD)를 입력해주세요.")
+                return
+            
+            if actual_selling_price_vnd <= 0:
+                st.error("❌ 실제 판매가(VND)를 입력해주세요.")
+                return
+            
             try:
                 existing_products = load_func('products') if load_func else []
                 if existing_products:
@@ -327,9 +352,9 @@ def render_single_product_input_form(save_func, load_func):
                 'selling_price_usd': selling_price_usd,
                 'logistics_cost_usd': logistics_cost_usd,
                 'unit_price': selling_price_usd,
-                'unit_price_vnd': unit_price_vnd,
+                'unit_price_vnd': selling_price_usd * exchange_rate,
                 'actual_selling_price_vnd': actual_selling_price_vnd,
-                'currency': currency,
+                'currency': 'USD',
                 'exchange_rate': exchange_rate,
                 'supplier': supplier,
                 'stock_quantity': stock_quantity,
@@ -1170,7 +1195,8 @@ def render_product_table(products):
             'Category': p.get('category', ''),
             'Cost': f"${p.get('cost_price_usd', 0):,.2f}",
             'Price': f"${p.get('selling_price_usd', 0):,.2f}",
-            'VND': f"{p.get('unit_price_vnd', 0):,.0f}",
+            'Logistics': f"${p.get('logistics_cost_usd', 0):,.2f}",
+            'VND': f"{p.get('actual_selling_price_vnd', 0):,.0f}",
             'Stock': p.get('stock_quantity', 0),
             'Active': '✅' if p.get('is_active') else '❌'
         })
@@ -1179,7 +1205,6 @@ def render_product_table(products):
     
     st.dataframe(df, use_container_width=True, hide_index=True)
     st.caption(f"📊 총 **{len(products)}개** 제품")
-
 
 # ==========================================
 # CSV 관리
