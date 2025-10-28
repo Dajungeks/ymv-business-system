@@ -147,6 +147,10 @@ def render_code_list_table_view(load_func, update_func, delete_func):
         st.info("등록된 제품 코드가 없습니다.")
         return
     
+    # 제품 데이터 로드 (한 번만)
+    products = load_func('products') or []
+    registered_codes = [p.get('product_code') for p in products if p.get('product_code')]
+    
     if 'show_edit_form' not in st.session_state:
         st.session_state.show_edit_form = False
     if 'editing_code_id' not in st.session_state:
@@ -159,7 +163,7 @@ def render_code_list_table_view(load_func, update_func, delete_func):
         render_edit_form_expandable(update_func)
     
     filtered_codes = get_filtered_codes(codes)
-    render_code_table(filtered_codes)
+    render_code_table(filtered_codes, registered_codes)
 
 
 def render_search_filters(codes):
@@ -351,35 +355,32 @@ def get_filtered_codes(codes):
     return filtered
 
 
-def render_code_table(codes):
-    """코드 테이블"""
+def render_code_table(codes, registered_codes=None):
+    """코드 테이블 렌더링"""
     if not codes:
-        st.info("조건에 맞는 코드가 없습니다.")
+        st.info("검색 결과가 없습니다.")
         return
     
-    table_data = []
+    st.markdown(f"**총 {len(codes)}개**")
     
+    table_data = []
     for code in codes:
+        # 등록 상태 체크
+        is_registered = code.get('full_code') in registered_codes if registered_codes else False
+        status_text = "✅ 등록됨" if is_registered else "❌ 미등록"
+        
         table_data.append({
             'ID': code.get('id', ''),
-            'Category': code.get('category', ''),
-            'Code01': code.get('code01', ''),
-            'Code02': code.get('code02', ''),
-            'Code03': code.get('code03', ''),
-            'Code04': code.get('code04', ''),
-            'Code05': code.get('code05', ''),
-            'Code06': code.get('code06', ''),
-            'Code07': code.get('code07', ''),
-            'Full Code': code.get('full_code', ''),
-            'Description': code.get('description', ''),
-            'Active': '✅' if code.get('is_active') else '❌'
+            '카테고리': code.get('category', ''),
+            '전체 코드': code.get('full_code', ''),
+            '설명': code.get('description', ''),
+            '등록 상태': status_text,
+            '상태': '🟢 활성' if code.get('is_active') else '🔴 비활성',
+            '생성일': code.get('created_at', '').split('T')[0] if code.get('created_at') else ''
         })
     
     df = pd.DataFrame(table_data)
-    
     st.dataframe(df, use_container_width=True, hide_index=True)
-    st.caption(f"📊 총 **{len(codes)}개** 코드")
-
 
 # ==========================================
 # 대량 등록/수정

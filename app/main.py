@@ -42,9 +42,11 @@ from components.supplier.supplier_management import show_supplier_management
 from components.product.product_management import show_product_management
 from components.product.product_code_management import show_product_code_management
 
+# 내부 컴포넌트 - Operations
+from components.operations.purchase_management import show_purchase_management
+
 # 내부 컴포넌트 - Logistics
 from components.logistics.logistics_management import show_logistics_management  # 👈 새로운 물류사 관리만
-
 
 # 내부 컴포넌트 - Dashboard
 from components.dashboard.dashboard import show_dashboard_main
@@ -300,124 +302,32 @@ def show_sales_process_management_page():
         render_print_form
     )
 
-def show_purchase_management():
+def show_purchase_management_page():
     """구매품 관리 페이지"""
-    st.title("🛒 구매품 관리")
-    
-    current_user = auth_manager.get_current_user()
-    user_role = current_user.get('role', 'Staff') if current_user else 'Staff'
-    
-    # 탭 구성
-    tab1, tab2 = st.tabs(["📝 구매 요청 등록", "📋 구매 요청 목록"])
-    
-    with tab1:
-        render_purchase_form(current_user)
-    
-    with tab2:
-        render_purchase_list(current_user, user_role)
-
-def render_purchase_form(current_user):
-    """구매 요청 등록 폼"""
-    st.subheader("구매 요청 등록")
-    
-    with st.form("purchase_form"):
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            category = st.selectbox("카테고리", ["사무용품", "전자제품", "가구", "소모품", "기타"])
-            item_name = st.text_input("품목명")
-            quantity = st.number_input("수량", min_value=1, value=1, step=1)
-            unit = st.selectbox("단위", ["개", "박스", "세트", "kg", "L"])
-        
-        with col2:
-            currency = st.selectbox("통화", ["KRW", "USD", "VND"])
-            currency_steps = {"USD": 10, "VND": 10000, "KRW": 1000}
-            step = currency_steps.get(currency, 1000)
-            
-            unit_price = st.number_input("단가", min_value=0.0, value=0.0, step=float(step))
-            supplier = st.text_input("공급업체")
-            request_date = st.date_input("요청일", value=st.session_state.get('today', None))
-            urgency = st.selectbox("긴급도", ["낮음", "보통", "높음", "긴급"], index=1)
-        
-        notes = st.text_area("비고")
-        submitted = st.form_submit_button("📝 구매품 등록", type="primary")
-        
-        if submitted:
-            if not item_name.strip():
-                st.error("품목명을 입력해주세요.")
-            elif not supplier.strip():
-                st.error("공급업체를 입력해주세요.")
-            elif unit_price <= 0:
-                st.error("단가를 입력해주세요.")
-            else:
-                purchase_data = {
-                    "category": category,
-                    "item_name": item_name,
-                    "quantity": quantity,
-                    "unit": unit,
-                    "unit_price": unit_price,
-                    "currency": currency,
-                    "supplier": supplier,
-                    "request_date": request_date.isoformat(),
-                    "urgency": urgency,
-                    "status": "대기중",
-                    "notes": notes if notes.strip() else None,
-                    "requester": current_user['id'],
-                    "created_at": st.session_state.get('now', None),
-                    "updated_at": st.session_state.get('now', None)
-                }
-                
-                if db_operations.save_data("purchases", purchase_data):
-                    st.success("✅ 구매 요청이 등록되었습니다!")
-                    time.sleep(1)
-                    st.rerun()
-                else:
-                    st.error("❌ 구매 요청 등록에 실패했습니다.")
-
-def render_purchase_list(current_user, user_role):
-    """구매 요청 목록"""
-    st.subheader("구매품 목록")
-    
-    purchases = db_operations.load_data("purchases")
-    employees = db_operations.load_data("employees")
-    
-    if not purchases:
-        st.info("등록된 구매품이 없습니다.")
-        return
-    
-    # 권한별 필터링 (Master, CEO, Admin, Manager는 전체 조회)
-    if user_role not in ['Master', 'CEO', 'Admin', 'Manager']:
-        purchases = [p for p in purchases if p.get('requester') == current_user['id']]
-    
-    st.write(f"📦 총 {len(purchases)}건의 구매 요청")
-    
-    # 구매품 목록 표시 (간단한 형태)
-    for purchase in purchases[:10]:  # 최근 10개만 표시
-        with st.expander(f"🛒 {purchase.get('item_name', '')} - {purchase.get('status', '')}"):
-            col1, col2 = st.columns(2)
-            
-            with col1:
-                st.write(f"**카테고리**: {purchase.get('category', '')}")
-                st.write(f"**수량**: {purchase.get('quantity', 0)} {purchase.get('unit', '개')}")
-                st.write(f"**공급업체**: {purchase.get('supplier', '')}")
-            
-            with col2:
-                currency = purchase.get('currency', 'KRW')
-                unit_price = purchase.get('unit_price', 0)
-                total_price = unit_price * purchase.get('quantity', 1)
-                
-                st.write(f"**단가**: {unit_price:,} {currency}")
-                st.write(f"**총액**: {total_price:,} {currency}")
-                st.write(f"**상태**: {purchase.get('status', '')}")
-
-def show_quotation_management_page():
-    """견적서 관리 페이지"""
-    show_quotation_management(
+    show_purchase_management(
         db_operations.load_data,
         db_operations.save_data,
         db_operations.update_data,
-        db_operations.delete_data
+        db_operations.delete_data,
+        auth_manager.get_current_user()
     )
+
+def show_quotation_management_page():
+    """견적서 관리 페이지"""
+    
+    # 로그인 체크
+    if 'current_user' not in st.session_state or not st.session_state.current_user:
+        st.warning("로그인이 필요합니다. 사이드바에서 로그인해주세요.")
+        return
+    
+    show_quotation_management(
+        save_func=db_operations.save_data,
+        load_func=db_operations.load_data,
+        update_func=db_operations.update_data,
+        delete_func=db_operations.delete_data,
+        current_user=st.session_state.current_user
+    )
+
 
 def show_multilingual_input():
     """다국어 입력 페이지"""
@@ -487,6 +397,10 @@ def main():
         st.title("🏢 YMV 시스템")
         
         current_user = auth_manager.get_current_user()
+        
+        # session_state에 저장
+        st.session_state.current_user = current_user
+        
         if current_user:
             st.write(f"👤 {current_user.get('name', 'Unknown')}")
             st.write(f"🏛️ {current_user.get('department', 'Unknown')}")
@@ -495,7 +409,6 @@ def main():
                 auth_manager.logout_user()
         
         st.divider()
-        
         # 메뉴 카테고리별 버튼
         st.subheader("📊 분석 및 관리")
         if st.button("📈 대시보드", use_container_width=True, 
@@ -512,6 +425,12 @@ def main():
         if st.button("📋 견적서 관리", use_container_width=True,
                     type="primary" if st.session_state.current_page == "견적서 관리" else "secondary"):
             st.session_state.current_page = "견적서 관리"
+            st.rerun()
+        
+        # 👇 규격 결정서 - 영업 관리로 이동
+        if st.button("🔥 규격 결정서", use_container_width=True,
+                    type="primary" if st.session_state.current_page == "규격 결정서" else "secondary"):
+            st.session_state.current_page = "규격 결정서"
             st.rerun()
 
         if st.button("📊 실적 관리", use_container_width=True,
@@ -545,12 +464,8 @@ def main():
             st.session_state.current_page = "구매품 관리"
             st.rerun()
 
-        if st.button("🔥 규격 결정서", use_container_width=True,
-                    type="primary" if st.session_state.current_page == "Hot Runner Order Sheet" else "secondary"):
-            st.session_state.current_page = "Hot Runner Order Sheet"
-            st.rerun()
+        # 👇 규격 결정서 제거됨 (기존 위치)
         
-
         st.subheader("🚚 물류 관리")
         if st.button("🚚 물류사 관리", use_container_width=True,
                     type="primary" if st.session_state.current_page == "물류사 관리" else "secondary"):
@@ -596,7 +511,9 @@ def main():
         show_customer_management_page()
     elif current_page == "견적서 관리":
         show_quotation_management_page()
-    elif current_page == "실적 관리":  # 👈 추가
+    elif current_page == "규격 결정서":  # 👈 추가
+        show_hot_runner_order_sheet_page()
+    elif current_page == "실적 관리":
         show_performance_management(db_operations.load_data, db_operations.update_data)
     elif current_page == "영업 프로세스":
         show_sales_process_management_page()
@@ -607,10 +524,14 @@ def main():
     elif current_page == "공급업체 관리":
         show_supplier_management_page()
     elif current_page == "구매품 관리":
-        show_purchase_management()
+        show_purchase_management_page()
     elif current_page == "물류사 관리":
-            show_logistics_management(db_operations.load_data, db_operations.save_data, 
-                                    db_operations.update_data, db_operations.delete_data)
+        show_logistics_management(
+            db_operations.load_data,
+            db_operations.save_data,
+            db_operations.update_data,
+            db_operations.delete_data
+        )
     elif current_page == "직원 관리":
         show_employee_management_page()
     elif current_page == "법인 관리":
@@ -618,11 +539,11 @@ def main():
     elif current_page == "지출 요청서":
         show_expense_management_page()
     elif current_page == "환급 관리":
-         show_reimbursement_management_page()
-    elif current_page == "Hot Runner Order Sheet":
-        show_hot_runner_order_sheet_page()
+        show_reimbursement_management_page()
     elif current_page == "다국어 입력":
         show_multilingual_input()
+    elif current_page == "Hot Runner Order Sheet":  # 👈 제거 예정 (호환성)
+        show_hot_runner_order_sheet_page()
 
 if __name__ == "__main__":
     main()

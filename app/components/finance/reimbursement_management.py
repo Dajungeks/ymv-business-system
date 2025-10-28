@@ -17,7 +17,6 @@ def show_reimbursement_management(load_data_func, update_data_func, get_current_
         return
     
     # 프린트 모드 확인
-    # 프린트 모드 확인
     if st.session_state.get('print_reimbursement'):
         from utils.helpers import PrintFormGenerator
         PrintFormGenerator.render_reimbursement_print(
@@ -31,7 +30,7 @@ def show_reimbursement_management(load_data_func, update_data_func, get_current_
         return
 
     # 탭 구성 (3개로 변경)
-    tab1, tab2, tab3 = st.tabs(["📋 환급 대기 목록", "🖨️ 프린트 완료 목록", "✅ 최종 완료 내역"])
+    tab1, tab2 = st.tabs(["📝 환급 대상", "📋 환급 목록"])
 
     with tab1:
         render_reimbursement_pending(load_data_func, update_data_func, get_current_user_func)
@@ -39,14 +38,10 @@ def show_reimbursement_management(load_data_func, update_data_func, get_current_
     with tab2:
         render_reimbursement_printed(load_data_func, update_data_func, get_current_user_func)
 
-    with tab3:
-        render_reimbursement_completed(load_data_func, get_current_user_func)
-
-
 def render_reimbursement_pending(load_data_func, update_data_func, get_current_user_func):
-    """환급 대기 목록 - 프린트만"""
+    """환급 대상 목록 - 테이블 UI"""
     
-    st.subheader("📋 환급 대기 목록")
+    st.subheader("📋 환급 대상 목록")
     
     # 데이터 로드
     all_expenses = load_data_func("expenses")
@@ -59,154 +54,138 @@ def render_reimbursement_pending(load_data_func, update_data_func, get_current_u
     # 직원 딕셔너리
     employee_dict = {emp.get('id'): emp for emp in employees if emp.get('id')}
     
-    # 환급 대기 중인 항목 필터링
+    # 환급 대상: 화던 확인 완료 + 법인카드/법인계좌 제외 + pending만
     pending_expenses = [exp for exp in all_expenses 
-                       if exp.get('reimbursement_status') == 'pending']
+                       if exp.get('accounting_confirmed', False) == True
+                       and exp.get('payment_method') not in ['법인카드', '법인계좌']
+                       and exp.get('reimbursement_status') == 'pending']
     
     if not pending_expenses:
-        st.info("환급 대기 중인 지출요청서가 없습니다.")
+        st.info("환급 대상 지출요청서가 없습니다.")
         return
     
-    # 직원별 필터
-    employee_filter_options = ["전체"]
-    requester_ids = list(set([exp.get('requester') for exp in pending_expenses]))
-    for req_id in requester_ids:
-        emp_info = employee_dict.get(req_id, {})
-        emp_name = emp_info.get('name', '알 수 없음')
-        emp_id = emp_info.get('employee_id', f'ID{req_id}')
-        employee_filter_options.append(f"{emp_name} ({emp_id})")
+    st.write(f"💳 총 {len(pending_expenses)}건의 환급 대상")
     
-    selected_employee = st.selectbox("직원 필터", employee_filter_options, key="reimbursement_employee_filter")
-    
-    # 필터링
-    if selected_employee != "전체":
-        employee_name = selected_employee.split(" (")[0]
-        filtered_expenses = [exp for exp in pending_expenses 
-                           if employee_dict.get(exp.get('requester'), {}).get('name') == employee_name]
-    else:
-        filtered_expenses = pending_expenses
-    
-    st.write(f"💳 총 {len(filtered_expenses)}건의 환급 대기")
-    
-    if not filtered_expenses:
-        return
-    
-    # 직원별 그룹핑
-    grouped_by_employee = defaultdict(list)
-    for exp in filtered_expenses:
+    # 테이블 데이터 생성
+    table_data = []
+    for exp in pending_expenses:
         requester_id = exp.get('requester')
-        grouped_by_employee[requester_id].append(exp)
-    
-    # 선택된 항목 저장용 (세션 상태)
-    if 'selected_reimbursements' not in st.session_state:
-        st.session_state.selected_reimbursements = {}
-    
-    # 직원별로 표시
-    for requester_id, expenses in grouped_by_employee.items():
         emp_info = employee_dict.get(requester_id, {})
         emp_name = emp_info.get('name', '알 수 없음')
-        emp_id = emp_info.get('employee_id', f'ID{requester_id}')
         
-        # 통화별 합계 계산
-        currency_totals = defaultdict(float)
-        for exp in expenses:
-            currency = exp.get('currency', 'VND')
-            amount = exp.get('amount', 0)
-            currency_totals[currency] += amount
+        # 화던 상태 표시
+        hoadon_status = "✅" if exp.get('accounting_confirmed') else "⏳"
         
-        total_str = ", ".join([f"{amount:,.0f} {curr}" for curr, amount in currency_totals.items()])
+        # 환급 상태 표시
+        reimbursement_status = exp.get('reimbursement_status', 'pending')
+        status_map = {
+            'pending': '대기',
+            'printed': '환급완료',
+            'completed': '최종완료',
+            'not_required': '환급불필요'
+        }
+        status_display = status_map.get(reimbursement_status, reimbursement_status)
         
-        with st.expander(f"👤 {emp_name} ({emp_id}) - {len(expenses)}건 - {total_str}", expanded=True):
-            # 세션 초기화
-            if requester_id not in st.session_state.selected_reimbursements:
-                st.session_state.selected_reimbursements[requester_id] = []
-            
-            # 테이블 헤더
-            cols = st.columns([0.5, 1.5, 1, 1.5, 1, 1])
-            cols[0].markdown("**선택**")
-            cols[1].markdown("**문서번호**")
-            cols[2].markdown("**지출일**")
-            cols[3].markdown("**내역**")
-            cols[4].markdown("**금액**")
-            cols[5].markdown("**통화**")
-            
-            st.markdown("---")
-            
-            # 항목별 표시
-            selected_expense_ids = []
-            for exp in expenses:
-                exp_id = exp.get('id')
-                cols = st.columns([0.5, 1.5, 1, 1.5, 1, 1])
+        table_data.append({
+            'ID': exp.get('id'),
+            '지출요청서번호': exp.get('document_number', 'N/A'),
+            '환급대상자': emp_name,
+            '지출일': exp.get('expense_date', 'N/A'),
+            '유형': exp.get('expense_type', 'N/A'),
+            '금액': f"{exp.get('amount', 0):,.0f}",
+            '통화': exp.get('currency', 'VND'),
+            '환급상태': status_display,
+            '화던(Hóa đơn)': hoadon_status,
+            '결제방법': exp.get('payment_method', 'N/A')
+        })
+    
+    if table_data:
+        df = pd.DataFrame(table_data)
+        
+        # 선택 가능한 테이블
+        st.dataframe(df, use_container_width=True, height=400, hide_index=True)
+        
+        # 선택 입력
+        st.markdown("---")
+        selected_ids_input = st.text_input(
+            "환급 처리할 ID (쉼표로 구분)", 
+            placeholder="예: 112, 113, 114",
+            key="selected_reimbursement_ids"
+        )
+        
+        if selected_ids_input:
+            try:
+                selected_ids = [int(id.strip()) for id in selected_ids_input.split(',')]
+                selected_expenses = [exp for exp in pending_expenses if exp.get('id') in selected_ids]
                 
-                with cols[0]:
-                    if st.checkbox("", key=f"select_{exp_id}", label_visibility="collapsed"):
-                        selected_expense_ids.append(exp_id)
-                
-                cols[1].write(exp.get('document_number', 'N/A'))
-                cols[2].write(exp.get('expense_date', 'N/A'))
-                cols[3].write(exp.get('description', '')[:20] + "...")
-                cols[4].write(f"{exp.get('amount', 0):,.0f}")
-                cols[5].write(exp.get('currency', 'VND'))
-            
-            st.markdown("---")
-            
-            # 선택된 항목 프린트 버튼
-            if selected_expense_ids:
-                selected_expenses = [exp for exp in expenses if exp.get('id') in selected_expense_ids]
-                
-                if st.button(f"🖨️ 선택 항목 프린트 ({len(selected_expenses)}건)", 
-                           key=f"print_{requester_id}", use_container_width=True):
-                    
-                    # 임시 상태로 먼저 업데이트
-                    success_count = 0
+                if selected_expenses:
+                    # 통화별 합계
+                    currency_totals = defaultdict(float)
                     for exp in selected_expenses:
-                        result = update_data_func("expenses", {
-                            'id': exp.get('id'),
-                            'reimbursement_status': 'printed',
-                            'reimbursement_document_number': 'TEMP',
-                            'updated_at': datetime.now().isoformat()
-                        }, "id")
-                        
-                        if result:
-                            success_count += 1
+                        currency = exp.get('currency', 'VND')
+                        amount = exp.get('amount', 0)
+                        currency_totals[currency] += amount
                     
-                    # 업데이트 성공 확인
-                    if success_count == len(selected_expenses):
-                        # DB 반영 대기
-                        import time
-                        time.sleep(0.5)
-                        
-                        # 문서번호 생성 (업데이트 후)
-                        from components.document_number import generate_document_number
-                        document_number = generate_document_number('PAY', load_func=load_data_func)
-                        
-                        # 실제 문서번호로 업데이트
+                    total_str = ", ".join([f"{amount:,.0f} {curr}" for curr, amount in currency_totals.items()])
+                    
+                    st.info(f"선택된 항목: {len(selected_expenses)}건 - {total_str}")
+                    
+                    if st.button(f"🖨️ 환급 프린트 ({len(selected_expenses)}건)", type="primary", use_container_width=True):
+                        # 임시 상태로 먼저 업데이트
+                        success_count = 0
                         for exp in selected_expenses:
-                            update_data_func("expenses", {
+                            result = update_data_func("expenses", {
                                 'id': exp.get('id'),
-                                'reimbursement_document_number': document_number,
+                                'reimbursement_status': 'printed',
+                                'reimbursement_document_number': 'TEMP',
                                 'updated_at': datetime.now().isoformat()
                             }, "id")
+                            
+                            if result:
+                                success_count += 1
                         
-                        # 통화별 그룹핑
-                        grouped_by_currency = defaultdict(list)
-                        for exp in selected_expenses:
-                            currency = exp.get('currency', 'VND')
-                            grouped_by_currency[currency].append(exp)
-                        
-                        # 프린트 데이터 저장
-                        st.session_state['print_reimbursement'] = {
-                            'employee_id': requester_id,
-                            'grouped_expenses': dict(grouped_by_currency),
-                            'document_number': document_number
-                        }
-                        st.success(f"✅ {success_count}건 프린트 준비 완료! 문서번호: {document_number}")
-                        st.rerun()
-                    else:
-                        st.error(f"⚠️ {success_count}/{len(selected_expenses)}건만 처리되었습니다.")
+                        if success_count == len(selected_expenses):
+                            import time
+                            time.sleep(0.5)
+                            
+                            # 문서번호 생성
+                            from components.system.document_number import generate_document_number
+                            document_number = generate_document_number('PAY', load_func=load_data_func)
+                            
+                            # 실제 문서번호로 업데이트
+                            for exp in selected_expenses:
+                                update_data_func("expenses", {
+                                    'id': exp.get('id'),
+                                    'reimbursement_document_number': document_number,
+                                    'updated_at': datetime.now().isoformat()
+                                }, "id")
+                            
+                            # 통화별 그룹핑
+                            grouped_by_currency = defaultdict(list)
+                            for exp in selected_expenses:
+                                currency = exp.get('currency', 'VND')
+                                grouped_by_currency[currency].append(exp)
+                            
+                            # 첫 번째 항목에서 직원 ID 추출
+                            requester_id = selected_expenses[0].get('requester')
+                            
+                            # 프린트 데이터 저장
+                            st.session_state['print_reimbursement'] = {
+                                'employee_id': requester_id,
+                                'grouped_expenses': dict(grouped_by_currency),
+                                'document_number': document_number
+                            }
+                            st.success(f"✅ {success_count}건 프린트 준비 완료! 문서번호: {document_number}")
+                            st.rerun()
+                        else:
+                            st.error(f"⚠️ {success_count}/{len(selected_expenses)}건만 처리되었습니다.")
+                else:
+                    st.warning("⚠️ 선택한 ID가 환급 대상 목록에 없습니다.")
+            except ValueError:
+                st.error("⚠️ ID는 숫자로 입력해주세요.")
 
 def render_reimbursement_printed(load_data_func, update_data_func, get_current_user_func):
-    """프린트 완료 목록 - 최종 환급 처리 대기"""
+    """프린트 완료 목록 - 테이블 형식"""
     
     st.subheader("🖨️ 프린트 완료 목록")
     
@@ -221,7 +200,7 @@ def render_reimbursement_printed(load_data_func, update_data_func, get_current_u
     # 직원 딕셔너리
     employee_dict = {emp.get('id'): emp for emp in employees if emp.get('id')}
     
-    # 프린트 완료 항목 필터링
+    # 환급 완료 항목 필터링 (printed 상태만)
     printed_expenses = [exp for exp in all_expenses 
                        if exp.get('reimbursement_status') == 'printed']
     
@@ -241,74 +220,101 @@ def render_reimbursement_printed(load_data_func, update_data_func, get_current_u
     
     st.write(f"📄 총 {len(printed_expenses)}건의 프린트 완료")
     
-    # 문서번호별 그룹핑
-    grouped_by_doc = defaultdict(list)
+    # 테이블 데이터 생성
+    table_data = []
     for exp in printed_expenses:
-        doc_num = exp.get('reimbursement_document_number', 'N/A')
-        grouped_by_doc[doc_num].append(exp)
-    
-    # 문서번호별로 표시
-    for doc_num, expenses in grouped_by_doc.items():
-        # 첫 번째 항목에서 직원 정보 추출
-        first_exp = expenses[0]
-        requester_id = first_exp.get('requester')
+        requester_id = exp.get('requester')
         emp_info = employee_dict.get(requester_id, {})
         emp_name = emp_info.get('name', '알 수 없음')
         
-        # 통화별 합계
-        currency_totals = defaultdict(float)
-        for exp in expenses:
-            currency = exp.get('currency', 'VND')
-            amount = exp.get('amount', 0)
-            currency_totals[currency] += amount
+        # 프린트일 추출
+        updated_at = exp.get('updated_at', 'N/A')
+        if updated_at != 'N/A':
+            try:
+                dt = datetime.fromisoformat(str(updated_at).replace('Z', '+00:00'))
+                updated_at = dt.strftime('%Y-%m-%d')
+            except:
+                pass
         
-        total_str = ", ".join([f"{amount:,.0f} {curr}" for curr, amount in currency_totals.items()])
+        table_data.append({
+            'ID': exp.get('id'),
+            '환급문서번호': exp.get('reimbursement_document_number', 'N/A'),
+            '지출요청서번호': exp.get('document_number', 'N/A'),
+            '환급대상자': emp_name,
+            '지출일': exp.get('expense_date', 'N/A'),
+            '유형': exp.get('expense_type', 'N/A'),
+            '금액': f"{exp.get('amount', 0):,.0f}",
+            '통화': exp.get('currency', 'VND'),
+            '프린트일': updated_at
+        })
+    
+    if table_data:
+        df = pd.DataFrame(table_data)
+        st.dataframe(df, use_container_width=True, height=400, hide_index=True)
         
-        with st.expander(f"📋 {doc_num} - {emp_name} - {len(expenses)}건 - {total_str}", expanded=False):
-            # 상세 내역 표시
-            for exp in expenses:
-                cols = st.columns([2, 1, 1, 1])
-                cols[0].write(f"**{exp.get('description', 'N/A')[:30]}**")
-                cols[1].write(exp.get('expense_date', 'N/A'))
-                cols[2].write(f"{exp.get('amount', 0):,.0f}")
-                cols[3].write(exp.get('currency', 'VND'))
+        # 재출력 기능
+        st.markdown("---")
+        st.info("💡 환급 문서를 재출력하려면 환급문서번호를 입력하세요.")
+        
+        reprint_doc_number = st.text_input(
+            "재출력할 환급문서번호",
+            placeholder="예: PAY-251001-001",
+            key="reprint_doc_number"
+        )
+        
+        if reprint_doc_number:
+            # 해당 문서번호의 지출 항목 찾기
+            doc_expenses = [exp for exp in printed_expenses 
+                          if exp.get('reimbursement_document_number') == reprint_doc_number]
             
-            st.markdown("---")
-            
-            # 최종 환급 완료 버튼
-            col1, col2 = st.columns(2)
-            
-            with col1:
-                if st.button(f"✅ 최종 환급 완료", key=f"complete_{doc_num}", use_container_width=True):
-                    current_user = get_current_user_func()
-                    success_count = 0
-                    
-                    for exp in expenses:
-                        if complete_reimbursement(exp.get('id'), current_user.get('id'), update_data_func):
-                            success_count += 1
-                    
-                    if success_count == len(expenses):
-                        st.success(f"✅ {len(expenses)}건 최종 환급 완료!")
-                        st.rerun()
-                    else:
-                        st.warning(f"⚠️ {success_count}/{len(expenses)}건만 처리되었습니다.")
-            
-            with col2:
-                if st.button(f"🖨️ 재출력", key=f"reprint_{doc_num}", use_container_width=True):
+            if doc_expenses:
+                # 통화별 합계
+                currency_totals = defaultdict(float)
+                for exp in doc_expenses:
+                    currency = exp.get('currency', 'VND')
+                    amount = exp.get('amount', 0)
+                    currency_totals[currency] += amount
+                
+                total_str = ", ".join([f"{amount:,.0f} {curr}" for curr, amount in currency_totals.items()])
+                
+                st.success(f"✅ 선택된 문서: {reprint_doc_number} - {len(doc_expenses)}건 - {total_str}")
+                
+                if st.button(f"🖨️ 재출력", type="primary", use_container_width=True):
                     # 통화별 그룹핑
                     grouped_by_currency = defaultdict(list)
-                    for exp in expenses:
+                    for exp in doc_expenses:
                         currency = exp.get('currency', 'VND')
                         grouped_by_currency[currency].append(exp)
+                    
+                    # 첫 번째 항목에서 직원 ID 추출
+                    requester_id = doc_expenses[0].get('requester')
                     
                     # 프린트 데이터 저장
                     st.session_state['print_reimbursement'] = {
                         'employee_id': requester_id,
                         'grouped_expenses': dict(grouped_by_currency),
-                        'document_number': doc_num
+                        'document_number': reprint_doc_number
                     }
+                    st.success(f"✅ 재출력 준비 완료!")
                     st.rerun()
+            else:
+                st.warning("⚠️ 해당 환급문서번호를 찾을 수 없습니다.")
 
+
+def complete_reimbursement(expense_id, user_id, update_data_func):
+    """환급 완료 처리 - printed → completed"""
+    try:
+        update_data = {
+            'id': expense_id,
+            'reimbursement_status': 'completed',
+            'reimbursed_at': datetime.now().isoformat(),
+            'reimbursed_by': user_id,
+            'updated_at': datetime.now().isoformat()
+        }
+        return update_data_func("expenses", update_data, "id")
+    except Exception as e:
+        st.error(f"환급 완료 처리 중 오류: {str(e)}")
+        return False
 
 def complete_reimbursement(expense_id, user_id, update_data_func):
     """환급 완료 처리"""
@@ -325,9 +331,38 @@ def complete_reimbursement(expense_id, user_id, update_data_func):
         st.error(f"환급 완료 처리 중 오류: {str(e)}")
         return False
 
+def complete_reimbursement(expense_id, user_id, update_data_func):
+    """환급 완료 처리"""
+    try:
+        update_data = {
+            'id': expense_id,
+            'reimbursement_status': 'completed',
+            'reimbursed_at': datetime.now().isoformat(),
+            'reimbursed_by': user_id,
+            'updated_at': datetime.now().isoformat()
+        }
+        return update_data_func("expenses", update_data, "id")
+    except Exception as e:
+        st.error(f"환급 완료 처리 중 오류: {str(e)}")
+        return False
+
+def complete_reimbursement(expense_id, user_id, update_data_func):
+    """환급 완료 처리"""
+    try:
+        update_data = {
+            'id': expense_id,
+            'reimbursement_status': 'completed',
+            'reimbursed_at': datetime.now().isoformat(),
+            'reimbursed_by': user_id,
+            'updated_at': datetime.now().isoformat()
+        }
+        return update_data_func("expenses", update_data, "id")
+    except Exception as e:
+        st.error(f"환급 완료 처리 중 오류: {str(e)}")
+        return False
 
 def render_reimbursement_completed(load_data_func, get_current_user_func):
-    """최종 완료 내역"""
+    """최종 완료 내역 - 월별/주별/항목별 필터"""
     
     st.subheader("✅ 최종 완료 내역")
     
@@ -342,7 +377,7 @@ def render_reimbursement_completed(load_data_func, get_current_user_func):
     # 직원 딕셔너리
     employee_dict = {emp.get('id'): emp for emp in employees if emp.get('id')}
     
-    # 최종 완료 항목 필터링
+    # 최종 완료 항목 필터링 (completed 상태만)
     completed_expenses = [exp for exp in all_expenses 
                          if exp.get('reimbursement_status') == 'completed']
     
@@ -350,21 +385,136 @@ def render_reimbursement_completed(load_data_func, get_current_user_func):
         st.info("최종 완료된 내역이 없습니다.")
         return
     
+    # 필터 영역
+    st.markdown("### 🔍 필터")
+    col1, col2, col3 = st.columns(3)
+    
+    with col1:
+        # 월별 필터
+        available_months = set()
+        for exp in completed_expenses:
+            reimbursed_at = exp.get('reimbursed_at')
+            if reimbursed_at:
+                try:
+                    dt = datetime.fromisoformat(str(reimbursed_at).replace('Z', '+00:00'))
+                    available_months.add(dt.strftime('%Y-%m'))
+                except:
+                    pass
+        
+        month_options = ["전체"] + sorted(list(available_months), reverse=True)
+        selected_month = st.selectbox("월 선택", month_options, key="month_filter")
+    
+    with col2:
+        # 주별 필터 (ISO 주)
+        week_options = ["전체", "최근 1주", "최근 2주", "최근 4주"]
+        selected_week = st.selectbox("기간 선택", week_options, key="week_filter")
+    
+    with col3:
+        # 지출 유형 필터
+        expense_types = set([exp.get('expense_type', '기타') for exp in completed_expenses])
+        type_options = ["전체"] + sorted(list(expense_types))
+        selected_type = st.selectbox("지출 유형", type_options, key="type_filter")
+    
+    # 필터링 적용
+    filtered_expenses = completed_expenses.copy()
+    
+    # 월별 필터
+    if selected_month != "전체":
+        filtered_expenses = [exp for exp in filtered_expenses 
+                           if exp.get('reimbursed_at') and 
+                           datetime.fromisoformat(str(exp.get('reimbursed_at')).replace('Z', '+00:00')).strftime('%Y-%m') == selected_month]
+    
+    # 주별 필터
+    if selected_week != "전체":
+        from datetime import timedelta
+        now = datetime.now()
+        
+        if selected_week == "최근 1주":
+            cutoff_date = now - timedelta(days=7)
+        elif selected_week == "최근 2주":
+            cutoff_date = now - timedelta(days=14)
+        elif selected_week == "최근 4주":
+            cutoff_date = now - timedelta(days=28)
+        
+        filtered_expenses = [exp for exp in filtered_expenses 
+                           if exp.get('reimbursed_at') and 
+                           datetime.fromisoformat(str(exp.get('reimbursed_at')).replace('Z', '+00:00')) >= cutoff_date]
+    
+    # 지출 유형 필터
+    if selected_type != "전체":
+        filtered_expenses = [exp for exp in filtered_expenses 
+                           if exp.get('expense_type') == selected_type]
+    
+    if not filtered_expenses:
+        st.info("필터 조건에 맞는 데이터가 없습니다.")
+        return
+    
+    # 통계 대시보드
+    st.markdown("### 📊 통계")
+    
+    # 통화별 합계 계산
+    currency_totals = defaultdict(float)
+    for exp in filtered_expenses:
+        currency = exp.get('currency', 'VND')
+        amount = exp.get('amount', 0)
+        currency_totals[currency] += amount
+    
+    # 지출 유형별 집계
+    type_stats = defaultdict(lambda: {'count': 0, 'amount': 0})
+    for exp in filtered_expenses:
+        exp_type = exp.get('expense_type', '기타')
+        type_stats[exp_type]['count'] += 1
+        type_stats[exp_type]['amount'] += exp.get('amount', 0)
+    
+    # 통계 표시
+    stat_col1, stat_col2, stat_col3 = st.columns(3)
+    
+    with stat_col1:
+        st.metric("총 건수", f"{len(filtered_expenses)}건")
+    
+    with stat_col2:
+        total_vnd = currency_totals.get('VND', 0)
+        st.metric("총 금액 (VND)", f"{total_vnd:,.0f}")
+    
+    with stat_col3:
+        if 'USD' in currency_totals or 'KRW' in currency_totals:
+            other_currencies = ", ".join([f"{curr}: {amt:,.0f}" for curr, amt in currency_totals.items() if curr != 'VND'])
+            st.metric("기타 통화", other_currencies if other_currencies else "-")
+        else:
+            st.metric("평균 금액", f"{total_vnd / len(filtered_expenses):,.0f}" if len(filtered_expenses) > 0 else "0")
+    
+    # 지출 유형별 통계
+    if type_stats:
+        st.markdown("#### 📈 지출 유형별 집계")
+        type_data = []
+        for exp_type, stats in sorted(type_stats.items(), key=lambda x: x[1]['amount'], reverse=True):
+            type_data.append({
+                '지출 유형': exp_type,
+                '건수': stats['count'],
+                '금액': f"{stats['amount']:,.0f}"
+            })
+        
+        if type_data:
+            type_df = pd.DataFrame(type_data)
+            st.dataframe(type_df, use_container_width=True, hide_index=True)
+    
+    st.markdown("---")
+    
     # 정렬 옵션
     sort_option = st.selectbox("정렬", ["최신순", "오래된순", "금액높은순"], key="completed_sort")
     
     if sort_option == "최신순":
-        completed_expenses.sort(key=lambda x: x.get('reimbursed_at', ''), reverse=True)
+        filtered_expenses.sort(key=lambda x: x.get('reimbursed_at', ''), reverse=True)
     elif sort_option == "오래된순":
-        completed_expenses.sort(key=lambda x: x.get('reimbursed_at', ''))
+        filtered_expenses.sort(key=lambda x: x.get('reimbursed_at', ''))
     elif sort_option == "금액높은순":
-        completed_expenses.sort(key=lambda x: x.get('amount', 0), reverse=True)
+        filtered_expenses.sort(key=lambda x: x.get('amount', 0), reverse=True)
     
-    st.write(f"💚 총 {len(completed_expenses)}건의 최종 완료")
+    st.write(f"💚 {len(filtered_expenses)}건의 환급 완료 내역")
     
     # DataFrame으로 표시
     table_data = []
-    for exp in completed_expenses:
+    for exp in filtered_expenses:
         requester_id = exp.get('requester')
         emp_info = employee_dict.get(requester_id, {})
         emp_name = emp_info.get('name', '알 수 없음')
@@ -382,10 +532,12 @@ def render_reimbursement_completed(load_data_func, get_current_user_func):
                 pass
         
         table_data.append({
-            '문서번호': exp.get('reimbursement_document_number', 'N/A'),
-            '수령인': emp_name,
+            'ID': exp.get('id'),
+            '환급문서번호': exp.get('reimbursement_document_number', 'N/A'),
+            '지출요청서번호': exp.get('document_number', 'N/A'),
+            '환급수령인': emp_name,
             '지출일': exp.get('expense_date', 'N/A'),
-            '내역': exp.get('description', '')[:30],
+            '지출유형': exp.get('expense_type', '기타'),
             '금액': f"{exp.get('amount', 0):,.0f}",
             '통화': exp.get('currency', 'VND'),
             '완료일': reimbursed_at,
@@ -394,7 +546,7 @@ def render_reimbursement_completed(load_data_func, get_current_user_func):
     
     if table_data:
         df = pd.DataFrame(table_data)
-        st.dataframe(df, use_container_width=True, height=400)
+        st.dataframe(df, use_container_width=True, height=400, hide_index=True)
         
         # CSV 다운로드
         csv_data = df.to_csv(index=False, encoding='utf-8-sig')
@@ -404,5 +556,4 @@ def render_reimbursement_completed(load_data_func, get_current_user_func):
             file_name=f"reimbursement_completed_{datetime.now().strftime('%Y%m%d')}.csv",
             mime="text/csv"
         )
-
 
