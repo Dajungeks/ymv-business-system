@@ -18,26 +18,21 @@ class AuthManager:
         """AuthManager 초기화"""
         self.db = db_operations
 
-    def login_user(self, employee_id, password, login_type="employee"):
+    def login_user(self, account_id, password):
         """
-        사용자 로그인 (직원 또는 법인)
-        User login authentication (employee or company)
+        사용자 로그인 (직원 또는 법인 계정)
+        User login authentication (employee or corporate account)
         """
         try:
-            if not employee_id or not password:
+            if not account_id or not password:
                 st.error("아이디와 비밀번호를 입력해주세요.")
                 return False
             
-            if login_type == "employee":
-                # 직원 로그인
-                employees = self.db.load_data("employees")
-                if not employees:
-                    st.error("직원 정보를 불러올 수 없습니다.")
-                    return False
-                
-                # 사용자 인증
+            # 1단계: 직원 로그인 시도
+            employees = self.db.load_data("employees")
+            if employees:
                 for employee in employees:
-                    if (employee.get("employee_id") == employee_id and 
+                    if (employee.get("employee_id") == account_id and 
                         employee.get("password") == password):
                         
                         # 활성 계정 확인
@@ -51,50 +46,45 @@ class AuthManager:
                         st.session_state.user_type = "employee"
                         
                         # 로그인 시간 기록
-                        self._record_login_activity(employee.get('id'))
+                        self._record_login_activity(employee.get('id'), 'employee')
                         
                         return True
-                
-                # 인증 실패
-                st.error("잘못된 사번 또는 비밀번호입니다.")
-                return False
             
-            elif login_type == "company":
-                # 법인 로그인
-                companies = self.db.load_data("companies")
-                if not companies:
-                    st.error("법인 정보를 불러올 수 없습니다.")
-                    return False
-                
-                # 법인 인증
-                for company in companies:
-                    if (company.get("login_id") == employee_id and 
-                        company.get("login_password") == password):
+            # 2단계: 법인 계정 로그인 시도
+            corporate_accounts = self.db.load_data("corporate_accounts")
+            if corporate_accounts:
+                for account in corporate_accounts:
+                    if (account.get("account_id") == account_id and 
+                        account.get("password") == password):
                         
                         # 활성 계정 확인
-                        if not company.get('is_active', True):
-                            st.error("비활성화된 법인입니다.")
+                        if not account.get('is_active', True):
+                            st.error("비활성화된 법인 계정입니다.")
                             return False
                         
-                        # 세션에 법인 정보 저장 (직원 형식으로 변환)
+                        # 세션에 법인 계정 정보 저장 (직원 형식으로 변환)
                         st.session_state.logged_in = True
                         st.session_state.user_info = {
-                            'id': company.get('id'),
-                            'name': company.get('company_name'),
-                            'employee_id': company.get('login_id'),
-                            'role': 'Company',
-                            'department': company.get('company_name_en'),
-                            'company_code': company.get('company_code'),
-                            'company_role': company.get('role'),
-                            'is_active': company.get('is_active', True)
+                            'id': account.get('id'),
+                            'name': account.get('company_name'),
+                            'employee_id': account.get('account_id'),
+                            'role': 'Corporate',  # 법인 계정 role
+                            'department': account.get('company_name'),
+                            'company_code': account.get('company_code'),
+                            'country': account.get('country'),
+                            'approval_authority': account.get('approval_authority', True),
+                            'is_active': account.get('is_active', True)
                         }
-                        st.session_state.user_type = "company"
+                        st.session_state.user_type = "corporate"
+                        
+                        # 로그인 시간 기록
+                        self._record_login_activity(account.get('id'), 'corporate')
                         
                         return True
-                
-                # 인증 실패
-                st.error("잘못된 로그인 ID 또는 비밀번호입니다.")
-                return False
+            
+            # 인증 실패
+            st.error("잘못된 아이디 또는 비밀번호입니다.")
+            return False
                 
         except Exception as e:
             st.error(f"로그인 오류: {str(e)}")
@@ -108,12 +98,14 @@ class AuthManager:
         try:
             # 로그아웃 활동 기록
             current_user = self.get_current_user()
+            user_type = st.session_state.get('user_type', 'employee')
             if current_user:
-                self._record_logout_activity(current_user.get('id'))
+                self._record_logout_activity(current_user.get('id'), user_type)
             
             # 세션 정리
             st.session_state.logged_in = False
             st.session_state.user_info = None
+            st.session_state.user_type = None
             
             # 관련 세션 상태 정리
             keys_to_remove = [key for key in st.session_state.keys() 
@@ -139,7 +131,7 @@ class AuthManager:
     
     def check_permission(self, required_role=None, required_permissions=None):
         """
-        권한 확인 (master, admin, manager 지원)
+        권한 확인 (CEO, Admin, Manager 지원)
         Check user permissions
         """
         current_user = self.get_current_user()
@@ -148,10 +140,11 @@ class AuthManager:
         
         # 역할 기반 권한 확인
         if required_role:
-            user_role = current_user.get('role', 'employee')
-            # Master는 모든 권한, CEO와 Admin도 높은 권한
-            if user_role == 'Master':
+            user_role = current_user.get('role', 'Staff')
+            # CEO는 모든 권한
+            if user_role == 'CEO':
                 return True
+            # Admin도 높은 권한
             if user_role != required_role and user_role not in ['CEO', 'Admin']:
                 return False
         
@@ -176,20 +169,21 @@ class AuthManager:
     
     def require_manager_role(self):
         """
-        관리자 권한 필수 (Master, CEO)
+        관리자 권한 필수 (CEO)
         Require manager role
         """
         current_user = self.get_current_user()
-        if not current_user or current_user.get('role') not in ['Master', 'CEO']:
+        if not current_user or current_user.get('role') not in ['CEO']:
             st.warning("관리자 권한이 필요합니다.")
             return False
         return True
     
-    def _record_login_activity(self, user_id):
+    def _record_login_activity(self, user_id, user_type='employee'):
         """로그인 활동 기록"""
         try:
             activity_data = {
                 'user_id': user_id,
+                'user_type': user_type,
                 'activity_type': 'login',
                 'activity_time': datetime.now().isoformat(),
                 'ip_address': self._get_client_ip(),
@@ -203,11 +197,12 @@ class AuthManager:
             # 로그인 성공에 영향을 주지 않도록 에러는 무시
             pass
     
-    def _record_logout_activity(self, user_id):
+    def _record_logout_activity(self, user_id, user_type='employee'):
         """로그아웃 활동 기록"""
         try:
             activity_data = {
                 'user_id': user_id,
+                'user_type': user_type,
                 'activity_type': 'logout',
                 'activity_time': datetime.now().isoformat()
             }

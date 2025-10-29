@@ -3,6 +3,7 @@ import pandas as pd
 from datetime import datetime, date
 import calendar
 import io
+import plotly.graph_objects as go
 from collections import defaultdict
 
 
@@ -34,30 +35,30 @@ def show_expense_management(load_data_func, save_data_func, update_data_func, de
         invoice_tab_name = f"🧾 화던 (Hóa đơn) 확인 대기 항목 ({pending_invoice_count})" if pending_invoice_count > 0 else "🧾 화던 (Hóa đơn) 발행 확인"
         
         tab1, tab2, tab3, tab4, tab5 = st.tabs([
+            "📊 지출 통계",
             "📝 지출요청서 작성", 
             "📋 지출요청서 목록", 
-            "📊 지출 통계", 
             approval_tab_name,
             invoice_tab_name
         ])
     else:
         tab1, tab2, tab3, tab4 = st.tabs([
+            "📊 지출 통계",
             "📝 지출요청서 작성", 
             "📋 지출요청서 목록", 
-            "📊 지출 통계", 
             "👨‍💼 승인 관리"
         ])
     
     with tab1:
-        render_expense_form(load_data_func, save_data_func, current_user)
+        render_expense_statistics_new(load_data_func)
     
     with tab2:
+        render_expense_form(load_data_func, save_data_func, current_user)
+    
+    with tab3:
         render_expense_list(load_data_func, update_data_func, delete_data_func, 
                           get_current_user_func, get_approval_status_info_func, 
                           create_csv_download_func, render_print_form_func)
-    
-    with tab3:
-        render_expense_statistics(load_data_func, calculate_expense_statistics_func)
     
     with tab4:
         render_approval_management(load_data_func, update_data_func, get_current_user_func, 
@@ -587,7 +588,7 @@ def render_id_selection_expense(filtered_expenses, employee_dict, current_user, 
     
     # 삭제 확인 모달
     if st.session_state.get('show_delete_confirm'):
-        render_delete_confirmation(filtered_expenses, current_user, user_role, delete_data_func)
+        render_delete_confirmation(filtered_expenses, current_user, user_role, delete_data_func, load_data_func, update_data_func)
 
 def render_expense_details_modal(filtered_expenses, employee_dict, get_approval_status_info_func,
                                  update_data_func, current_user, load_data_func):
@@ -844,9 +845,9 @@ def confirm_invoice_expense(expense_id, user_id, update_data_func, load_data_fun
         return False
 
 def render_invoice_check_tab(load_data_func, update_data_func, get_current_user_func):
-    """화던 (Hóa đơn) 발행 확인 탭 (테이블 형식 + 일괄 확인)"""
+    """화던 (Hóa đơn) 발행 확인 탭 - ID 입력 방식"""
     
-    st.subheader("🧾 화던 (Hóa đơn) 발행 확인 대기 목록")
+    st.subheader("🧾 화던 (Hóa đơn) 발행 확인 관리")
     
     expenses = load_data_func("expenses")
     employees = load_data_func("employees")
@@ -866,65 +867,13 @@ def render_invoice_check_tab(load_data_func, update_data_func, get_current_user_
         st.info("화던 (Hóa đơn) 발행 확인 대기 중인 지출요청서가 없습니다.")
         return
     
-    st.write(f"⏳ 화던 (Hóa đơn) 발행 확인 대기 중: **{len(pending_expenses)}건**")
-    
-    # 필터 옵션
-    col1, col2, col3 = st.columns(3)
-    
-    with col1:
-        search_query = st.text_input("🔍 검색", placeholder="문서번호, 직원명...", key="invoice_search")
-    
-    with col2:
-        sort_option = st.selectbox(
-            "정렬",
-            ["최신순", "오래된순", "금액높은순", "금액낮은순"],
-            key="invoice_sort"
-        )
-    
-    with col3:
-        currency_filter = st.selectbox("통화", ["전체", "VND", "USD", "KRW"], key="invoice_currency")
-    
-    # 필터링
-    filtered_expenses = pending_expenses
-    
-    if search_query:
-        filtered_expenses = [
-            exp for exp in filtered_expenses
-            if search_query.lower() in str(exp.get('document_number', '')).lower()
-            or search_query.lower() in str(employee_dict.get(exp.get('requester'), {}).get('name', '')).lower()
-        ]
-    
-    if currency_filter != "전체":
-        filtered_expenses = [exp for exp in filtered_expenses if exp.get('currency') == currency_filter]
-    
-    # 정렬
-    if sort_option == "최신순":
-        filtered_expenses.sort(key=lambda x: x.get('approved_at', ''), reverse=True)
-    elif sort_option == "오래된순":
-        filtered_expenses.sort(key=lambda x: x.get('approved_at', ''))
-    elif sort_option == "금액높은순":
-        filtered_expenses.sort(key=lambda x: x.get('amount', 0), reverse=True)
-    elif sort_option == "금액낮은순":
-        filtered_expenses.sort(key=lambda x: x.get('amount', 0))
-    
-    # 통계 정보
-    if filtered_expenses:
-        currency_totals = defaultdict(float)
-        for exp in filtered_expenses:
-            currency = exp.get('currency', 'VND')
-            amount = exp.get('amount', 0)
-            currency_totals[currency] += amount
-        
-        st.info(f"📊 총 금액: " + ", ".join([f"{amount:,.0f} {curr}" for curr, amount in currency_totals.items()]))
-    
-    st.markdown("---")
+    st.write(f"📋 총 {len(pending_expenses)}건의 확인 대기")
     
     # 테이블 데이터 생성
     table_data = []
-    for exp in filtered_expenses:
+    for exp in pending_expenses:
         emp_info = employee_dict.get(exp.get('requester'), {})
         emp_name = emp_info.get('name', '알 수 없음')
-        emp_id = emp_info.get('employee_id', 'N/A')
         
         approved_at = exp.get('approved_at', 'N/A')
         if approved_at != 'N/A':
@@ -937,8 +886,7 @@ def render_invoice_check_tab(load_data_func, update_data_func, get_current_user_
         table_data.append({
             'ID': exp.get('id'),
             '문서번호': exp.get('document_number', 'N/A'),
-            '요청자': f"{emp_name} ({emp_id})",
-            '부서': exp.get('department', 'N/A'),
+            '요청자': emp_name,
             '지출일': exp.get('expense_date', 'N/A'),
             '지출유형': exp.get('expense_type', 'N/A'),
             '금액': f"{exp.get('amount', 0):,.0f}",
@@ -950,178 +898,475 @@ def render_invoice_check_tab(load_data_func, update_data_func, get_current_user_
     # 테이블 표시
     if table_data:
         df = pd.DataFrame(table_data)
-        st.dataframe(df, use_container_width=True, hide_index=True)
+        st.dataframe(df, use_container_width=True, height=400, hide_index=True)
         
         st.markdown("---")
         
-        # ID 선택 영역
-        st.markdown("### 📋 ID 선택 (다중 선택 가능)")
+        # 화던 확인 처리
+        col1, col2 = st.columns(2)
         
-        # 세션 상태 초기화
-        if 'selected_invoice_ids' not in st.session_state:
-            st.session_state.selected_invoice_ids = []
-        
-        # 전체 선택/해제
-        col_all, _ = st.columns([1, 5])
-        with col_all:
-            all_ids = [exp.get('id') for exp in filtered_expenses]
-            is_all_selected = len(st.session_state.selected_invoice_ids) == len(all_ids) and \
-                             all(exp_id in st.session_state.selected_invoice_ids for exp_id in all_ids)
+        with col1:
+            st.markdown("### ✅ 화던 (Hóa đơn) 확인")
+            confirm_ids_input = st.text_input(
+                "확인할 ID (쉼표로 구분)",
+                placeholder="예: 15, 14, 7",
+                key="confirm_invoice_ids"
+            )
             
-            select_all = st.checkbox("전체 선택", value=is_all_selected, key="select_all_invoices")
-        
-        # 전체 선택/해제 토글
-        if select_all and not is_all_selected:
-            st.session_state.selected_invoice_ids = [exp.get('id') for exp in filtered_expenses]
-            st.rerun()
-        elif not select_all and is_all_selected:
-            st.session_state.selected_invoice_ids = []
-            st.rerun()
-        
-        # ID 체크박스 (한 줄에 10개씩)
-        ids_per_row = 10
-        
-        for i in range(0, len(filtered_expenses), ids_per_row):
-            cols = st.columns(ids_per_row)
-            for j in range(ids_per_row):
-                idx = i + j
-                if idx < len(filtered_expenses):
-                    exp = filtered_expenses[idx]
-                    exp_id = exp.get('id')
-                    with cols[j]:
-                        is_checked = st.checkbox(
-                            str(exp_id),
-                            value=exp_id in st.session_state.selected_invoice_ids,
-                            key=f"check_invoice_{exp_id}"
-                        )
-                        
-                        if is_checked and exp_id not in st.session_state.selected_invoice_ids:
-                            st.session_state.selected_invoice_ids.append(exp_id)
-                        elif not is_checked and exp_id in st.session_state.selected_invoice_ids:
-                            st.session_state.selected_invoice_ids.remove(exp_id)
-        
-        st.markdown("---")
-        
-        # 선택된 항목 액션
-        selected_count = len(st.session_state.selected_invoice_ids)
-        
-        if selected_count > 0:
-            selected_ids_text = ", ".join([str(id) for id in sorted(st.session_state.selected_invoice_ids)])
-            st.success(f"✅ {selected_count}건 선택됨 (ID: {selected_ids_text})")
-            
-            # 일괄 확인 버튼
-            if st.button("✅ 선택 항목 일괄 화던 (Hóa đơn) 확인", type="primary", use_container_width=True):
-                success_count = 0
-                fail_count = 0
-                
-                for exp_id in st.session_state.selected_invoice_ids:
-                    update_data = {
-                        'id': exp_id,
-                        'accounting_confirmed': True,
-                        'accounting_confirmed_at': datetime.now().isoformat(),
-                        'accounting_confirmed_by': current_user.get('id')
-                    }
+            if confirm_ids_input:
+                try:
+                    confirm_ids = [int(id.strip()) for id in confirm_ids_input.split(',')]
+                    selected_expenses = [exp for exp in pending_expenses if exp.get('id') in confirm_ids]
                     
-                    if update_data_func("expenses", update_data, "id"):
-                        success_count += 1
+                    if selected_expenses:
+                        # 통화별 합계
+                        currency_totals = {}
+                        for exp in selected_expenses:
+                            currency = exp.get('currency', 'VND')
+                            amount = exp.get('amount', 0)
+                            currency_totals[currency] = currency_totals.get(currency, 0) + amount
+                        
+                        total_str = ", ".join([f"{amount:,.0f} {curr}" for curr, amount in currency_totals.items()])
+                        
+                        st.info(f"선택된 항목: {len(selected_expenses)}건 - {total_str}")
+                        
+                        if st.button(f"✅ 화던 확인 ({len(selected_expenses)}건)", type="primary", use_container_width=True):
+                            success_count = 0
+                            
+                            for exp in selected_expenses:
+                                # 환급 상태 결정
+                                payment_method = exp.get('payment_method', '')
+                                if payment_method == '개인 신용카드':
+                                    reimbursement_status = 'pending'
+                                else:
+                                    reimbursement_status = 'not_required'
+                                
+                                update_data = {
+                                    'id': exp.get('id'),
+                                    'accounting_confirmed': True,
+                                    'accounting_confirmed_by': current_user.get('id'),
+                                    'accounting_confirmed_at': datetime.now().isoformat(),
+                                    'reimbursement_status': reimbursement_status,
+                                    'reimbursement_amount': exp.get('amount') if reimbursement_status == 'pending' else None,
+                                    'updated_at': datetime.now().isoformat()
+                                }
+                                
+                                if update_data_func("expenses", update_data, "id"):
+                                    success_count += 1
+                            
+                            if success_count == len(selected_expenses):
+                                st.success(f"✅ {len(selected_expenses)}건 화던 (Hóa đơn) 확인 완료!")
+                                import time
+                                time.sleep(2)
+                                st.rerun()
+                            else:
+                                st.warning(f"⚠️ {success_count}/{len(selected_expenses)}건만 처리되었습니다.")
+                                import time
+                                time.sleep(2)
+                                st.rerun()
                     else:
-                        fail_count += 1
-                
-                if success_count > 0:
-                    st.success(f"✅ {success_count}건 화던 (Hóa đơn) 확인 완료!")
-                if fail_count > 0:
-                    st.error(f"❌ {fail_count}건 처리 실패")
-                
-                # 선택 초기화
-                st.session_state.selected_invoice_ids = []
-                st.rerun()
-        else:
-            st.info("화던 (Hóa đơn) 확인할 항목을 선택해주세요.")
-    else:
-        st.info("조건에 맞는 항목이 없습니다.")
+                        st.warning("⚠️ 선택한 ID가 확인 대기 목록에 없습니다.")
+                except ValueError:
+                    st.error("⚠️ ID는 숫자로 입력해주세요.")
+        
+        with col2:
+            st.markdown("### 📊 선택 항목 통계")
+            if confirm_ids_input:
+                try:
+                    confirm_ids = [int(id.strip()) for id in confirm_ids_input.split(',')]
+                    selected_expenses = [exp for exp in pending_expenses if exp.get('id') in confirm_ids]
+                    
+                    if selected_expenses:
+                        st.write(f"**선택 건수:** {len(selected_expenses)}건")
+                        
+                        # 통화별 합계
+                        currency_totals = {}
+                        for exp in selected_expenses:
+                            currency = exp.get('currency', 'VND')
+                            amount = exp.get('amount', 0)
+                            currency_totals[currency] = currency_totals.get(currency, 0) + amount
+                        
+                        st.write("**통화별 합계:**")
+                        for curr, amount in currency_totals.items():
+                            st.write(f"- {curr}: {amount:,.0f}")
+                        
+                        # 환급 필요 건수
+                        reimbursement_needed = len([exp for exp in selected_expenses 
+                                                   if exp.get('payment_method') == '개인 신용카드'])
+                        if reimbursement_needed > 0:
+                            st.warning(f"⚠️ 환급 필요: {reimbursement_needed}건")
+                except:
+                    pass
+            else:
+                st.info("ID를 입력하면 통계가 표시됩니다.")
 
-def render_expense_statistics(load_data_func, calculate_expense_statistics_func):
-    """지출 통계 표시"""
+
+def render_expense_statistics_new(load_data_func):
+    """지출요청서 통계 (구매품 관리와 동일한 형식)"""
+    st.subheader("📊 지출요청서 통계")
     
-    expenses = load_data_func("expenses")
-    employees = load_data_func("employees")
+    expenses = load_data_func("expenses") or []
+    employees = load_data_func("employees") or []
     
     if not expenses:
         st.info("통계를 표시할 지출 데이터가 없습니다.")
         return
     
-    stats = calculate_expense_statistics_func(expenses)
+    employee_dict = {emp.get('id'): emp for emp in employees if emp.get('id')}
     
-    st.subheader("📊 지출 통계 대시보드")
-    
+    # 필터 영역
     col1, col2, col3, col4 = st.columns(4)
     
     with col1:
-        st.metric("총 지출요청", f"{stats.get('total_count', 0)}건")
+        years = sorted(list(set([datetime.fromisoformat(exp.get('expense_date', '2025-01-01')).year 
+                                for exp in expenses if exp.get('expense_date')])), reverse=True)
+        selected_year = st.selectbox("년도", years if years else [2025], key="exp_stat_year")
     
     with col2:
-        st.metric("총 요청금액", f"{stats.get('total_amount', 0):,}VND")
+        months = ["전체"] + [f"{i}월" for i in range(1, 13)]
+        selected_month = st.selectbox("월", months, key="exp_stat_month")
     
     with col3:
-        st.metric("승인된 금액", f"{stats.get('approved_amount', 0):,}VND")
+        currencies = ["전체"] + sorted(list(set([exp.get('currency', 'VND') for exp in expenses])))
+        selected_currency = st.selectbox("통화", currencies, key="exp_stat_currency")
     
     with col4:
-        total_count = stats.get('total_count', 0)
-        approved_count = stats.get('approved_count', 0)
-        approval_rate = (approved_count / total_count * 100) if total_count > 0 else 0
-        st.metric("승인율", f"{approval_rate:.1f}%")
+        expense_types = ["전체"] + sorted(list(set([exp.get('expense_type', '기타') for exp in expenses])))
+        selected_type = st.selectbox("지출유형", expense_types, key="exp_stat_type")
     
-    st.subheader("📈 상태별 분석")
-    col1, col2 = st.columns(2)
+    # 데이터 필터링
+    filtered_expenses = []
+    for exp in expenses:
+        if not exp.get('expense_date'):
+            continue
+        
+        try:
+            exp_date = datetime.fromisoformat(exp['expense_date'])
+            
+            # 년도 필터
+            if exp_date.year != selected_year:
+                continue
+            
+            # 월 필터
+            if selected_month != "전체":
+                month_num = int(selected_month.replace("월", ""))
+                if exp_date.month != month_num:
+                    continue
+            
+            # 통화 필터
+            if selected_currency != "전체" and exp.get('currency') != selected_currency:
+                continue
+            
+            # 지출유형 필터
+            if selected_type != "전체" and exp.get('expense_type') != selected_type:
+                continue
+            
+            filtered_expenses.append(exp)
+        except:
+            continue
+    
+    if not filtered_expenses:
+        st.warning("선택한 조건에 해당하는 데이터가 없습니다.")
+        return
+    
+    # 1. 요약 통계 (KPI 카드)
+    st.markdown("---")
+    st.markdown("### 📈 요약 통계")
+    
+    total_count = len(filtered_expenses)
+    approved_count = len([exp for exp in filtered_expenses if exp.get('status') == 'approved'])
+    pending_count = len([exp for exp in filtered_expenses if exp.get('status') == 'pending'])
+    rejected_count = len([exp for exp in filtered_expenses if exp.get('status') == 'rejected'])
+    
+    # 통화별 총액
+    currency_totals = {}
+    for exp in filtered_expenses:
+        currency = exp.get('currency', 'VND')
+        amount = exp.get('amount', 0)
+        currency_totals[currency] = currency_totals.get(currency, 0) + amount
+    
+    total_amount_str = ", ".join([f"{amount:,.0f} {curr}" for curr, amount in currency_totals.items()])
+    
+    kpi1, kpi2, kpi3, kpi4 = st.columns(4)
+    
+    with kpi1:
+        st.metric("총 지출건수", f"{total_count}건")
+    
+    with kpi2:
+        st.metric("총 지출금액", total_amount_str)
+    
+    with kpi3:
+        st.metric("승인완료", f"{approved_count}건", 
+                 delta=f"{(approved_count/total_count*100):.0f}%" if total_count > 0 else "0%")
+    
+    with kpi4:
+        st.metric("승인대기", f"{pending_count}건",
+                 delta=f"{(pending_count/total_count*100):.0f}%" if total_count > 0 else "0%")
+    
+    # 2. 월별 지출 추이 (세로 막대 그래프)
+    st.markdown("---")
+    st.markdown("### 📅 월별 지출 추이")
+    
+    monthly_data = []
+    for i in range(1, 13):
+        monthly_data.append({'month': i, 'month_label': f"{i}월", 'count': 0, 'amount': 0})
+    
+    for exp in expenses:
+        if not exp.get('expense_date'):
+            continue
+        try:
+            exp_date = datetime.fromisoformat(exp['expense_date'])
+            if exp_date.year == selected_year:
+                month = exp_date.month
+                amount = exp.get('amount', 0)
+                
+                # 선택된 통화만 계산
+                if selected_currency == "전체" or exp.get('currency') == selected_currency:
+                    monthly_data[month - 1]['count'] += 1
+                    monthly_data[month - 1]['amount'] += amount
+        except:
+            continue
+    
+    monthly_df = pd.DataFrame(monthly_data)
+    
+    # Plotly 막대 그래프
+    fig = go.Figure(data=[
+        go.Bar(
+            x=monthly_df['month_label'],
+            y=monthly_df['count'],
+            marker_color='#1f77b4',
+            text=monthly_df['count'],
+            textposition='outside'
+        )
+    ])
+    
+    fig.update_layout(
+        xaxis_title="월",
+        yaxis_title="건수",
+        height=300,
+        showlegend=False,
+        margin=dict(l=20, r=20, t=20, b=20)
+    )
+    
+    st.plotly_chart(fig, use_container_width=True)
+    
+    # 3. 지출유형별 통계
+    st.markdown("---")
+    st.markdown("### 🏷️ 지출유형별 통계")
+    
+    type_stats = {}
+    for exp in filtered_expenses:
+        expense_type = exp.get('expense_type', '기타')
+        amount = exp.get('amount', 0)
+        
+        if expense_type not in type_stats:
+            type_stats[expense_type] = {'count': 0, 'amount': 0}
+        
+        type_stats[expense_type]['count'] += 1
+        type_stats[expense_type]['amount'] += amount
+    
+    total_amount = sum([data['amount'] for data in type_stats.values()])
+    
+    type_table = []
+    for expense_type, data in sorted(type_stats.items(), key=lambda x: x[1]['amount'], reverse=True):
+        ratio = (data['amount'] / total_amount * 100) if total_amount > 0 else 0
+        type_table.append({
+            '지출유형': expense_type,
+            '건수': f"{data['count']}건",
+            '총 금액': f"{data['amount']:,.0f}",
+            '비율': f"{ratio:.1f}%"
+        })
+    
+    col1, col2 = st.columns([1, 2])
     
     with col1:
-        status_data = {
-            "대기중": stats.get('pending_count', 0),
-            "승인됨": stats.get('approved_count', 0),
-            "거부됨": stats.get('rejected_count', 0)
-        }
+        # Plotly 세로 막대 그래프
+        type_chart_df = pd.DataFrame([
+            {'지출유형': item['지출유형'], '금액': type_stats[item['지출유형']]['amount']}
+            for item in type_table
+        ])
         
-        if any(status_data.values()):
-            st.write("**상태별 건수**")
-            for status, count in status_data.items():
-                st.write(f"• {status}: {count}건")
+        fig_type = go.Figure(data=[
+            go.Bar(
+                x=type_chart_df['지출유형'],
+                y=type_chart_df['금액'],
+                marker_color='#2ca02c',
+                text=type_chart_df['금액'].apply(lambda x: f"{x:,.0f}"),
+                textposition='outside'
+            )
+        ])
+        
+        fig_type.update_layout(
+            xaxis_title="지출유형",
+            yaxis_title="금액",
+            height=300,
+            showlegend=False,
+            margin=dict(l=20, r=20, t=20, b=20)
+        )
+        
+        st.plotly_chart(fig_type, use_container_width=True)
     
     with col2:
-        category_stats = stats.get('category_stats', {})
-        if category_stats:
-            st.write("**지출 유형별 통계**")
-            for category, data in category_stats.items():
-                if isinstance(data, dict):
-                    count = data.get('count', 0)
-                    amount = data.get('amount', 0)
-                    st.write(f"• {category}: {count}건 ({amount:,}VND)")
+        df_type = pd.DataFrame(type_table)
+        st.dataframe(df_type, use_container_width=True, hide_index=True)
     
-    monthly_stats = stats.get('monthly_stats', {})
-    if monthly_stats:
-        st.subheader("📅 월별 지출 현황")
+    # 4. 부서별 통계
+    st.markdown("---")
+    st.markdown("### 🏢 부서별 통계")
+    
+    dept_stats = {}
+    for exp in filtered_expenses:
+        dept = exp.get('department', '미지정')
+        amount = exp.get('amount', 0)
         
-        monthly_data = []
-        for month, data in monthly_stats.items():
-            if isinstance(data, dict):
-                monthly_data.append({
-                    '월': month,
-                    '건수': data.get('count', 0),
-                    '금액': data.get('amount', 0)
-                })
+        if dept not in dept_stats:
+            dept_stats[dept] = {'count': 0, 'amount': 0}
         
-        if monthly_data:
-            df_monthly = pd.DataFrame(monthly_data)
-            st.dataframe(df_monthly, use_container_width=True)
-            
-            col1, col2 = st.columns(2)
-            
-            with col1:
-                st.write("**월별 건수**")
-                st.bar_chart(df_monthly.set_index('월')['건수'])
-            
-            with col2:
-                st.write("**월별 금액**")
-                st.bar_chart(df_monthly.set_index('월')['금액'])
+        dept_stats[dept]['count'] += 1
+        dept_stats[dept]['amount'] += amount
+    
+    dept_table = []
+    for dept, data in sorted(dept_stats.items(), key=lambda x: x[1]['amount'], reverse=True):
+        dept_table.append({
+            '부서': dept,
+            '건수': f"{data['count']}건",
+            '총 금액': f"{data['amount']:,.0f}"
+        })
+    
+    df_dept = pd.DataFrame(dept_table)
+    st.dataframe(df_dept, use_container_width=True, hide_index=True)
+    
+    # 5. 결제방법별 통계
+    st.markdown("---")
+    st.markdown("### 💳 결제방법별 통계")
+    
+    payment_stats = {}
+    for exp in filtered_expenses:
+        payment = exp.get('payment_method', '미지정')
+        amount = exp.get('amount', 0)
+        
+        if payment not in payment_stats:
+            payment_stats[payment] = {'count': 0, 'amount': 0}
+        
+        payment_stats[payment]['count'] += 1
+        payment_stats[payment]['amount'] += amount
+    
+    payment_table = []
+    for payment, data in sorted(payment_stats.items(), key=lambda x: x[1]['amount'], reverse=True):
+        payment_table.append({
+            '결제방법': payment,
+            '건수': f"{data['count']}건",
+            '총 금액': f"{data['amount']:,.0f}"
+        })
+    
+    col1, col2 = st.columns([1, 2])
+    
+    with col1:
+        # Plotly 세로 막대 그래프
+        payment_chart_df = pd.DataFrame([
+            {'결제방법': item['결제방법'], '금액': payment_stats[item['결제방법']]['amount']}
+            for item in payment_table
+        ])
+        
+        fig_payment = go.Figure(data=[
+            go.Bar(
+                x=payment_chart_df['결제방법'],
+                y=payment_chart_df['금액'],
+                marker_color='#ff7f0e',
+                text=payment_chart_df['금액'].apply(lambda x: f"{x:,.0f}"),
+                textposition='outside'
+            )
+        ])
+        
+        fig_payment.update_layout(
+            xaxis_title="결제방법",
+            yaxis_title="금액",
+            height=300,
+            showlegend=False,
+            margin=dict(l=20, r=20, t=20, b=20)
+        )
+        
+        st.plotly_chart(fig_payment, use_container_width=True)
+    
+    with col2:
+        df_payment = pd.DataFrame(payment_table)
+        st.dataframe(df_payment, use_container_width=True, hide_index=True)
+    
+    # 6. 긴급도별 통계 (세로 막대 그래프)
+    st.markdown("---")
+    st.markdown("### ⚡ 긴급도별 통계")
+    
+    urgency_order = ['낮음', '보통', '높음', '긴급']
+    urgency_stats = {'낮음': 0, '보통': 0, '높음': 0, '긴급': 0}
+    
+    for exp in filtered_expenses:
+        urgency = exp.get('urgency', '보통')
+        urgency_stats[urgency] = urgency_stats.get(urgency, 0) + 1
+    
+    urgency_df = pd.DataFrame([
+        {'긴급도': k, '건수': urgency_stats[k]}
+        for k in urgency_order
+    ])
+    
+    fig_urgency = go.Figure(data=[
+        go.Bar(
+            x=urgency_df['긴급도'],
+            y=urgency_df['건수'],
+            marker_color=['#90ee90', '#87ceeb', '#ffa500', '#ff4500'],
+            text=urgency_df['건수'],
+            textposition='outside'
+        )
+    ])
+    
+    fig_urgency.update_layout(
+        xaxis_title="긴급도",
+        yaxis_title="건수",
+        height=300,
+        showlegend=False,
+        margin=dict(l=20, r=20, t=20, b=20)
+    )
+    
+    st.plotly_chart(fig_urgency, use_container_width=True)
+    
+    # 7. CSV 다운로드
+    st.markdown("---")
+    st.markdown("### 📥 데이터 다운로드")
+    
+    col1, col2, col3 = st.columns(3)
+    
+    with col1:
+        if type_table:
+            csv_type = pd.DataFrame(type_table).to_csv(index=False, encoding='utf-8-sig')
+            st.download_button(
+                "📥 지출유형별 통계",
+                csv_type,
+                f"지출_유형통계_{selected_year}.csv",
+                "text/csv",
+                use_container_width=True
+            )
+    
+    with col2:
+        if dept_table:
+            csv_dept = pd.DataFrame(dept_table).to_csv(index=False, encoding='utf-8-sig')
+            st.download_button(
+                "📥 부서별 통계",
+                csv_dept,
+                f"지출_부서통계_{selected_year}.csv",
+                "text/csv",
+                use_container_width=True
+            )
+    
+    with col3:
+        if payment_table:
+            csv_payment = pd.DataFrame(payment_table).to_csv(index=False, encoding='utf-8-sig')
+            st.download_button(
+                "📥 결제방법별 통계",
+                csv_payment,
+                f"지출_결제통계_{selected_year}.csv",
+                "text/csv",
+                use_container_width=True
+            )
+
 
 def render_approval_management(load_data_func, update_data_func, get_current_user_func, 
                               get_approval_status_info_func):
@@ -1300,5 +1545,3 @@ def render_approval_management(load_data_func, update_data_func, get_current_use
                         st.warning("⚠️ 선택한 ID가 승인 대기 목록에 없습니다.")
                 except ValueError:
                     st.error("⚠️ ID는 숫자로 입력해주세요.")
-
-

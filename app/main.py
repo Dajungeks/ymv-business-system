@@ -33,7 +33,7 @@ from components.finance.reimbursement_management import show_reimbursement_manag
 # 내부 컴포넌트 - HR
 from components.hr.employee_management import show_employee_management
 
-from components.company.company_management import show_company_management
+from components.hr.corporate_account_management import show_corporate_account_management
 
 # 내부 컴포넌트 - Supplier
 from components.supplier.supplier_management import show_supplier_management
@@ -200,7 +200,7 @@ def show_reimbursement_management_page():
     current_user = auth_manager.get_current_user()
     user_role = current_user.get('role', 'Staff') if current_user else 'Staff'
     
-    if user_role not in ['Admin', 'CEO', 'Master']:
+    if user_role not in ['Admin', 'CEO']:
         st.warning("⚠️ 환급 관리 권한이 없습니다.")
         return
     
@@ -226,9 +226,9 @@ def show_employee_management_page():
         render_print_form
     )
 
-def show_company_management_page():
+def show_corporate_account_management_page():
     """법인 관리 페이지"""
-    show_company_management(
+    show_corporate_account_management(
         db_operations.load_data,
         db_operations.save_data,
         db_operations.update_data,
@@ -479,8 +479,8 @@ def main():
             st.rerun()
 
         if st.button("🏢 법인 관리", use_container_width=True,
-            type="primary" if st.session_state.current_page == "법인 관리" else "secondary"):
-            st.session_state.current_page = "법인 관리"
+            type="primary" if st.session_state.current_page == "법인 계정 관리" else "secondary"):
+            st.session_state.current_page = "법인 계정 관리"
             st.rerun()
 
         if st.button("💳 지출 요청서", use_container_width=True,
@@ -489,7 +489,7 @@ def main():
             st.rerun()
         
         # 환급 관리 메뉴 (권한 있는 사용자만)
-        if current_user and current_user.get('role') in ['Admin', 'CEO', 'Master']:
+        if current_user and current_user.get('role') in ['Admin', 'CEO']:
             if st.button("💰 환급 관리", use_container_width=True,
                         type="primary" if st.session_state.current_page == "환급 관리" else "secondary"):
                 st.session_state.current_page = "환급 관리"
@@ -534,8 +534,8 @@ def main():
         )
     elif current_page == "직원 관리":
         show_employee_management_page()
-    elif current_page == "법인 관리":
-        show_company_management_page()
+    elif current_page == "법인 계정 관리":
+        show_corporate_account_management_page()
     elif current_page == "지출 요청서":
         show_expense_management_page()
     elif current_page == "환급 관리":

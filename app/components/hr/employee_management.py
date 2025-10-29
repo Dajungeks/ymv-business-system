@@ -159,7 +159,7 @@ def render_employee_list(load_func, save_func, update_func, delete_func,
         status_filter = st.selectbox("상태 필터", ["전체", "재직", "휴직", "퇴직"])
     
     with col4:
-        role_filter = st.selectbox("역할 필터", ["전체", "Staff", "Manager", "Admin", "CEO", "Master"])
+        role_filter = st.selectbox("역할 필터", ["전체", "Staff", "Manager", "Admin", "CEO"])
     
     # 직원 데이터 로드
     try:
@@ -215,7 +215,7 @@ def render_employee_form(load_func, save_func, update_func, current_user, check_
     st.subheader("직원 등록/수정")
     
     # 권한 확인 - Master, CEO, Admin 가능
-    if current_user.get('role') not in ['Master', 'CEO', 'Admin']:
+    if current_user.get('role') not in ['CEO', 'Admin']:
         st.error("직원 등록/수정 권한이 없습니다.")
         return
     
@@ -279,7 +279,7 @@ def render_employee_form(load_func, save_func, update_func, current_user, check_
                                     format_func=lambda x: "선택 안함" if x is None else x['name'])
             
             # 역할 (Staff, Manager, Admin, CEO, Master)
-            role_options = ["Staff", "Manager", "Admin", "CEO", "Master"]
+            role_options = ["Staff", "Manager", "Admin", "CEO"]
             
             # 호환성을 위한 매핑
             role_mapping = {
@@ -458,13 +458,13 @@ def render_attendance_management(load_func, save_func, update_func, current_user
     st.subheader("근태 관리")
     
     # 권한에 따른 탭 구성 - Master, CEO, Admin
-    if current_user.get('role') in ['Master', 'CEO', 'Admin']:
+    if current_user.get('role') in ['CEO', 'Admin']:
         attendance_tabs = st.tabs(["월별 근태", "출퇴근 기록", "근태 통계"])
     else:
         attendance_tabs = st.tabs(["내 출퇴근"])
     
     # 월별 근태 현황 (관리자)
-    if current_user.get('role') in ['Master', 'CEO', 'Admin']:
+    if current_user.get('role') in ['CEO', 'Admin']:
         with attendance_tabs[0]:
             render_monthly_attendance(load_func, current_user)
         

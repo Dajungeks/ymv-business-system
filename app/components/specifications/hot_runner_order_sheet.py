@@ -1,4 +1,5 @@
 # app/components/specifications/hot_runner_order_sheet.py
+# 수정: Line 397, 642의 중복 버튼에 unique key 추가
 
 import streamlit as st
 import pandas as pd
@@ -400,19 +401,19 @@ def render_order_list(load_func, update_func, current_user):
         
         with col1:
             order_id = st.number_input("ID 입력", min_value=1, step=1, key="view_order_id")
-            if st.button("📄 상세 보기"):
+            if st.button("📄 상세 보기", key="view_btn_list"):
                 st.session_state['viewing_order_id'] = order_id
                 st.rerun()
         
         with col2:
             print_id = st.number_input("ID 입력", min_value=1, step=1, key="print_order_id")
-            if st.button("🖨️ 프린트"):
+            if st.button("🖨️ 프린트", key="print_btn_list"):
                 st.session_state['printing_order_id'] = print_id
                 st.rerun()
         
         with col3:
             edit_id = st.number_input("ID 입력", min_value=1, step=1, key="edit_order_id")
-            if st.button("✏️ 수정"):
+            if st.button("✏️ 수정", key="edit_btn_list"):
                 st.session_state['editing_order_id'] = edit_id
                 st.rerun()
     else:
@@ -421,14 +422,14 @@ def render_order_list(load_func, update_func, current_user):
     # 상세 보기 모달
     if st.session_state.get('viewing_order_id'):
         render_order_detail(load_func, st.session_state['viewing_order_id'])
-        if st.button("❌ 닫기"):
+        if st.button("❌ 닫기", key="close_view_list"):
             del st.session_state['viewing_order_id']
             st.rerun()
     
     # 프린트 미리보기 모달
     if st.session_state.get('printing_order_id'):
         render_print_preview(load_func, st.session_state['printing_order_id'])
-        if st.button("❌ 닫기"):
+        if st.button("❌ 닫기", key="close_print_list"):
             del st.session_state['printing_order_id']
             st.rerun()
 
@@ -520,11 +521,6 @@ def render_order_detail(load_func, order_id):
     if order.get('status') == 'rejected':
         st.markdown("---")
         st.error(f"**부결 사유:** {order.get('rejection_reason', 'N/A')}")
-    
-    # 닫기 버튼
-    if st.button("❌ 닫기", key="close_detail"):
-        st.session_state.pop('viewing_order_id', None)
-        st.rerun()
 
 
 def render_print_preview(load_func, order_id):
@@ -569,11 +565,6 @@ def render_print_preview(load_func, order_id):
     **작성일:** {order.get('created_at', 'N/A')[:10] if order.get('created_at') else 'N/A'}  
     **승인자:** {order.get('reviewed_by', '-')}  
     """)
-    
-    # 닫기 버튼
-    if st.button("❌ 닫기", key="close_print"):
-        st.session_state.pop('printing_order_id', None)
-        st.rerun()
 
 def render_search_edit(load_func, update_func, save_func, current_user):
     """검색 및 수정 (부결된 항목 재수정 + 삭제 가능)"""
@@ -639,7 +630,7 @@ def render_search_edit(load_func, update_func, save_func, current_user):
         
         with col1:
             edit_id = st.number_input("ID 입력 (수정)", min_value=1, step=1, key="edit_id_input")
-            if st.button("✏️ 수정"):
+            if st.button("✏️ 수정", key="edit_btn_search"):
                 selected = [o for o in editable_orders if o.get('id') == edit_id]
                 if selected:
                     st.session_state['editing_order_id'] = edit_id
@@ -651,7 +642,7 @@ def render_search_edit(load_func, update_func, save_func, current_user):
             delete_id = st.number_input("ID 입력 (삭제)", min_value=1, step=1, key="delete_id_input")
             confirm_delete = st.checkbox("삭제 확인", key="confirm_delete")
             
-            if st.button("🗑️ 삭제", disabled=not confirm_delete):
+            if st.button("🗑️ 삭제", disabled=not confirm_delete, key="delete_btn_search"):
                 selected = [o for o in my_orders if o.get('id') == delete_id]
                 if selected:
                     # 실제 삭제 대신 status를 'deleted'로 변경
@@ -666,14 +657,14 @@ def render_search_edit(load_func, update_func, save_func, current_user):
         
         with col3:
             view_id = st.number_input("ID 입력 (보기)", min_value=1, step=1, key="view_id_input")
-            if st.button("📄 상세 보기"):
+            if st.button("📄 상세 보기", key="view_btn_search"):
                 st.session_state['viewing_order_id'] = view_id
                 st.rerun()
         
         # 상세 보기
         if st.session_state.get('viewing_order_id'):
             render_order_detail(load_func, st.session_state['viewing_order_id'])
-            if st.button("❌ 닫기"):
+            if st.button("❌ 닫기", key="close_view_search"):
                 del st.session_state['viewing_order_id']
                 st.rerun()
         
@@ -695,7 +686,7 @@ def render_search_edit(load_func, update_func, save_func, current_user):
                 st.info("💡 수정 기능은 다음 단계에서 구현됩니다.")
                 
                 # 재제출 버튼
-                if st.button("📤 재제출 (YMK 승인 요청)", type="primary"):
+                if st.button("📤 재제출 (YMK 승인 요청)", type="primary", key="resubmit_btn"):
                     update_data = {
                         'status': 'submitted',
                         'submitted_at': datetime.now().isoformat(),
@@ -709,7 +700,7 @@ def render_search_edit(load_func, update_func, save_func, current_user):
                     else:
                         st.error("❌ 재제출 실패")
                 
-                if st.button("🔙 취소"):
+                if st.button("🔙 취소", key="cancel_edit_btn"):
                     del st.session_state['editing_order_id']
                     st.rerun()
     else:
@@ -774,7 +765,7 @@ def render_ymk_approval_page(load_func, update_func, current_user):
             order_id = st.number_input("ID 입력", min_value=1, step=1, key="ymk_order_id")
         
         with col2:
-            if st.button("📄 상세 보기"):
+            if st.button("📄 상세 보기", key="view_btn_ymk"):
                 st.session_state['viewing_order_id'] = order_id
                 st.rerun()
         
@@ -791,7 +782,7 @@ def render_ymk_approval_page(load_func, update_func, current_user):
                 col1, col2, col3 = st.columns(3)
                 
                 with col1:
-                    if st.button("✅ 승인", type="primary", use_container_width=True):
+                    if st.button("✅ 승인", type="primary", use_container_width=True, key="approve_btn_ymk"):
                         update_data = {
                             'status': 'approved',
                             'reviewed_by': current_user.get('id'),
@@ -807,12 +798,12 @@ def render_ymk_approval_page(load_func, update_func, current_user):
                             st.error("❌ 승인 처리 실패")
                 
                 with col2:
-                    if st.button("❌ 부결", use_container_width=True):
+                    if st.button("❌ 부결", use_container_width=True, key="reject_btn_ymk"):
                         st.session_state['ymk_rejecting'] = order.get('id')
                         st.rerun()
                 
                 with col3:
-                    if st.button("🔙 닫기", use_container_width=True):
+                    if st.button("🔙 닫기", use_container_width=True, key="close_btn_ymk"):
                         del st.session_state['viewing_order_id']
                         if 'ymk_rejecting' in st.session_state:
                             del st.session_state['ymk_rejecting']
@@ -825,7 +816,7 @@ def render_ymk_approval_page(load_func, update_func, current_user):
                     
                     rejection_reason = st.text_area("부결 사유 *", height=100)
                     
-                    if st.button("💾 부결 처리", type="primary"):
+                    if st.button("💾 부결 처리", type="primary", key="confirm_reject_ymk"):
                         if not rejection_reason.strip():
                             st.error("❌ 부결 사유를 입력해주세요.")
                         else:

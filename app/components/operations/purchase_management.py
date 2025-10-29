@@ -7,6 +7,8 @@ import streamlit as st
 import pandas as pd
 import time
 from datetime import datetime, date
+import plotly.express as px
+import plotly.graph_objects as go
 
 def show_purchase_management(load_func, save_func, update_func, delete_func, current_user):
     """구매품 관리 메인 함수"""
@@ -14,17 +16,20 @@ def show_purchase_management(load_func, save_func, update_func, delete_func, cur
     
     user_role = current_user.get('role', 'Staff') if current_user else 'Staff'
     
-    # 탭 구성 - CEO, Master만 승인 탭 추가
+    # 탭 구성 - CEO, Master만 승인 탭 + 통계 탭 추가
     if user_role in ['CEO', 'Master']:
-        tab1, tab2, tab3 = st.tabs(["📝 구매 요청 등록", "✅ 승인 관리", "📋 구매 요청 목록"])
+        tab1, tab2, tab3, tab4 = st.tabs(["📊 구매 통계", "📝 구매 요청 등록", "✅ 승인 관리", "📋 구매 요청 목록"])
         
         with tab1:
-            render_purchase_form(current_user, save_func)
+            render_purchase_statistics(load_func)
         
         with tab2:
-            render_approval_management(current_user, load_func, update_func, save_func)
+            render_purchase_form(current_user, save_func)
         
         with tab3:
+            render_approval_management(current_user, load_func, update_func, save_func)
+        
+        with tab4:
             render_purchase_list(current_user, user_role, load_func, update_func, delete_func)
     else:
         tab1, tab2 = st.tabs(["📝 구매 요청 등록", "📋 구매 요청 목록"])
@@ -275,12 +280,12 @@ def approve_purchase(purchase, current_user, update_func, save_func, load_func, 
         # 3. 지출요청서 생성
         expense_data = {
             'document_number': doc_number,
-            'expense_type': f"구매품-{purchase.get('category', '기타')}",
+            'expense_type': purchase.get('category', '기타'),
             'description': f"{purchase.get('item_name', '')} ({purchase.get('quantity', 0)}{purchase.get('unit', '개')}) - {purchase.get('supplier', '')}",
             'amount': total_amount,
             'currency': purchase.get('currency', 'KRW'),
             'expense_date': purchase.get('request_date', date.today().isoformat()),
-            'payment_method': '미정',
+            'payment_method': '법인계좌',
             'receipt_required': True,
             'notes': f"구매요청서 ID: {purchase.get('id')} | {purchase.get('notes', '')}",
             'requester': purchase.get('requester'),
@@ -529,3 +534,339 @@ def render_purchase_edit_form(purchase_id, purchases, update_func):
         if cancelled:
             del st.session_state['editing_purchase_id']
             st.rerun()
+
+
+def render_purchase_statistics(load_func):
+    """구매품 통계 (CEO/Master 전용)"""
+    st.subheader("📊 구매품 통계")
+    
+    purchases = load_func("purchases") or []
+    
+    if not purchases:
+        st.info("통계를 표시할 구매 데이터가 없습니다.")
+        return
+    
+    # 필터 영역
+    col1, col2, col3, col4 = st.columns(4)
+    
+    with col1:
+        years = sorted(list(set([datetime.fromisoformat(p.get('request_date', '2025-01-01')).year 
+                                for p in purchases if p.get('request_date')])), reverse=True)
+        selected_year = st.selectbox("년도", years if years else [2025])
+    
+    with col2:
+        months = ["전체"] + [f"{i}월" for i in range(1, 13)]
+        selected_month = st.selectbox("월", months)
+    
+    with col3:
+        currencies = ["전체"] + sorted(list(set([p.get('currency', 'KRW') for p in purchases])))
+        selected_currency = st.selectbox("통화", currencies)
+    
+    with col4:
+        categories = ["전체"] + sorted(list(set([p.get('category', '기타') for p in purchases])))
+        selected_category = st.selectbox("카테고리", categories)
+    
+    # 데이터 필터링
+    filtered_purchases = []
+    for p in purchases:
+        if not p.get('request_date'):
+            continue
+        
+        try:
+            req_date = datetime.fromisoformat(p['request_date'])
+            
+            # 년도 필터
+            if req_date.year != selected_year:
+                continue
+            
+            # 월 필터
+            if selected_month != "전체":
+                month_num = int(selected_month.replace("월", ""))
+                if req_date.month != month_num:
+                    continue
+            
+            # 통화 필터
+            if selected_currency != "전체" and p.get('currency') != selected_currency:
+                continue
+            
+            # 카테고리 필터
+            if selected_category != "전체" and p.get('category') != selected_category:
+                continue
+            
+            filtered_purchases.append(p)
+        except:
+            continue
+    
+    if not filtered_purchases:
+        st.warning("선택한 조건에 해당하는 데이터가 없습니다.")
+        return
+    
+    # 1. 요약 통계 (KPI 카드)
+    st.markdown("---")
+    st.markdown("### 📈 요약 통계")
+    
+    total_count = len(filtered_purchases)
+    approved_count = len([p for p in filtered_purchases if p.get('approval_status') == '승인완료'])
+    pending_count = len([p for p in filtered_purchases if p.get('approval_status') == '승인대기'])
+    rejected_count = len([p for p in filtered_purchases if p.get('approval_status') == '반려'])
+    
+    # 통화별 총액
+    currency_totals = {}
+    for p in filtered_purchases:
+        currency = p.get('currency', 'KRW')
+        total = p.get('unit_price', 0) * p.get('quantity', 1)
+        currency_totals[currency] = currency_totals.get(currency, 0) + total
+    
+    total_amount_str = ", ".join([f"{amount:,.0f} {curr}" for curr, amount in currency_totals.items()])
+    
+    kpi1, kpi2, kpi3, kpi4 = st.columns(4)
+    
+    with kpi1:
+        st.metric("총 구매건수", f"{total_count}건")
+    
+    with kpi2:
+        st.metric("총 구매금액", total_amount_str)
+    
+    with kpi3:
+        st.metric("승인완료", f"{approved_count}건", 
+                 delta=f"{(approved_count/total_count*100):.0f}%" if total_count > 0 else "0%")
+    
+    with kpi4:
+        st.metric("승인대기", f"{pending_count}건",
+                 delta=f"{(pending_count/total_count*100):.0f}%" if total_count > 0 else "0%")
+    
+    # 2. 월별 구매 추이 (세로 막대 그래프)
+    st.markdown("---")
+    st.markdown("### 📅 월별 구매 추이")
+    
+    monthly_data = []
+    for i in range(1, 13):
+        monthly_data.append({'month': i, 'month_label': f"{i}월", 'count': 0, 'amount': 0})
+    
+    for p in purchases:
+        if not p.get('request_date'):
+            continue
+        try:
+            req_date = datetime.fromisoformat(p['request_date'])
+            if req_date.year == selected_year:
+                month = req_date.month
+                total = p.get('unit_price', 0) * p.get('quantity', 1)
+                
+                # 선택된 통화만 계산
+                if selected_currency == "전체" or p.get('currency') == selected_currency:
+                    monthly_data[month - 1]['count'] += 1
+                    monthly_data[month - 1]['amount'] += total
+        except:
+            continue
+    
+    monthly_df = pd.DataFrame(monthly_data)
+    
+    # Plotly 막대 그래프
+    fig = go.Figure(data=[
+        go.Bar(
+            x=monthly_df['month_label'],
+            y=monthly_df['count'],
+            marker_color='#1f77b4',
+            text=monthly_df['count'],
+            textposition='outside'
+        )
+    ])
+    
+    fig.update_layout(
+        xaxis_title="월",
+        yaxis_title="건수",
+        height=300,
+        showlegend=False,
+        margin=dict(l=20, r=20, t=20, b=20)
+    )
+    
+    st.plotly_chart(fig, use_container_width=True)
+    
+    # 3. 카테고리별 통계
+    st.markdown("---")
+    st.markdown("### 🏷️ 카테고리별 통계")
+    
+    category_stats = {}
+    for p in filtered_purchases:
+        category = p.get('category', '기타')
+        total = p.get('unit_price', 0) * p.get('quantity', 1)
+        
+        if category not in category_stats:
+            category_stats[category] = {'count': 0, 'amount': 0}
+        
+        category_stats[category]['count'] += 1
+        category_stats[category]['amount'] += total
+    
+    total_amount = sum([data['amount'] for data in category_stats.values()])
+    
+    category_table = []
+    for category, data in sorted(category_stats.items(), key=lambda x: x[1]['amount'], reverse=True):
+        ratio = (data['amount'] / total_amount * 100) if total_amount > 0 else 0
+        category_table.append({
+            '카테고리': category,
+            '건수': f"{data['count']}건",
+            '총 금액': f"{data['amount']:,.0f}",
+            '비율': f"{ratio:.1f}%"
+        })
+    
+    col1, col2 = st.columns([1, 2])
+    
+    with col1:
+        # Plotly 세로 막대 그래프
+        category_chart_df = pd.DataFrame([
+            {'카테고리': item['카테고리'], '금액': category_stats[item['카테고리']]['amount']}
+            for item in category_table
+        ])
+        
+        fig_cat = go.Figure(data=[
+            go.Bar(
+                x=category_chart_df['카테고리'],
+                y=category_chart_df['금액'],
+                marker_color='#2ca02c',
+                text=category_chart_df['금액'].apply(lambda x: f"{x:,.0f}"),
+                textposition='outside'
+            )
+        ])
+        
+        fig_cat.update_layout(
+            xaxis_title="카테고리",
+            yaxis_title="금액",
+            height=300,
+            showlegend=False,
+            margin=dict(l=20, r=20, t=20, b=20)
+        )
+        
+        st.plotly_chart(fig_cat, use_container_width=True)
+    
+    with col2:
+        df_category = pd.DataFrame(category_table)
+        st.dataframe(df_category, use_container_width=True, hide_index=True)
+    
+    # 4. 품목별 통계 (상위 10개)
+    st.markdown("---")
+    st.markdown("### 🔝 품목별 통계 (상위 10개)")
+    
+    item_stats = {}
+    for p in filtered_purchases:
+        item_name = p.get('item_name', '알 수 없음')
+        quantity = p.get('quantity', 0)
+        unit = p.get('unit', '개')
+        total = p.get('unit_price', 0) * quantity
+        currency = p.get('currency', 'KRW')
+        
+        key = f"{item_name}_{currency}"
+        
+        if key not in item_stats:
+            item_stats[key] = {
+                'item_name': item_name,
+                'quantity': 0,
+                'unit': unit,
+                'amount': 0,
+                'currency': currency
+            }
+        
+        item_stats[key]['quantity'] += quantity
+        item_stats[key]['amount'] += total
+    
+    item_table = []
+    for rank, (key, data) in enumerate(sorted(item_stats.items(), key=lambda x: x[1]['amount'], reverse=True)[:10], 1):
+        item_table.append({
+            '순위': rank,
+            '품목명': data['item_name'],
+            '수량': f"{data['quantity']}{data['unit']}",
+            '총 금액': f"{data['amount']:,.0f}",
+            '통화': data['currency']
+        })
+    
+    df_items = pd.DataFrame(item_table)
+    st.dataframe(df_items, use_container_width=True, hide_index=True)
+    
+    # 5. 공급업체별 통계
+    st.markdown("---")
+    st.markdown("### 🏢 공급업체별 통계")
+    
+    supplier_stats = {}
+    for p in filtered_purchases:
+        supplier = p.get('supplier', '미지정')
+        total = p.get('unit_price', 0) * p.get('quantity', 1)
+        
+        if supplier not in supplier_stats:
+            supplier_stats[supplier] = {'count': 0, 'amount': 0}
+        
+        supplier_stats[supplier]['count'] += 1
+        supplier_stats[supplier]['amount'] += total
+    
+    supplier_table = []
+    for supplier, data in sorted(supplier_stats.items(), key=lambda x: x[1]['amount'], reverse=True):
+        supplier_table.append({
+            '공급업체': supplier,
+            '건수': f"{data['count']}건",
+            '총 금액': f"{data['amount']:,.0f}"
+        })
+    
+    df_suppliers = pd.DataFrame(supplier_table)
+    st.dataframe(df_suppliers, use_container_width=True, hide_index=True)
+    
+    # 6. 긴급도별 통계 (세로 막대 그래프)
+    st.markdown("---")
+    st.markdown("### ⚡ 긴급도별 통계")
+    
+    urgency_order = ['낮음', '보통', '높음', '긴급']
+    urgency_stats = {'낮음': 0, '보통': 0, '높음': 0, '긴급': 0}
+    
+    for p in filtered_purchases:
+        urgency = p.get('urgency', '보통')
+        urgency_stats[urgency] = urgency_stats.get(urgency, 0) + 1
+    
+    urgency_df = pd.DataFrame([
+        {'긴급도': k, '건수': urgency_stats[k]}
+        for k in urgency_order
+    ])
+    
+    fig_urgency = go.Figure(data=[
+        go.Bar(
+            x=urgency_df['긴급도'],
+            y=urgency_df['건수'],
+            marker_color=['#90ee90', '#87ceeb', '#ffa500', '#ff4500'],
+            text=urgency_df['건수'],
+            textposition='outside'
+        )
+    ])
+    
+    fig_urgency.update_layout(
+        xaxis_title="긴급도",
+        yaxis_title="건수",
+        height=300,
+        showlegend=False,
+        margin=dict(l=20, r=20, t=20, b=20)
+    )
+    
+    st.plotly_chart(fig_urgency, use_container_width=True)
+    
+    # 7. CSV 다운로드
+    st.markdown("---")
+    st.markdown("### 📥 데이터 다운로드")
+    
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        if category_table:
+            csv_category = pd.DataFrame(category_table).to_csv(index=False, encoding='utf-8-sig')
+            st.download_button(
+                "📥 카테고리별 통계 다운로드",
+                csv_category,
+                f"구매_카테고리통계_{selected_year}.csv",
+                "text/csv",
+                use_container_width=True
+            )
+    
+    with col2:
+        if item_table:
+            csv_items = pd.DataFrame(item_table).to_csv(index=False, encoding='utf-8-sig')
+            st.download_button(
+                "📥 품목별 통계 다운로드",
+                csv_items,
+                f"구매_품목통계_{selected_year}.csv",
+                "text/csv",
+                use_container_width=True
+            )
