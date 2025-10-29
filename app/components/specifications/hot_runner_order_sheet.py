@@ -1,5 +1,5 @@
 # app/components/specifications/hot_runner_order_sheet.py
-# 수정: Line 397, 642의 중복 버튼에 unique key 추가
+# 수정: 법인별 테이블 분리 적용 (V12)
 
 import streamlit as st
 import pandas as pd
@@ -35,13 +35,14 @@ def clear_order_form_session():
         if key in st.session_state:
             del st.session_state[key]
 
-def check_quotation_already_linked(load_func, quotation_id):
+
+def check_quotation_already_linked(load_func, quotation_id, hot_runner_table):
     """견적서가 이미 규격 결정서와 연결되어 있는지 확인"""
     if not quotation_id:
         return False, None
     
-    # 해당 견적서로 생성된 규격 결정서 조회
-    orders = load_func('hot_runner_orders', 
+    # 법인별 테이블에서 해당 견적서로 생성된 규격 결정서 조회
+    orders = load_func(hot_runner_table, 
                        filters={'quotation_id': quotation_id})
     
     if orders and len(orders) > 0:
@@ -52,10 +53,21 @@ def check_quotation_already_linked(load_func, quotation_id):
     
     return False, None   
 
+
 def show_hot_runner_order_management(load_func, save_func, update_func, current_user):
     """규격 결정서 관리 메인 함수"""
     
     st.title("🔥 Hot Runner 규격 결정서 관리")
+    
+    # 법인별 테이블명 생성
+    from utils.helpers import get_company_table
+    
+    company_code = current_user.get('company')
+    if not company_code:
+        st.error("법인 정보가 없습니다.")
+        return
+    
+    hot_runner_table = get_company_table('hot_runner_orders', company_code)
     
     # YMK 계정 확인
     is_ymk = current_user.get('username', '').upper() == 'YMK'
@@ -63,30 +75,30 @@ def show_hot_runner_order_management(load_func, save_func, update_func, current_
     if is_ymk:
         st.info("🔐 YMK 승인 모드로 접속하셨습니다.")
         # YMK는 승인 전용
-        render_ymk_approval_page(load_func, update_func, current_user)
+        render_ymk_approval_page(load_func, update_func, current_user, hot_runner_table)
     else:
         # 일반 사용자: 작성, 목록, 수정
         tab1, tab2, tab3 = st.tabs(["📝 작성", "📋 목록", "🔍 검색/수정"])
         
         with tab1:
-            render_order_form(load_func, save_func, current_user)
+            render_order_form(load_func, save_func, current_user, hot_runner_table)
         
         with tab2:
-            render_order_list(load_func, update_func, current_user)
+            render_order_list(load_func, update_func, current_user, hot_runner_table)
         
         with tab3:
-            render_search_edit(load_func, update_func, save_func, current_user)
+            render_search_edit(load_func, update_func, save_func, current_user, hot_runner_table)
 
 
-def generate_order_number(load_func, quotation_id=None):
+def generate_order_number(load_func, hot_runner_table, quotation_id=None):
     """주문번호 생성 (HRO-YYMMDD-NNN) + Revision 처리"""
     from datetime import datetime
     
     today = datetime.now().strftime("%y%m%d")
     prefix = f"HRO-{today}-"
     
-    # 오늘 생성된 주문 조회
-    all_orders = load_func('hot_runner_orders') or []
+    # 법인별 테이블에서 오늘 생성된 주문 조회
+    all_orders = load_func(hot_runner_table) or []
     today_orders = [o for o in all_orders 
                     if o.get('order_number', '').startswith(prefix)]
     
@@ -111,7 +123,7 @@ def generate_order_number(load_func, quotation_id=None):
     revision = "RV01"
     if quotation_id:
         # 동일 견적서의 기존 규격 결정서 조회
-        existing = load_func('hot_runner_orders', 
+        existing = load_func(hot_runner_table, 
                            filters={'quotation_id': quotation_id})
         if existing:
             # 가장 높은 revision 찾기
@@ -123,7 +135,8 @@ def generate_order_number(load_func, quotation_id=None):
     
     return order_number, revision
 
-def render_order_form(load_func, save_func, current_user):
+
+def render_order_form(load_func, save_func, current_user, hot_runner_table):
     """규격 결정서 작성 폼"""
     
     st.markdown("### 📝 새 규격 결정서 작성")
@@ -132,7 +145,8 @@ def render_order_form(load_func, save_func, current_user):
     if st.session_state.get('quotation_id'):
         is_linked, linked_order = check_quotation_already_linked(
             load_func, 
-            st.session_state.get('quotation_id')
+            st.session_state.get('quotation_id'),
+            hot_runner_table
         )
         if is_linked:
             st.error(f"❌ 이 견적서는 이미 규격 결정서 [{linked_order}]와 연결되어 있습니다.")
@@ -195,7 +209,8 @@ def render_order_form(load_func, save_func, current_user):
         
         # 주문번호 및 revision 생성
         order_number, revision = generate_order_number(
-            load_func, 
+            load_func,
+            hot_runner_table,
             customer_data.get('quotation_id')
         )
         
@@ -263,9 +278,9 @@ def render_order_form(load_func, save_func, current_user):
             'auto_quantity': st.session_state.get('auto_quantity', 0)
         }
         
-        # DB 저장
+        # 법인별 테이블에 DB 저장
         try:
-            result = save_func('hot_runner_orders', order_data)
+            result = save_func(hot_runner_table, order_data)
             
             if status == 'submitted':
                 st.success(f"✅ 규격 결정서 {order_number} ({revision})가 제출되었습니다! (YMK 승인 대기)")
@@ -278,14 +293,15 @@ def render_order_form(load_func, save_func, current_user):
         
         except Exception as e:
             st.error(f"❌ 저장 실패: {str(e)}")
-            
-def render_order_list(load_func, update_func, current_user):
+
+
+def render_order_list(load_func, update_func, current_user, hot_runner_table):
     """규격 결정서 목록 조회 (제품 CODE, 수량, 금액 포함)"""
     
     st.markdown("### 📋 규격 결정서 목록")
     
-    # 데이터 로드
-    orders = load_func('hot_runner_orders') if load_func else []
+    # 법인별 테이블에서 데이터 로드
+    orders = load_func(hot_runner_table) if load_func else []
     
     if not orders:
         st.info("등록된 규격 결정서가 없습니다.")
@@ -421,26 +437,27 @@ def render_order_list(load_func, update_func, current_user):
     
     # 상세 보기 모달
     if st.session_state.get('viewing_order_id'):
-        render_order_detail(load_func, st.session_state['viewing_order_id'])
+        render_order_detail(load_func, st.session_state['viewing_order_id'], hot_runner_table)
         if st.button("❌ 닫기", key="close_view_list"):
             del st.session_state['viewing_order_id']
             st.rerun()
     
     # 프린트 미리보기 모달
     if st.session_state.get('printing_order_id'):
-        render_print_preview(load_func, st.session_state['printing_order_id'])
+        render_print_preview(load_func, st.session_state['printing_order_id'], hot_runner_table)
         if st.button("❌ 닫기", key="close_print_list"):
             del st.session_state['printing_order_id']
             st.rerun()
 
-def render_order_detail(load_func, order_id):
+
+def render_order_detail(load_func, order_id, hot_runner_table):
     """규격 결정서 상세 보기"""
     
     st.markdown("---")
     st.markdown(f"### 📄 규격 결정서 상세 (ID: {order_id})")
     
-    # 데이터 로드
-    orders = load_func('hot_runner_orders') if load_func else []
+    # 법인별 테이블에서 데이터 로드
+    orders = load_func(hot_runner_table) if load_func else []
     order = next((o for o in orders if o.get('id') == order_id), None)
     
     if not order:
@@ -523,14 +540,14 @@ def render_order_detail(load_func, order_id):
         st.error(f"**부결 사유:** {order.get('rejection_reason', 'N/A')}")
 
 
-def render_print_preview(load_func, order_id):
+def render_print_preview(load_func, order_id, hot_runner_table):
     """프린트 미리보기 (견적서와 유사한 구성)"""
     
     st.markdown("---")
     st.markdown(f"### 🖨️ 프린트 미리보기 (ID: {order_id})")
     
-    # 데이터 로드
-    orders = load_func('hot_runner_orders') if load_func else []
+    # 법인별 테이블에서 데이터 로드
+    orders = load_func(hot_runner_table) if load_func else []
     order = next((o for o in orders if o.get('id') == order_id), None)
     
     if not order:
@@ -566,13 +583,14 @@ def render_print_preview(load_func, order_id):
     **승인자:** {order.get('reviewed_by', '-')}  
     """)
 
-def render_search_edit(load_func, update_func, save_func, current_user):
+
+def render_search_edit(load_func, update_func, save_func, current_user, hot_runner_table):
     """검색 및 수정 (부결된 항목 재수정 + 삭제 가능)"""
     
     st.markdown("### 🔍 규격 결정서 검색/수정")
     
-    # 본인이 작성한 규격 결정서만 조회
-    orders = load_func('hot_runner_orders') if load_func else []
+    # 법인별 테이블에서 본인이 작성한 규격 결정서만 조회
+    orders = load_func(hot_runner_table) if load_func else []
     my_orders = [o for o in orders 
                  if o.get('created_by') == current_user.get('id')
                  and o.get('status') != 'deleted']
@@ -647,7 +665,7 @@ def render_search_edit(load_func, update_func, save_func, current_user):
                 if selected:
                     # 실제 삭제 대신 status를 'deleted'로 변경
                     update_data = {'status': 'deleted'}
-                    if update_func('hot_runner_orders', delete_id, update_data):
+                    if update_func(hot_runner_table, delete_id, update_data):
                         st.success("✅ 삭제되었습니다!")
                         st.rerun()
                     else:
@@ -663,7 +681,7 @@ def render_search_edit(load_func, update_func, save_func, current_user):
         
         # 상세 보기
         if st.session_state.get('viewing_order_id'):
-            render_order_detail(load_func, st.session_state['viewing_order_id'])
+            render_order_detail(load_func, st.session_state['viewing_order_id'], hot_runner_table)
             if st.button("❌ 닫기", key="close_view_search"):
                 del st.session_state['viewing_order_id']
                 st.rerun()
@@ -693,7 +711,7 @@ def render_search_edit(load_func, update_func, save_func, current_user):
                         'rejection_reason': None
                     }
                     
-                    if update_func('hot_runner_orders', order.get('id'), update_data):
+                    if update_func(hot_runner_table, order.get('id'), update_data):
                         st.success("✅ 재제출되었습니다!")
                         del st.session_state['editing_order_id']
                         st.rerun()
@@ -706,13 +724,14 @@ def render_search_edit(load_func, update_func, save_func, current_user):
     else:
         st.info("조건에 맞는 규격 결정서가 없습니다.")
 
-def render_ymk_approval_page(load_func, update_func, current_user):
+
+def render_ymk_approval_page(load_func, update_func, current_user, hot_runner_table):
     """YMK 승인 전용 페이지 (승인 후 재수정 지원)"""
     
     st.markdown("### 🔐 YMK 승인 페이지")
     
-    # submitted 상태 규격 결정서 조회
-    orders = load_func('hot_runner_orders', 
+    # 법인별 테이블에서 submitted 상태 규격 결정서 조회
+    orders = load_func(hot_runner_table, 
                        filters={'status': 'submitted'}) if load_func else []
     
     if not orders:
@@ -775,7 +794,7 @@ def render_ymk_approval_page(load_func, update_func, current_user):
             
             if selected_order:
                 order = selected_order[0]
-                render_order_detail(load_func, order.get('id'))
+                render_order_detail(load_func, order.get('id'), hot_runner_table)
                 
                 st.markdown("---")
                 
@@ -790,7 +809,7 @@ def render_ymk_approval_page(load_func, update_func, current_user):
                             'rejection_reason': None
                         }
                         
-                        if update_func('hot_runner_orders', order.get('id'), update_data):
+                        if update_func(hot_runner_table, order.get('id'), update_data):
                             st.success("✅ 승인되었습니다!")
                             del st.session_state['viewing_order_id']
                             st.rerun()
@@ -827,7 +846,7 @@ def render_ymk_approval_page(load_func, update_func, current_user):
                                 'rejection_reason': rejection_reason
                             }
                             
-                            if update_func('hot_runner_orders', order.get('id'), update_data):
+                            if update_func(hot_runner_table, order.get('id'), update_data):
                                 st.success("✅ 부결 처리되었습니다!")
                                 del st.session_state['viewing_order_id']
                                 del st.session_state['ymk_rejecting']

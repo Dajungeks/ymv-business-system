@@ -10,17 +10,26 @@ from collections import defaultdict
 def show_expense_management(load_data_func, save_data_func, update_data_func, delete_data_func, 
                            get_current_user_func, get_approval_status_info_func, 
                            calculate_expense_statistics_func, create_csv_download_func, 
-                           render_print_form_func):
+                           render_print_form_func, current_user):
     """지출 요청서 관리 컴포넌트 메인 함수"""
     
     st.header("💰 지출 요청서 관리")
     
+    # 법인별 테이블명 생성
+    from utils.helpers import get_company_table
+    
+    company_code = current_user.get('company')
+    if not company_code:
+        st.error("법인 정보가 없습니다.")
+        return
+    
+    expense_table = 'expenses'
+    
     # 현재 사용자 권한 확인
-    current_user = get_current_user_func()
     user_role = current_user.get('role', 'Staff') if current_user else 'Staff'
     
     # 대기 건수 계산
-    expenses = load_data_func("expenses")
+    expenses = load_data_func(expense_table)
     pending_approval_count = 0
     pending_invoice_count = 0
     
@@ -50,32 +59,32 @@ def show_expense_management(load_data_func, save_data_func, update_data_func, de
         ])
     
     with tab1:
-        render_expense_statistics_new(load_data_func)
+        render_expense_statistics_new(load_data_func, expense_table)
     
     with tab2:
-        render_expense_form(load_data_func, save_data_func, current_user)
+        render_expense_form(load_data_func, save_data_func, current_user, expense_table)
     
     with tab3:
         render_expense_list(load_data_func, update_data_func, delete_data_func, 
                           get_current_user_func, get_approval_status_info_func, 
-                          create_csv_download_func, render_print_form_func)
+                          create_csv_download_func, render_print_form_func, expense_table)
     
     with tab4:
         render_approval_management(load_data_func, update_data_func, get_current_user_func, 
-                                  get_approval_status_info_func)
+                                  get_approval_status_info_func, expense_table)
     
     # 화던 (Hóa đơn) 발행 확인 탭 (권한 있는 사용자만)
     if user_role in ['Admin', 'CEO', 'Master']:
         with tab5:
-            render_invoice_check_tab(load_data_func, update_data_func, get_current_user_func)
+            render_invoice_check_tab(load_data_func, update_data_func, get_current_user_func, expense_table)
 
 
-def generate_document_number(load_data_func):
+def generate_document_number(load_data_func, expense_table):
     """문서번호 자동 생성: EXP-YYMMDD-Count"""
     today = date.today()
     date_str = today.strftime('%y%m%d')
     
-    all_expenses = load_data_func("expenses")
+    all_expenses = load_data_func(expense_table)
     if all_expenses:
         today_expenses = [exp for exp in all_expenses 
                          if exp.get('document_number', '').startswith(f"EXP-{date_str}")]
@@ -85,7 +94,7 @@ def generate_document_number(load_data_func):
     
     return f"EXP-{date_str}-{count:03d}"
 
-def render_expense_form(load_data_func, save_data_func, current_user):
+def render_expense_form(load_data_func, save_data_func, current_user, expense_table):
     """지출 요청 폼 렌더링"""
     
     st.subheader("💰 새 지출 요청")
@@ -211,13 +220,13 @@ def render_expense_form(load_data_func, save_data_func, current_user):
                 "notes": notes if notes.strip() else None,
                 "urgency": urgency,
                 "status": "pending",
-                "document_number": generate_document_number(load_data_func),
+                "document_number": generate_document_number(load_data_func, expense_table),
                 "created_at": datetime.now().isoformat(),
                 "updated_at": datetime.now().isoformat()
             }
             
-            # DB 저장
-            if save_data_func("expenses", expense_data):
+            # 법인별 테이블에 저장
+            if save_data_func(expense_table, expense_data):
                 st.success("✅ 지출 요청이 제출되었습니다!")
                 st.balloons()
                 
@@ -230,7 +239,7 @@ def render_expense_form(load_data_func, save_data_func, current_user):
 
 def render_expense_list(load_data_func, update_data_func, delete_data_func, 
                        get_current_user_func, get_approval_status_info_func, 
-                       create_csv_download_func, render_print_form_func):
+                       create_csv_download_func, render_print_form_func, expense_table):
     """지출요청서 목록 관리 - 제품 목록과 동일한 스타일"""
     
     # 프린트 모드
@@ -244,8 +253,8 @@ def render_expense_list(load_data_func, update_data_func, delete_data_func,
             st.rerun()
         return
     
-    # 데이터 로드
-    expenses = load_data_func("expenses")
+    # 법인별 테이블에서 데이터 로드
+    expenses = load_data_func(expense_table)
     employees = load_data_func("employees")
     
     if not expenses:
@@ -280,7 +289,7 @@ def render_expense_list(load_data_func, update_data_func, delete_data_func,
     render_id_selection_expense(filtered_expenses, employee_dict, current_user, user_role,
                                 update_data_func, delete_data_func, 
                                 get_approval_status_info_func, render_print_form_func,
-                                load_data_func)
+                                load_data_func, expense_table)
 
 
 def render_search_filters_expense(expenses, employees, user_role):
@@ -469,7 +478,7 @@ def render_expense_table_view(filtered_expenses, employee_dict, get_approval_sta
 def render_id_selection_expense(filtered_expenses, employee_dict, current_user, user_role,
                                update_data_func, delete_data_func, 
                                get_approval_status_info_func, render_print_form_func,
-                               load_data_func):
+                               load_data_func, expense_table):
     """ID 선택 영역"""
     
     st.markdown("### 📋 ID 선택 (다중 선택 가능)")
@@ -584,14 +593,15 @@ def render_id_selection_expense(filtered_expenses, employee_dict, current_user, 
     if st.session_state.get('show_expense_details'):
         render_expense_details_modal(filtered_expenses, employee_dict, 
                                      get_approval_status_info_func, update_data_func, 
-                                     current_user, load_data_func)
+                                     current_user, load_data_func, expense_table)
     
     # 삭제 확인 모달
     if st.session_state.get('show_delete_confirm'):
-        render_delete_confirmation(filtered_expenses, current_user, user_role, delete_data_func, load_data_func, update_data_func)
+        render_delete_confirmation(filtered_expenses, current_user, user_role, delete_data_func, 
+                                  load_data_func, update_data_func, expense_table)
 
 def render_expense_details_modal(filtered_expenses, employee_dict, get_approval_status_info_func,
-                                 update_data_func, current_user, load_data_func):
+                                 update_data_func, current_user, load_data_func, expense_table):
     """선택된 지출요청서 상세 정보"""
     
     st.markdown("---")
@@ -704,7 +714,7 @@ def render_expense_details_modal(filtered_expenses, employee_dict, get_approval_
                                 'accounting_confirmed_by': current_user.get('id')
                             }
                             
-                            if update_data_func("expenses", update_data, "id"):
+                            if update_data_func(expense_table, update_data, "id"):
                                 st.success(f"✅ 화던 (Hóa đơn) 확인 완료: {document_number}")
                                 st.rerun()
                             else:
@@ -731,7 +741,8 @@ def render_expense_details_modal(filtered_expenses, employee_dict, get_approval_
                             del st.session_state[f'confirm_delete_{expense.get("id")}']
                         st.rerun()
 
-def render_delete_confirmation(filtered_expenses, current_user, user_role, delete_data_func, load_data_func, update_data_func):
+def render_delete_confirmation(filtered_expenses, current_user, user_role, delete_data_func, 
+                               load_data_func, update_data_func, expense_table):
     """삭제 확인 모달 - 구매요청 상태 되돌리기 추가"""
     
     st.markdown("---")
@@ -769,10 +780,10 @@ def render_delete_confirmation(filtered_expenses, current_user, user_role, delet
                 success_count = 0
                 for exp_id in st.session_state.selected_expense_ids:
                     # 1. 연결된 구매요청 상태 되돌리기
-                    revert_purchase_approval(exp_id, load_data_func, update_data_func)
+                    revert_purchase_approval(exp_id, load_data_func, update_data_func, current_user)
                     
                     # 2. 지출요청서 삭제
-                    if delete_data_func('expenses', exp_id, 'id'):
+                    if delete_data_func(expense_table, exp_id, 'id'):
                         success_count += 1
                 
                 if success_count > 0:
@@ -789,11 +800,19 @@ def render_delete_confirmation(filtered_expenses, current_user, user_role, delet
             st.rerun()
 
 
-def revert_purchase_approval(expense_id, load_data_func, update_data_func):
+def revert_purchase_approval(expense_id, load_data_func, update_data_func, current_user):
     """지출요청서 삭제 시 연결된 구매요청 상태 되돌리기"""
     try:
+        # 법인별 테이블명 생성
+        from utils.helpers import get_company_table
+        company_code = current_user.get('company')
+        if not company_code:
+            return
+        
+        purchase_table = get_company_table('purchases', company_code)
+        
         # 연결된 구매요청 찾기
-        purchases = load_data_func("purchases") or []
+        purchases = load_data_func(purchase_table) or []
         related_purchase = next((p for p in purchases if p.get('expense_id') == expense_id), None)
         
         if related_purchase:
@@ -808,15 +827,15 @@ def revert_purchase_approval(expense_id, load_data_func, update_data_func):
                 'updated_at': datetime.now().isoformat()
             }
             
-            update_data_func("purchases", update_data, "id")
+            update_data_func(purchase_table, update_data, "id")
     except Exception as e:
         # 오류 발생 시 로그만 남기고 삭제는 계속 진행
         print(f"구매요청 상태 되돌리기 오류: {str(e)}")
 
-def confirm_invoice_expense(expense_id, user_id, update_data_func, load_data_func):
+def confirm_invoice_expense(expense_id, user_id, update_data_func, load_data_func, expense_table):
     """화던 (Hóa đơn) 발행 확인 처리 (환급 상태 자동 설정)"""
     try:
-        all_expenses = load_data_func("expenses")
+        all_expenses = load_data_func(expense_table)
         expense = next((exp for exp in all_expenses if exp.get('id') == expense_id), None)
         
         if not expense:
@@ -839,17 +858,18 @@ def confirm_invoice_expense(expense_id, user_id, update_data_func, load_data_fun
             'updated_at': datetime.now().isoformat()
         }
         
-        return update_data_func("expenses", update_data, "id")
+        return update_data_func(expense_table, update_data, "id")
     except Exception as e:
         st.error(f"화던 (Hóa đơn) 발행 확인 처리 중 오류: {str(e)}")
         return False
 
-def render_invoice_check_tab(load_data_func, update_data_func, get_current_user_func):
+def render_invoice_check_tab(load_data_func, update_data_func, get_current_user_func, expense_table):
     """화던 (Hóa đơn) 발행 확인 탭 - ID 입력 방식"""
     
     st.subheader("🧾 화던 (Hóa đơn) 발행 확인 관리")
     
-    expenses = load_data_func("expenses")
+    # 법인별 테이블에서 데이터 로드
+    expenses = load_data_func(expense_table)
     employees = load_data_func("employees")
     current_user = get_current_user_func()
     
@@ -951,7 +971,7 @@ def render_invoice_check_tab(load_data_func, update_data_func, get_current_user_
                                     'updated_at': datetime.now().isoformat()
                                 }
                                 
-                                if update_data_func("expenses", update_data, "id"):
+                                if update_data_func(expense_table, update_data, "id"):
                                     success_count += 1
                             
                             if success_count == len(selected_expenses):
@@ -1001,11 +1021,12 @@ def render_invoice_check_tab(load_data_func, update_data_func, get_current_user_
                 st.info("ID를 입력하면 통계가 표시됩니다.")
 
 
-def render_expense_statistics_new(load_data_func):
+def render_expense_statistics_new(load_data_func, expense_table):
     """지출요청서 통계 (구매품 관리와 동일한 형식)"""
     st.subheader("📊 지출요청서 통계")
     
-    expenses = load_data_func("expenses") or []
+    # 법인별 테이블에서 데이터 로드
+    expenses = load_data_func(expense_table) or []
     employees = load_data_func("employees") or []
     
     if not expenses:
@@ -1369,7 +1390,7 @@ def render_expense_statistics_new(load_data_func):
 
 
 def render_approval_management(load_data_func, update_data_func, get_current_user_func, 
-                              get_approval_status_info_func):
+                              get_approval_status_info_func, expense_table):
     """승인 관리 (CEO/Master 전용) - 테이블 + ID 입력 방식"""
     
     current_user = get_current_user_func()
@@ -1377,7 +1398,8 @@ def render_approval_management(load_data_func, update_data_func, get_current_use
         st.warning("⚠️ 승인 권한이 없습니다.")
         return
     
-    expenses = load_data_func("expenses")
+    # 법인별 테이블에서 데이터 로드
+    expenses = load_data_func(expense_table)
     employees = load_data_func("employees")
     
     if not expenses:
@@ -1476,7 +1498,7 @@ def render_approval_management(load_data_func, update_data_func, get_current_use
                                     'updated_at': datetime.now().isoformat()
                                 }
                                 
-                                if update_data_func("expenses", update_data, "id"):
+                                if update_data_func(expense_table, update_data, "id"):
                                     success_count += 1
                             
                             if success_count == len(selected_expenses):
@@ -1528,7 +1550,7 @@ def render_approval_management(load_data_func, update_data_func, get_current_use
                                         'updated_at': datetime.now().isoformat()
                                     }
                                     
-                                    if update_data_func("expenses", update_data, "id"):
+                                    if update_data_func(expense_table, update_data, "id"):
                                         success_count += 1
                                 
                                 if success_count == len(selected_expenses):

@@ -1,18 +1,26 @@
 """
-제품 관리 시스템 V6
-- 제품 등록 (단일) - 코드 검색 개선
-- 일괄 등록 (별도 탭)
-- 테이블 뷰 목록
-- CSV 관리
+제품 관리 시스템 V7 - 법인별 DB 분리
+- 제품 코드: 전체 공유
+- 제품: 법인별 분리 (products_ymv, products_ymk 등)
 """
 
 import streamlit as st
 import pandas as pd
 from datetime import datetime
 
-def show_product_management(load_func, save_func, update_func, delete_func):
+def show_product_management(load_func, save_func, update_func, delete_func, current_user):
     """제품 관리 메인 페이지"""
     st.title("📦 제품 관리")
+    
+    # 법인별 테이블명 생성
+    from utils.helpers import get_company_table
+    
+    company_code = current_user.get('company')
+    if not company_code:
+        st.error("법인 정보가 없습니다.")
+        return
+    
+    product_table = get_company_table('products', company_code)
     
     # 탭 구성 (4개)
     tab1, tab2, tab3, tab4 = st.tabs([
@@ -23,32 +31,33 @@ def show_product_management(load_func, save_func, update_func, delete_func):
     ])
     
     with tab1:
-        render_product_form(save_func, load_func)
+        render_product_form(save_func, load_func, product_table)
     
     with tab2:
-        render_bulk_registration_tab(save_func, load_func)
+        render_bulk_registration_tab(save_func, load_func, product_table)
     
     with tab3:
-        render_product_list_table_view(load_func, update_func, delete_func)
+        render_product_list_table_view(load_func, update_func, delete_func, product_table)
     
     with tab4:
-        render_product_csv_management(load_func, save_func)
+        render_product_csv_management(load_func, save_func, product_table)
 
 
 # ==========================================
 # 제품 등록 (단일)
 # ==========================================
 
-def render_product_form(save_func, load_func):
+def render_product_form(save_func, load_func, product_table):
     """제품 등록 폼 (단일)"""
     st.header("📝 제품 등록")
     
     # 제품 정보 입력 모드 체크
     if st.session_state.get('show_product_input_form', False):
-        render_single_product_input_form(save_func, load_func)
+        render_single_product_input_form(save_func, load_func, product_table)
         return
     
     try:
+        # 제품 코드는 공유 테이블에서 로드
         all_codes = load_func('product_codes') or []
         
         if not all_codes:
@@ -194,7 +203,7 @@ def render_product_form(save_func, load_func):
     except Exception as e:
         st.error(f"❌ 코드 검색 중 오류: {str(e)}")
 
-def render_single_product_input_form(save_func, load_func):
+def render_single_product_input_form(save_func, load_func, product_table):
     """선택한 코드의 제품 정보 입력"""
     import math
     
@@ -332,7 +341,8 @@ def render_single_product_input_form(save_func, load_func):
                 return
             
             try:
-                existing_products = load_func('products') if load_func else []
+                # 법인별 테이블에서 중복 확인
+                existing_products = load_func(product_table) if load_func else []
                 if existing_products:
                     existing_codes = [p.get('product_code', '') for p in existing_products]
                     if selected_code.get('full_code') in existing_codes:
@@ -368,7 +378,8 @@ def render_single_product_input_form(save_func, load_func):
             }
             
             try:
-                if save_func('products', product_data):
+                # 법인별 테이블에 저장
+                if save_func(product_table, product_data):
                     st.success("✅ 제품이 성공적으로 등록되었습니다!")
                     st.balloons()
                     
@@ -384,18 +395,18 @@ def render_single_product_input_form(save_func, load_func):
 # 일괄 등록
 # ==========================================
 
-def render_bulk_registration_tab(save_func, load_func):
+def render_bulk_registration_tab(save_func, load_func, product_table):
     """일괄 등록 전용 탭"""
     st.header("📦 제품 일괄 등록")
     
     # 일괄 등록 폼 모드 체크
     if st.session_state.get('show_bulk_registration_form', False):
-        render_bulk_registration_from_search(save_func, load_func)
+        render_bulk_registration_from_search(save_func, load_func, product_table)
         return
     
     # 코드 검색 모드 체크
     if st.session_state.get('show_code_search_bulk', False):
-        render_code_search_bulk(load_func, save_func)
+        render_code_search_bulk(load_func, save_func, product_table)
         return
     
     # 시작 화면
@@ -406,11 +417,12 @@ def render_bulk_registration_tab(save_func, load_func):
         st.rerun()
 
 
-def render_code_search_bulk(load_func, save_func):
+def render_code_search_bulk(load_func, save_func, product_table):
     """일괄 등록용 코드 검색 (필터링 + 다중 선택)"""
     st.subheader("🔍 제품 코드 검색 (일괄 등록)")
     
     try:
+        # 제품 코드는 공유 테이블에서 로드
         all_codes = load_func('product_codes') or []
         
         if not all_codes:
@@ -615,7 +627,7 @@ def render_code_search_bulk(load_func, save_func):
         st.error(f"❌ 코드 검색 중 오류: {str(e)}")
 
 
-def render_bulk_registration_from_search(save_func, load_func):
+def render_bulk_registration_from_search(save_func, load_func, product_table):
     """선택한 코드들 일괄 등록"""
     st.header("📦 선택한 제품 일괄 등록")
     
@@ -755,7 +767,8 @@ def render_bulk_registration_from_search(save_func, load_func):
                         'updated_at': datetime.now().isoformat()
                     }
                     
-                    if save_func('products', product_data):
+                    # 법인별 테이블에 저장
+                    if save_func(product_table, product_data):
                         success_count += 1
                     else:
                         error_count += 1
@@ -830,12 +843,13 @@ def apply_pattern(pattern, code):
 # 제품 목록 (테이블 뷰)
 # ==========================================
 
-def render_product_list_table_view(load_func, update_func, delete_func):
+def render_product_list_table_view(load_func, update_func, delete_func, product_table):
     """제품 목록 - 테이블 뷰"""
     st.header("📋 제품 목록")
     
     try:
-        products = load_func('products') or []
+        # 법인별 테이블에서 로드
+        products = load_func(product_table) or []
         
         if not products:
             st.info("등록된 제품이 없습니다.")
@@ -847,10 +861,10 @@ def render_product_list_table_view(load_func, update_func, delete_func):
             st.session_state.editing_product_id = None
         
         render_search_filters_product(products, load_func)
-        render_edit_delete_controls_product(load_func, update_func, delete_func)
+        render_edit_delete_controls_product(load_func, update_func, delete_func, product_table)
         
         if st.session_state.show_edit_form_product and st.session_state.get('editing_product_data'):
-            render_edit_form_expandable_product(update_func)
+            render_edit_form_expandable_product(update_func, product_table)
         
         filtered_products = get_filtered_products(products)
         render_product_table(filtered_products)
@@ -884,6 +898,7 @@ def render_cascading_search_filters(load_func):
     """단계별 코드 선택 검색 (제품 등록과 동일)"""
     
     try:
+        # 제품 코드는 공유 테이블에서 로드
         all_codes = load_func('product_codes') or []
         
         if not all_codes:
@@ -1018,7 +1033,7 @@ def render_text_search_filters(products):
     st.session_state.product_code_search_selections = {}
 
 
-def render_edit_delete_controls_product(load_func, update_func, delete_func):
+def render_edit_delete_controls_product(load_func, update_func, delete_func, product_table):
     """수정/삭제 컨트롤"""
     st.markdown("---")
     
@@ -1031,7 +1046,8 @@ def render_edit_delete_controls_product(load_func, update_func, delete_func):
         if st.button("✏️ 수정", use_container_width=True, type="primary"):
             if product_id_input and product_id_input.strip().isdigit():
                 product_id = int(product_id_input.strip())
-                products = load_func('products') or []
+                # 법인별 테이블에서 로드
+                products = load_func(product_table) or []
                 found = next((p for p in products if p.get('id') == product_id), None)
                 
                 if found:
@@ -1059,7 +1075,8 @@ def render_edit_delete_controls_product(load_func, update_func, delete_func):
         
         with del_col1:
             if st.button("✅ 예", key="confirm_del_prod"):
-                if delete_func('products', st.session_state.deleting_product_id):
+                # 법인별 테이블에서 삭제
+                if delete_func(product_table, st.session_state.deleting_product_id):
                     st.success("✅ 삭제 완료!")
                     st.session_state.pop('deleting_product_id', None)
                     st.rerun()
@@ -1072,7 +1089,7 @@ def render_edit_delete_controls_product(load_func, update_func, delete_func):
     st.markdown("---")
 
 
-def render_edit_form_expandable_product(update_func):
+def render_edit_form_expandable_product(update_func, product_table):
     """제품 수정 폼"""
     product = st.session_state.editing_product_data
     product_id = product.get('id')
@@ -1121,7 +1138,8 @@ def render_edit_form_expandable_product(update_func):
                     'updated_at': datetime.now().isoformat()
                 }
                 
-                if update_func('products', update_data):
+                # 법인별 테이블로 업데이트
+                if update_func(product_table, update_data):
                     st.success("✅ 수정 완료!")
                     st.session_state.show_edit_form_product = False
                     st.session_state.editing_product_id = None
@@ -1210,7 +1228,7 @@ def render_product_table(products):
 # CSV 관리
 # ==========================================
 
-def render_product_csv_management(load_func, save_func):
+def render_product_csv_management(load_func, save_func, product_table):
     """CSV 관리"""
     st.header("📤 제품 CSV 관리")
     
@@ -1219,7 +1237,8 @@ def render_product_csv_management(load_func, save_func):
     with col1:
         st.subheader("📥 CSV 다운로드")
         if st.button("CSV 다운로드", type="primary"):
-            products = load_func('products') or []
+            # 법인별 테이블에서 로드
+            products = load_func(product_table) or []
             if products:
                 csv_data = generate_products_csv(products)
                 st.download_button("다운로드", csv_data, f"products_{datetime.now().strftime('%Y%m%d')}.csv", "text/csv")

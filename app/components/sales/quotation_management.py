@@ -12,7 +12,18 @@ def show_quotation_management(save_func, load_func, update_func, delete_func, cu
         st.error("로그인이 필요합니다.")
         return
     
-    # 탭 3개로 변경 (인쇄 탭 제거)
+    # 법인별 테이블명 생성
+    from utils.helpers import get_company_table
+    
+    company_code = current_user.get('company')
+    if not company_code:
+        st.error("법인 정보가 없습니다.")
+        return
+    
+    customer_table = get_company_table('customers', company_code)
+    quotation_table = get_company_table('quotations', company_code)
+    
+    # 탭 3개로 변경
     tab1, tab2, tab3 = st.tabs([
         "📝 견적서 작성",
         "📋 견적서 목록",
@@ -20,13 +31,14 @@ def show_quotation_management(save_func, load_func, update_func, delete_func, cu
     ])
     
     with tab1:
-        render_quotation_form(save_func, load_func, update_func)
+        render_quotation_form(save_func, load_func, update_func, customer_table, quotation_table)
     
     with tab2:
-        render_quotation_list(load_func, update_func, delete_func, save_func)
+        render_quotation_list(load_func, update_func, delete_func, save_func, customer_table, quotation_table)
     
     with tab3:
-        render_quotation_csv_management(load_func, save_func)
+        render_quotation_csv_management(load_func, save_func, quotation_table)
+
 
 def safe_strip(value):
     """안전한 strip 함수 - None 체크 포함"""
@@ -210,8 +222,7 @@ def filter_codes_by_selections(codes, selections):
             filtered = [c for c in filtered if str(c.get(level, '')) == value]
     return filtered
 
-
-def render_quotation_form(save_func, load_func, update_func):
+def render_quotation_form(save_func, load_func, update_func, customer_table, quotation_table):
     """견적서 작성 폼 - 신규만"""
     
     # 수정 모드는 목록에서 처리
@@ -224,18 +235,19 @@ def render_quotation_form(save_func, load_func, update_func):
         return
     
     if st.session_state.get('show_quotation_input_form', False):
-        render_quotation_form_with_customer(save_func, load_func)
+        render_quotation_form_with_customer(save_func, load_func, customer_table, quotation_table)
         return
     
     st.header("새 견적서 작성")
-    render_customer_search_for_quotation(load_func)
+    render_customer_search_for_quotation(load_func, customer_table)
 
-def render_customer_search_for_quotation(load_func):
+def render_customer_search_for_quotation(load_func, customer_table):
     """고객 검색"""
     st.subheader("🔍 고객 검색")
     
     try:
-        customers_data = load_func('customers')
+        # 법인별 고객 테이블에서 로드
+        customers_data = load_func(customer_table)
         if not customers_data:
             st.warning("등록된 고객이 없습니다.")
             return
@@ -306,8 +318,7 @@ def render_customer_search_for_quotation(load_func):
     except Exception as e:
         st.error(f"❌ 고객 검색 중 오류: {str(e)}")
 
-
-def render_quotation_form_with_customer(save_func, load_func):
+def render_quotation_form_with_customer(save_func, load_func, customer_table, quotation_table):
     """선택한 고객으로 견적서 작성"""
     selected_customer = st.session_state.get('selected_customer_for_quotation', {})
     
@@ -498,7 +509,7 @@ def render_quotation_form_with_customer(save_func, load_func):
         col1, col2 = st.columns(2)
         
         with col1:
-            quote_number = generate_quote_number(load_func)
+            quote_number = generate_quote_number(load_func, quotation_table)
             st.text_input("견적번호", value=quote_number, disabled=True)
             quote_date = st.date_input("견적일", value=datetime.now().date())
         
@@ -537,7 +548,6 @@ def render_quotation_form_with_customer(save_func, load_func):
                 disabled=True,
                 key="delivery_terms_display"
             )
-
             delivery_date = None
         
         with col2:
@@ -638,7 +648,8 @@ def render_quotation_form_with_customer(save_func, load_func):
                 'updated_at': datetime.now().isoformat()
             }
             
-            if save_func('quotations', quotation_data):
+            # 법인별 테이블에 저장
+            if save_func(quotation_table, quotation_data):
                 save_type = "임시저장" if temp_save else "정식저장"
                 st.success(f"✅ 견적서가 성공적으로 {save_type}되었습니다!")
                 st.session_state.pop('selected_customer_for_quotation', None)
@@ -648,59 +659,96 @@ def render_quotation_form_with_customer(save_func, load_func):
             else:
                 st.error("❌ 견적서 저장에 실패했습니다.")
 
-def render_quotation_list(load_func, update_func, delete_func, save_func):
-    """견적서 목록"""
-    st.header("📋 견적서 목록")
+def render_quotation_list(load_func, update_func, delete_func, save_func, 
+                         customer_table, quotation_table):
+    """견적서 목록 및 관리"""
     
-    # 수정 모드 확인
-    if st.session_state.get('editing_quotation_id'):
-        st.markdown("---")
-        st.subheader("✏️ 견적서 수정")
+    # 프린트 모드 체크
+    if st.session_state.get('print_quotation'):
+        print_quotation = st.session_state['print_quotation']
         
-        col1, col2 = st.columns([5, 1])
-        with col2:
-            if st.button("❌ 수정 취소", use_container_width=True):
-                st.session_state.pop('editing_quotation_id', None)
-                st.session_state.pop('editing_quotation_data', None)
-                st.rerun()
+        # HTML 생성
+        html_content = generate_quotation_html(print_quotation, load_func)
         
-        # 수정 폼 표시
-        render_quotation_edit_inline(load_func, update_func, save_func)
+        # HTML 표시
+        st.components.v1.html(html_content, height=800, scrolling=True)
+        
+        # 돌아가기 버튼
+        if st.button("← 목록으로 돌아가기", type="primary"):
+            del st.session_state['print_quotation']
+            st.rerun()
         return
     
-    try:
-        quotations_data = load_func('quotations')
-        if not quotations_data:
-            st.info("등록된 견적서가 없습니다.")
-            return
-        
-        quotations_df = pd.DataFrame(quotations_data)
-        
-        customers_data = load_func('customers')
-        if customers_data:
-            customers_df = pd.DataFrame(customers_data)
-            customer_dict = {}
-            for _, row in customers_df.iterrows():
-                display_name = row.get('company_name_short') or row.get('company_name_original')
-                customer_dict[row['id']] = display_name
-            quotations_df['customer_company'] = quotations_df['customer_id'].map(customer_dict).fillna(quotations_df['customer_name'])
-        else:
-            quotations_df['customer_company'] = quotations_df['customer_name']
-        
-        render_quotation_search_filters(quotations_df)
-        
-        # 통합 컨트롤
-        render_quotation_controls(load_func, update_func, delete_func, save_func)
-        
-        filtered_quotations = get_filtered_quotations(quotations_df)
-        
-        # 테이블
-        render_quotation_table(filtered_quotations)
+    st.subheader("📋 견적서 목록")
     
-    except Exception as e:
-        st.error(f"❌ 견적서 목록 로드 중 오류: {str(e)}")
+    # 데이터 로드
+    quotations = load_func(quotation_table) or []
+    customers = load_func(customer_table) or []
+    
+    if not quotations:
+        st.info("등록된 견적서가 없습니다.")
+        return
+    
+    # 고객 딕셔너리 생성
+    customer_dict = {c.get('id'): c for c in customers}
+    
+    # 검색 및 필터
+    col1, col2, col3 = st.columns(3)
+    
+    with col1:
+        search_term = st.text_input("🔍 검색", placeholder="견적번호/고객명")
+    
+    with col2:
+        status_filter = st.selectbox("상태", ["전체", "Draft", "Sent", "Approved", "Rejected", "Expired"])
+    
+    with col3:
+        sort_order = st.selectbox("정렬", ["최신순", "오래된순"])
+    
+    # 필터링
+    filtered = quotations.copy()
+    
+    if search_term:
+        filtered = [q for q in filtered 
+                   if search_term.lower() in q.get('quote_number', '').lower()
+                   or search_term.lower() in customer_dict.get(q.get('customer_id'), {}).get('company_name_short', '').lower()]
+    
+    if status_filter != "전체":
+        filtered = [q for q in filtered if q.get('status') == status_filter]
+    
+    # 정렬
+    if sort_order == "최신순":
+        filtered.sort(key=lambda x: x.get('created_at', ''), reverse=True)
+    else:
+        filtered.sort(key=lambda x: x.get('created_at', ''))
+    
+    # 테이블 표시
+    if filtered:
+        table_data = []
+        for q in filtered:
+            customer = customer_dict.get(q.get('customer_id'), {})
+            table_data.append({
+                'ID': q.get('id'),
+                '견적번호': q.get('quote_number', 'N/A'),
+                '고객': customer.get('company_name_short', 'N/A'),
+                '견적일': q.get('quote_date', 'N/A'),
+                '유효기한': q.get('valid_until', 'N/A'),
+                '상태': q.get('status', 'Draft'),
+                '금액': f"{q.get('final_amount', 0):,}",
+                '통화': q.get('currency', 'USD')
+            })
+        
+        df = pd.DataFrame(table_data)
+        st.dataframe(df, use_container_width=True, hide_index=True)
+        st.caption(f"📊 총 **{len(filtered)}건** 견적서")
+    else:
+        st.info("검색 결과가 없습니다.")
+    
+    st.markdown("---")
+    
+    # 컨트롤 버튼
+    render_quotation_controls(load_func, update_func, delete_func, save_func, quotation_table)
 
-def render_quotation_edit_inline(load_func, update_func, save_func):
+def render_quotation_edit_inline(load_func, update_func, save_func, customer_table, quotation_table):
     """목록 내 인라인 수정 - 전체 폼"""
     editing_data = st.session_state.get('editing_quotation_data', {})
     
@@ -1063,7 +1111,7 @@ def render_quotation_edit_inline(load_func, update_func, save_func):
             }
             
             try:
-                success = update_func('quotations', quotation_data)
+                success = update_func(quotation_table, quotation_data)
                 if success:
                     st.success(f"✅ 견적서가 수정되었습니다! (Rev: {new_revision})")
                     st.session_state.pop('editing_quotation_id', None)
@@ -1223,8 +1271,7 @@ def generate_quotations_csv(quotations_df):
     df = pd.DataFrame(csv_data)
     return df.to_csv(index=False, encoding='utf-8-sig')
 
-
-def render_quotation_csv_management(load_func, save_func):
+def render_quotation_csv_management(load_func, save_func, quotation_table):
     """견적서 CSV 관리"""
     st.header("견적서 CSV 관리")
     
@@ -1234,7 +1281,8 @@ def render_quotation_csv_management(load_func, save_func):
         st.subheader("CSV 다운로드")
         if st.button("견적서 CSV 다운로드", type="primary"):
             try:
-                quotations_data = load_func('quotations')
+                # 법인별 테이블에서 로드
+                quotations_data = load_func(quotation_table)
                 if not quotations_data:
                     st.warning("다운로드할 견적서가 없습니다.")
                     return
@@ -1250,14 +1298,13 @@ def render_quotation_csv_management(load_func, save_func):
         st.subheader("CSV 업로드")
         st.info("견적서 CSV 업로드 기능은 추후 구현 예정입니다.")
 
-
-def generate_quote_number(load_func):
+def generate_quote_number(load_func, quotation_table='quotations'):
     """견적번호 자동 생성"""
     today = datetime.now()
     date_str = today.strftime('%y%m%d')
     
     try:
-        quotations_data = load_func('quotations')
+        quotations_data = load_func(quotation_table)  # ← quotation_table 사용
         if not quotations_data:
             return f"YMV-{date_str}-001"
         
@@ -1282,7 +1329,6 @@ def generate_quote_number(load_func):
     except:
         timestamp = today.strftime('%H%M%S')
         return f"YMV-{date_str}-{timestamp[:3]}"
-
 
 def get_next_revision_number(current_revision):
     """Revision 번호 증가"""
@@ -1356,7 +1402,7 @@ def generate_quotation_html(quotation, load_func, language='한국어'):
     <title>Quotation - {quotation.get('quote_number', '')}</title>
     <style>
         body {{ font-family: Arial, sans-serif; margin: 0; padding: 0; background-color: #f5f5f5; }}
-        .quotation {{ width: 210mm; min-height: 297mm; margin: 20px auto; background: white; padding: 15mm; box-shadow: 0 0 10px rgba(0,0,0,0.1); box-sizing: border-box; display: flex; flex-direction: column; }}
+        .quotation {{ width: 210mm; min-height: 297mm; margin-bottom: 20px auto; background: white; padding: 15mm; box-shadow: 0 0 10px rgba(0,0,0,0.1); box-sizing: border-box; display: flex; flex-direction: column; }}
         .content-area {{ flex: 1; }}
         .bottom-fixed {{ margin-top: auto; }}
         
@@ -1364,7 +1410,7 @@ def generate_quotation_html(quotation, load_func, language='한국어'):
         .quotation-title h1 {{ font-size: 18px; font-weight: bold; margin: 0; letter-spacing: 3px; color: #000; }}
         
         .header {{ display: flex; justify-content: space-between; margin-bottom: 30px; padding-bottom: 20px; border-bottom: 2px solid #000; }}
-        .company-name {{ font-size: 18px; font-weight: bold; }}
+        .company-name {{ font-size: 14px; font-weight: bold; }}
         .company-info {{ font-size: 12px; line-height: 1.4; }}
         .office-info {{ margin-top: 10px; font-size: 11px; }}
         .quote-details {{ display: flex; justify-content: space-between; margin-bottom: 20px; font-size: 12px; }}
@@ -1738,7 +1784,8 @@ def create_sales_process_from_quotation(quotation_dict, save_func):
             'success': False,
             'message': str(e)
         }
-def render_quotation_controls(load_func, update_func, delete_func, save_func):
+
+def render_quotation_controls(load_func, update_func, delete_func, save_func, quotation_table):
     """견적서 수정/삭제/인쇄/상태변경 통합 컨트롤"""
     st.markdown("---")
     
@@ -1751,7 +1798,8 @@ def render_quotation_controls(load_func, update_func, delete_func, save_func):
         if st.button("✏️ 수정", use_container_width=True, type="primary"):
             if quotation_id_input and quotation_id_input.strip().isdigit():
                 quotation_id = int(quotation_id_input.strip())
-                quotations = load_func('quotations') or []
+                # 법인별 테이블에서 로드
+                quotations = load_func(quotation_table) or []
                 found = next((q for q in quotations if q.get('id') == quotation_id), None)
                 
                 if found:
@@ -1775,52 +1823,13 @@ def render_quotation_controls(load_func, update_func, delete_func, save_func):
         if st.button("🖨️ 프린트", use_container_width=True):
             if quotation_id_input and quotation_id_input.strip().isdigit():
                 quotation_id = int(quotation_id_input.strip())
-                quotations = load_func('quotations') or []
+                # 법인별 테이블에서 로드
+                quotations = load_func(quotation_table) or []
                 found = next((q for q in quotations if q.get('id') == quotation_id), None)
                 
                 if found:
-                    # 고객사 이름 조회
-                    customer_id = found.get('customer_id')
-                    customer_name = 'Unknown'
-                    
-                    if customer_id:
-                        customers = load_func('customers') or []
-                        customer = next((c for c in customers if c.get('id') == customer_id), None)
-                        if customer:
-                            customer_name = customer.get('company_name_short') or customer.get('company_name_original') or 'Unknown'
-                    
-                    customer_name = customer_name.replace(' ', '_')
-                    
-                    # HTML 생성
-                    html_content = generate_quotation_html(found, load_func, 'English')
-                    
-                    # 파일명
-                    filename = f"{found.get('quote_number', 'QT')}_{found.get('revision_number', 'Rv00')}_{customer_name}.html"
-                    
-                    # 프린트용 HTML (자동 프린트 스크립트 포함)
-                    print_html = f"""<!DOCTYPE html>
-<html>
-<head>
-    <meta charset="UTF-8">
-    <title>{filename.replace('.html', '')}</title>
-</head>
-<body>
-    {html_content}
-    <script>
-        // 페이지 로드 후 자동 프린트
-        window.onload = function() {{
-            setTimeout(function() {{
-                window.print();
-            }}, 500);
-        }};
-    </script>
-</body>
-</html>"""
-                    
-                    # 다운로드 버튼 표시
-                    st.session_state.print_ready = True
-                    st.session_state.print_html = print_html
-                    st.session_state.print_filename = filename
+                    # 프린트 모드로 전환
+                    st.session_state['print_quotation'] = found
                     st.rerun()
                 else:
                     st.error(f"❌ ID {quotation_id}를 찾을 수 없습니다.")
@@ -1839,7 +1848,8 @@ def render_quotation_controls(load_func, update_func, delete_func, save_func):
         if st.button("✅ 변경", use_container_width=True):
             if quotation_id_input and quotation_id_input.strip().isdigit():
                 quotation_id = int(quotation_id_input.strip())
-                quotations = load_func('quotations') or []
+                # 법인별 테이블에서 로드
+                quotations = load_func(quotation_table) or []
                 found = next((q for q in quotations if q.get('id') == quotation_id), None)
                 
                 if found:
@@ -1849,7 +1859,8 @@ def render_quotation_controls(load_func, update_func, delete_func, save_func):
                         'updated_at': datetime.now().isoformat()
                     }
                     
-                    if update_func('quotations', update_data):
+                    # 법인별 테이블로 업데이트
+                    if update_func(quotation_table, update_data):
                         st.success(f"✅ 상태가 {new_status}로 변경되었습니다!")
                         
                         if new_status == 'Approved':
@@ -1861,10 +1872,6 @@ def render_quotation_controls(load_func, update_func, delete_func, save_func):
                         st.rerun()
                     else:
                         st.error("❌ 상태 변경 실패")
-                else:
-                    st.error(f"❌ ID {quotation_id}를 찾을 수 없습니다.")
-            else:
-                st.error("❌ 올바른 ID를 입력하세요.")
     
     # 삭제 확인
     if st.session_state.get('deleting_quotation_id'):
@@ -1874,7 +1881,8 @@ def render_quotation_controls(load_func, update_func, delete_func, save_func):
         
         with del_col1:
             if st.button("✅ 예", key="confirm_del_quot"):
-                if delete_func('quotations', st.session_state.deleting_quotation_id):
+                # 법인별 테이블에서 삭제
+                if delete_func(quotation_table, st.session_state.deleting_quotation_id):
                     st.success("✅ 삭제 완료!")
                     st.session_state.pop('deleting_quotation_id', None)
                     st.rerun()
@@ -1883,30 +1891,3 @@ def render_quotation_controls(load_func, update_func, delete_func, save_func):
             if st.button("❌ 아니오", key="cancel_del_quot"):
                 st.session_state.pop('deleting_quotation_id', None)
                 st.rerun()
-    
-    # HTML 다운로드
-    if st.session_state.get('print_ready'):
-        st.success("✅ HTML 파일을 다운로드하여 브라우저에서 열면 자동으로 프린트 창이 열립니다.")
-        
-        col1, col2 = st.columns([4, 1])
-        
-        with col1:
-            st.download_button(
-                label="📄 HTML 다운로드",
-                data=st.session_state.print_html,
-                file_name=st.session_state.print_filename,
-                mime="text/html",
-                key="download_print_html",
-                use_container_width=True
-            )
-        
-        with col2:
-            if st.button("❌ 닫기", use_container_width=True):
-                st.session_state.pop('print_ready', None)
-                st.session_state.pop('print_html', None)
-                st.session_state.pop('print_filename', None)
-                st.rerun()
-    
-    st.markdown("---")
-
-

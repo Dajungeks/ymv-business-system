@@ -10,6 +10,130 @@ from datetime import datetime
 from collections import defaultdict
 
 
+class CorporatePermissionHelper:
+    """
+    법인별 권한 관리 클래스
+    Corporate permission management class
+    """
+    
+    @staticmethod
+    def get_company_table(base_table, company_code):
+        """
+        법인별 테이블명 반환
+        Returns company-specific table name
+        
+        Args:
+            base_table: 기본 테이블명 (예: 'customers', 'quotations')
+            company_code: 법인 코드 ('YMV', 'YMTH', 'YMK', 'YMC')
+        
+        Returns:
+            법인별 테이블명 (예: 'customers_ymv')
+        """
+        return f"{base_table}_{company_code.lower()}"
+    
+    @staticmethod
+    def is_super_admin(user):
+        """
+        YMV 법인장 여부 확인
+        Check if user is YMV super admin
+        """
+        if not user:
+            return False
+        return user.get('is_super_admin', False)
+    
+    @staticmethod
+    def can_approve_order(user):
+        """
+        규격 결정서 승인 권한 확인
+        Check hot runner order approval authority
+        """
+        if not user:
+            return False
+        return user.get('approval_authority', False) or user.get('is_super_admin', False)
+    
+    @staticmethod
+    def can_view_all_companies(user, table_name):
+        """
+        전체 법인 데이터 조회 가능 여부
+        Check if user can view all company data
+        
+        특별 규칙:
+        - YMV 법인장: 모든 테이블 전체 조회 가능
+        - YMK: hot_runner_orders만 전체 조회 가능 (승인 목적)
+        """
+        if not user:
+            return False
+        
+        # YMV 법인장: 모든 테이블 전체 조회
+        if user.get('is_super_admin', False):
+            return True
+        
+        # YMK: 규격 결정서만 전체 조회
+        if user.get('company') == 'YMK' and user.get('approval_authority', False):
+            if 'hot_runner_orders' in table_name:
+                return True
+        
+        return False
+    
+    @staticmethod
+    def can_edit_data(data_company, user):
+        """
+        데이터 수정 가능 여부
+        Check if user can edit data
+        
+        Args:
+            data_company: 데이터 소속 법인 ('YMV', 'YMTH', 'YMK', 'YMC')
+            user: 현재 로그인 사용자 정보
+        """
+        if not user:
+            return False
+        
+        # YMV 법인장: 모든 데이터 수정 가능
+        if user.get('is_super_admin', False):
+            return True
+        
+        # 자기 법인 데이터만 수정 가능
+        return user.get('company') == data_company
+    
+    @staticmethod
+    def get_accessible_companies(user):
+        """
+        접근 가능한 법인 목록 반환
+        Returns list of accessible companies
+        """
+        if not user:
+            return []
+        
+        # YMV 법인장: 모든 법인
+        if user.get('is_super_admin', False):
+            return ['YMV', 'YMTH', 'YMK', 'YMC']
+        
+        # 일반: 자기 법인만
+        return [user.get('company')]
+    
+    @staticmethod
+    def filter_by_company(data_list, user, company_field='company'):
+        """
+        법인별 데이터 필터링
+        Filter data by company permission
+        
+        Args:
+            data_list: 데이터 리스트
+            user: 현재 사용자
+            company_field: 법인 구분 필드명 (기본: 'company')
+        """
+        if not data_list:
+            return []
+        
+        # YMV 법인장: 모든 데이터
+        if CorporatePermissionHelper.is_super_admin(user):
+            return data_list
+        
+        # 자기 법인 데이터만 필터링
+        user_company = user.get('company')
+        return [d for d in data_list if d.get(company_field) == user_company]
+
+
 class StatusHelper:
     """
     상태 정보 관리 클래스
@@ -351,7 +475,7 @@ class CSVGenerator:
                     '수량': purchase.get('quantity', 0),
                     '단위': purchase.get('unit', '개'),
                     '단가': purchase.get('unit_price', 0),
-                    '이액': purchase.get('total_price', 0),
+                    '총액': purchase.get('total_price', 0),
                     '통화': purchase.get('currency', 'KRW'),
                     '공급업체': purchase.get('supplier', ''),
                     '긴급도': purchase.get('urgency', '보통'),
@@ -677,7 +801,6 @@ Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
      
 
 
-    # ← 여기에 추가 시작! (들여쓰기 4칸, PrintFormGenerator 클래스 안)
     @staticmethod
     def render_hot_runner_print(order, load_data_func):
         """
@@ -841,8 +964,6 @@ Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
         st.components.v1.html(print_html, height=1400, scrolling=True)
 
 
-# 하위 호환성을 위한 래퍼 함수들  ← 이 줄은 그대로 유지!
-
 # 하위 호환성을 위한 래퍼 함수들
 def get_approval_status_info(status):
     """하위 호환성 래퍼 함수"""
@@ -859,3 +980,33 @@ def create_csv_download(expenses, employees):
 def render_print_form(expense, employees):
     """하위 호환성 래퍼 함수"""
     return PrintFormGenerator.render_print_form(expense, employees)
+
+
+# 법인 권한 함수 하위 호환성 래퍼
+def get_company_table(base_table, company_code):
+    """하위 호환성 래퍼 함수"""
+    return CorporatePermissionHelper.get_company_table(base_table, company_code)
+
+def is_super_admin(user):
+    """하위 호환성 래퍼 함수"""
+    return CorporatePermissionHelper.is_super_admin(user)
+
+def can_approve_order(user):
+    """하위 호환성 래퍼 함수"""
+    return CorporatePermissionHelper.can_approve_order(user)
+
+def can_view_all_companies(user, table_name):
+    """하위 호환성 래퍼 함수"""
+    return CorporatePermissionHelper.can_view_all_companies(user, table_name)
+
+def can_edit_data(data_company, user):
+    """하위 호환성 래퍼 함수"""
+    return CorporatePermissionHelper.can_edit_data(data_company, user)
+
+def get_accessible_companies(user):
+    """하위 호환성 래퍼 함수"""
+    return CorporatePermissionHelper.get_accessible_companies(user)
+
+def filter_by_company(data_list, user, company_field='company'):
+    """하위 호환성 래퍼 함수"""
+    return CorporatePermissionHelper.filter_by_company(data_list, user, company_field)

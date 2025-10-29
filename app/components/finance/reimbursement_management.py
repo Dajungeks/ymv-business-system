@@ -3,6 +3,7 @@ import pandas as pd
 from datetime import datetime
 from collections import defaultdict
 
+
 def show_reimbursement_management(load_data_func, update_data_func, get_current_user_func):
     """환급 관리 메인 함수"""
     
@@ -15,6 +16,9 @@ def show_reimbursement_management(load_data_func, update_data_func, get_current_
     if user_role not in ['Admin', 'CEO', 'Master']:
         st.warning("⚠️ 환급 관리 권한이 없습니다.")
         return
+    
+    # 지출/환급은 법인 분리 없이 공통 테이블 사용
+    expense_table = 'expenses'
     
     # 프린트 모드 확인
     if st.session_state.get('print_reimbursement'):
@@ -29,22 +33,22 @@ def show_reimbursement_management(load_data_func, update_data_func, get_current_
             st.rerun()
         return
 
-    # 탭 구성 (3개로 변경)
+    # 탭 구성 (2개로 변경)
     tab1, tab2 = st.tabs(["📝 환급 대상", "📋 환급 목록"])
 
     with tab1:
-        render_reimbursement_pending(load_data_func, update_data_func, get_current_user_func)
+        render_reimbursement_pending(load_data_func, update_data_func, get_current_user_func, expense_table)
 
     with tab2:
-        render_reimbursement_printed(load_data_func, update_data_func, get_current_user_func)
+        render_reimbursement_printed(load_data_func, update_data_func, get_current_user_func, expense_table)
 
-def render_reimbursement_pending(load_data_func, update_data_func, get_current_user_func):
+def render_reimbursement_pending(load_data_func, update_data_func, get_current_user_func, expense_table):
     """환급 대상 목록 - 테이블 UI"""
     
     st.subheader("📋 환급 대상 목록")
     
-    # 데이터 로드
-    all_expenses = load_data_func("expenses")
+    # 법인별 테이블에서 데이터 로드
+    all_expenses = load_data_func(expense_table)
     employees = load_data_func("employees")
     
     if not all_expenses or not employees:
@@ -134,7 +138,7 @@ def render_reimbursement_pending(load_data_func, update_data_func, get_current_u
                         # 임시 상태로 먼저 업데이트
                         success_count = 0
                         for exp in selected_expenses:
-                            result = update_data_func("expenses", {
+                            result = update_data_func(expense_table, {
                                 'id': exp.get('id'),
                                 'reimbursement_status': 'printed',
                                 'reimbursement_document_number': 'TEMP',
@@ -154,7 +158,7 @@ def render_reimbursement_pending(load_data_func, update_data_func, get_current_u
                             
                             # 실제 문서번호로 업데이트
                             for exp in selected_expenses:
-                                update_data_func("expenses", {
+                                update_data_func(expense_table, {
                                     'id': exp.get('id'),
                                     'reimbursement_document_number': document_number,
                                     'updated_at': datetime.now().isoformat()
@@ -184,13 +188,13 @@ def render_reimbursement_pending(load_data_func, update_data_func, get_current_u
             except ValueError:
                 st.error("⚠️ ID는 숫자로 입력해주세요.")
 
-def render_reimbursement_printed(load_data_func, update_data_func, get_current_user_func):
+def render_reimbursement_printed(load_data_func, update_data_func, get_current_user_func, expense_table):
     """프린트 완료 목록 - 테이블 형식"""
     
     st.subheader("🖨️ 프린트 완료 목록")
     
-    # 데이터 로드
-    all_expenses = load_data_func("expenses")
+    # 법인별 테이블에서 데이터 로드
+    all_expenses = load_data_func(expense_table)
     employees = load_data_func("employees")
     
     if not all_expenses or not employees:
@@ -301,7 +305,7 @@ def render_reimbursement_printed(load_data_func, update_data_func, get_current_u
                 st.warning("⚠️ 해당 환급문서번호를 찾을 수 없습니다.")
 
 
-def complete_reimbursement(expense_id, user_id, update_data_func):
+def complete_reimbursement(expense_id, user_id, update_data_func, expense_table):
     """환급 완료 처리 - printed → completed"""
     try:
         update_data = {
@@ -311,63 +315,19 @@ def complete_reimbursement(expense_id, user_id, update_data_func):
             'reimbursed_by': user_id,
             'updated_at': datetime.now().isoformat()
         }
-        return update_data_func("expenses", update_data, "id")
+        return update_data_func(expense_table, update_data, "id")
     except Exception as e:
         st.error(f"환급 완료 처리 중 오류: {str(e)}")
         return False
 
-def complete_reimbursement(expense_id, user_id, update_data_func):
-    """환급 완료 처리"""
-    try:
-        update_data = {
-            'id': expense_id,
-            'reimbursement_status': 'completed',
-            'reimbursed_at': datetime.now().isoformat(),
-            'reimbursed_by': user_id,
-            'updated_at': datetime.now().isoformat()
-        }
-        return update_data_func("expenses", update_data, "id")
-    except Exception as e:
-        st.error(f"환급 완료 처리 중 오류: {str(e)}")
-        return False
 
-def complete_reimbursement(expense_id, user_id, update_data_func):
-    """환급 완료 처리"""
-    try:
-        update_data = {
-            'id': expense_id,
-            'reimbursement_status': 'completed',
-            'reimbursed_at': datetime.now().isoformat(),
-            'reimbursed_by': user_id,
-            'updated_at': datetime.now().isoformat()
-        }
-        return update_data_func("expenses", update_data, "id")
-    except Exception as e:
-        st.error(f"환급 완료 처리 중 오류: {str(e)}")
-        return False
-
-def complete_reimbursement(expense_id, user_id, update_data_func):
-    """환급 완료 처리"""
-    try:
-        update_data = {
-            'id': expense_id,
-            'reimbursement_status': 'completed',
-            'reimbursed_at': datetime.now().isoformat(),
-            'reimbursed_by': user_id,
-            'updated_at': datetime.now().isoformat()
-        }
-        return update_data_func("expenses", update_data, "id")
-    except Exception as e:
-        st.error(f"환급 완료 처리 중 오류: {str(e)}")
-        return False
-
-def render_reimbursement_completed(load_data_func, get_current_user_func):
+def render_reimbursement_completed(load_data_func, get_current_user_func, expense_table):
     """최종 완료 내역 - 월별/주별/항목별 필터"""
     
     st.subheader("✅ 최종 완료 내역")
     
-    # 데이터 로드
-    all_expenses = load_data_func("expenses")
+    # 법인별 테이블에서 데이터 로드
+    all_expenses = load_data_func(expense_table)
     employees = load_data_func("employees")
     
     if not all_expenses or not employees:
@@ -556,4 +516,3 @@ def render_reimbursement_completed(load_data_func, get_current_user_func):
             file_name=f"reimbursement_completed_{datetime.now().strftime('%Y%m%d')}.csv",
             mime="text/csv"
         )
-

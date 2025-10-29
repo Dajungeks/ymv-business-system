@@ -5,6 +5,14 @@ def show_purchase_order_management(load_func, save_func, update_func, current_us
     """발주 관리 메인 함수"""
     st.header("📦 발주 관리")
     
+    # 법인별 테이블명 생성
+    from utils.helpers import get_company_table
+    
+    company_code = current_user.get('company')
+    if not company_code:
+        st.error("법인 정보가 없습니다.")
+        return
+    
     # 발주 유형 선택 (코드별 분할 발주 추가)
     purchase_type = st.radio(
         "발주 유형 선택:",
@@ -13,21 +21,25 @@ def show_purchase_order_management(load_func, save_func, update_func, current_us
     )
     
     if purchase_type == "🎯 고객 주문 기반 발주":
-        render_customer_order_based_purchase(load_func, save_func, update_func, current_user)
+        render_customer_order_based_purchase(load_func, save_func, update_func, current_user, company_code)
     elif purchase_type == "📦 재고 보충 발주":
-        render_inventory_replenishment_purchase(load_func, save_func, update_func, current_user)
+        render_inventory_replenishment_purchase(load_func, save_func, update_func, current_user, company_code)
     elif purchase_type == "🔧 코드별 분할 발주":
-        render_breakdown_based_purchase(load_func, save_func, update_func, current_user)
+        render_breakdown_based_purchase(load_func, save_func, update_func, current_user, company_code)
     else:  # 내부 처리
-        render_all_purchase_orders(load_func, update_func)
+        render_all_purchase_orders(load_func, update_func, company_code)
 
-def render_breakdown_based_purchase(load_func, save_func, update_func, current_user):
+def render_breakdown_based_purchase(load_func, save_func, update_func, current_user, company_code):
     """코드별 분할 기반 발주"""
     st.subheader("🔧 코드별 분할 발주")
     st.info("영업 프로세스에서 분할된 코드별 아이템의 외주 발주를 처리합니다.")
     
+    # 법인별 테이블
+    from utils.helpers import get_company_table
+    breakdown_table = get_company_table('process_item_breakdown', company_code)
+    
     # 분할된 아이템 중 외주 발주 대상 조회
-    breakdowns = load_func('process_item_breakdown') or []
+    breakdowns = load_func(breakdown_table) or []
     external_items = [
         item for item in breakdowns 
         if item.get('processing_type') in ['external', 'mixed'] 
@@ -47,9 +59,9 @@ def render_breakdown_based_purchase(load_func, save_func, update_func, current_u
     
     # 아이템별 발주 처리
     for item in external_items:
-        render_breakdown_external_order_form(item, load_func, save_func, update_func, current_user)
+        render_breakdown_external_order_form(item, load_func, save_func, update_func, current_user, company_code)
 
-def render_breakdown_external_order_form(item, load_func, save_func, update_func, current_user):
+def render_breakdown_external_order_form(item, load_func, save_func, update_func, current_user, company_code):
     """분할 아이템 외주 발주 폼"""
     with st.expander(f"🏭 {item.get('item_code', 'N/A')} - 외주 {item.get('external_quantity', 0)}개", expanded=True):
         
@@ -65,7 +77,9 @@ def render_breakdown_external_order_form(item, load_func, save_func, update_func
             # 관련 영업 프로세스 정보
             process_id = item.get('sales_process_id')
             if process_id:
-                processes = load_func('sales_process') or []
+                from utils.helpers import get_company_table
+                process_table = get_company_table('sales_process', company_code)
+                processes = load_func(process_table) or []
                 process = next((p for p in processes if p.get('id') == process_id), None)
                 if process:
                     st.write(f"**프로세스**: {process.get('process_number', 'N/A')}")
@@ -135,7 +149,7 @@ def render_breakdown_external_order_form(item, load_func, save_func, update_func
                 create_breakdown_external_order(
                     item, supplier_name, supplier_contact, supplier_email, 
                     supplier_phone, order_date, expected_arrival, unit_cost, 
-                    total_cost, payment_terms, notes, save_func, update_func, current_user
+                    total_cost, payment_terms, notes, save_func, update_func, current_user, company_code
                 )
                 st.success(f"✅ {item.get('item_code', 'N/A')} 외주 발주가 완료되었습니다!")
                 st.rerun()
@@ -144,16 +158,21 @@ def render_breakdown_external_order_form(item, load_func, save_func, update_func
 
 def create_breakdown_external_order(item, supplier_name, supplier_contact, supplier_email, 
                                    supplier_phone, order_date, expected_arrival, unit_cost, 
-                                   total_cost, payment_terms, notes, save_func, update_func, current_user):
+                                   total_cost, payment_terms, notes, save_func, update_func, current_user, company_code):
     """분할 아이템 외주 발주 생성"""
     # 발주서 번호 생성 (코드별 분할 발주용)
-    po_number = generate_document_number('POB', save_func)  # Purchase Order Breakdown
+    po_number = generate_document_number('POB', save_func)
+    
+    # 법인별 테이블
+    from utils.helpers import get_company_table
+    supplier_order_table = get_company_table('purchase_orders_to_supplier', company_code)
+    breakdown_table = get_company_table('process_item_breakdown', company_code)
     
     order_data = {
         'po_number': po_number,
         'purchase_type': 'breakdown_external',
         'sales_process_id': item.get('sales_process_id'),
-        'breakdown_item_id': item.get('id'),  # 분할 아이템 연결
+        'breakdown_item_id': item.get('id'),
         'supplier_name': supplier_name,
         'supplier_contact': supplier_contact,
         'supplier_email': supplier_email,
@@ -172,22 +191,27 @@ def create_breakdown_external_order(item, supplier_name, supplier_contact, suppl
     }
     
     # 발주서 저장
-    result = save_func('purchase_orders_to_supplier', order_data)
+    result = save_func(supplier_order_table, order_data)
     
     if result:
         # breakdown 아이템에 발주서 ID 연결
-        update_func('process_item_breakdown', item['id'], {
+        update_func(breakdown_table, {
+            'id': item['id'],
             'external_order_id': result.get('id') if isinstance(result, dict) else None,
             'item_status': 'completed',
             'updated_at': datetime.now()
-        })
+        }, "id")
 
-def render_customer_order_based_purchase(load_func, save_func, update_func, current_user):
+def render_customer_order_based_purchase(load_func, save_func, update_func, current_user, company_code):
     """고객 주문 기반 발주"""
     st.subheader("🎯 고객 주문 기반 발주")
     
+    # 법인별 테이블
+    from utils.helpers import get_company_table
+    process_table = get_company_table('sales_process', company_code)
+    
     # 승인된 영업 프로세스 조회
-    processes = load_func('sales_process')
+    processes = load_func(process_table)
     if not processes:
         st.warning("승인된 영업 프로세스가 없습니다.")
         return
@@ -234,11 +258,11 @@ def render_customer_order_based_purchase(load_func, save_func, update_func, curr
         )
         
         if order_method == "🏠 내부 재고 처리":
-            process_internal_stock(selected_process, current_user, save_func, update_func)
+            process_internal_stock(selected_process, current_user, save_func, update_func, company_code)
         else:  # 외주 발주
-            show_customer_order_external_form(selected_process, current_user, save_func, update_func)
+            show_customer_order_external_form(selected_process, current_user, save_func, update_func, company_code)
 
-def process_internal_stock(process, current_user, save_func, update_func):
+def process_internal_stock(process, current_user, save_func, update_func, company_code):
     """내부 재고 처리"""
     st.subheader("🏠 내부 재고 처리")
     
@@ -257,6 +281,11 @@ def process_internal_stock(process, current_user, save_func, update_func):
         
         if submitted:
             if warehouse_location:
+                # 법인별 테이블
+                from utils.helpers import get_company_table
+                internal_table = get_company_table('internal_processing', company_code)
+                process_table = get_company_table('sales_process', company_code)
+                
                 # 내부 처리 기록 저장
                 internal_data = {
                     'sales_process_id': process['id'],
@@ -270,20 +299,21 @@ def process_internal_stock(process, current_user, save_func, update_func):
                 }
                 
                 # 내부 처리 테이블에 저장
-                save_func('internal_processing', internal_data)
+                save_func(internal_table, internal_data)
                 
                 # 영업 프로세스 상태 업데이트
-                update_func('sales_process', process['id'], {
+                update_func(process_table, {
+                    'id': process['id'],
                     'process_status': 'internal_processed',
                     'updated_at': datetime.now()
-                })
+                }, "id")
                 
                 st.success("✅ 내부 재고 처리가 완료되었습니다!")
                 st.rerun()
             else:
                 st.error("창고 위치를 입력해주세요.")
 
-def show_customer_order_external_form(process, current_user, save_func, update_func):
+def show_customer_order_external_form(process, current_user, save_func, update_func, company_code):
     """외주 발주 폼"""
     st.subheader("🏭 외주 발주")
     
@@ -320,17 +350,22 @@ def show_customer_order_external_form(process, current_user, save_func, update_f
                 create_customer_order_external_purchase(
                     process, supplier_name, supplier_contact, supplier_email, 
                     supplier_phone, order_date, expected_arrival, unit_cost, 
-                    total_cost, payment_terms, notes, current_user, save_func, update_func
+                    total_cost, payment_terms, notes, current_user, save_func, update_func, company_code
                 )
             else:
                 st.error("공급업체명과 단가를 입력해주세요.")
 
 def create_customer_order_external_purchase(process, supplier_name, supplier_contact, supplier_email, 
                                           supplier_phone, order_date, expected_arrival, unit_cost, 
-                                          total_cost, payment_terms, notes, current_user, save_func, update_func):
+                                          total_cost, payment_terms, notes, current_user, save_func, update_func, company_code):
     """고객 주문 외주 발주 생성"""
     # 발주서 번호 생성
     po_number = generate_document_number('POC', save_func)
+    
+    # 법인별 테이블
+    from utils.helpers import get_company_table
+    supplier_order_table = get_company_table('purchase_orders_to_supplier', company_code)
+    process_table = get_company_table('sales_process', company_code)
     
     purchase_data = {
         'po_number': po_number,
@@ -353,18 +388,19 @@ def create_customer_order_external_purchase(process, supplier_name, supplier_con
     }
     
     # 발주서 저장
-    save_func('purchase_orders_to_supplier', purchase_data)
+    save_func(supplier_order_table, purchase_data)
     
     # 영업 프로세스 상태 업데이트
-    update_func('sales_process', process['id'], {
+    update_func(process_table, {
+        'id': process['id'],
         'process_status': 'external_ordered',
         'updated_at': datetime.now()
-    })
+    }, "id")
     
     st.success(f"✅ 발주서 {po_number}가 등록되었습니다!")
     st.rerun()
 
-def render_inventory_replenishment_purchase(load_func, save_func, update_func, current_user):
+def render_inventory_replenishment_purchase(load_func, save_func, update_func, current_user, company_code):
     """재고 보충 발주"""
     st.subheader("📦 재고 보충 발주")
     st.info("영업 프로세스와 무관한 재고 확보를 위한 발주입니다.")
@@ -428,7 +464,7 @@ def render_inventory_replenishment_purchase(load_func, save_func, update_func, c
                     supplier_name, supplier_contact, supplier_email, supplier_phone,
                     order_date, expected_arrival, quantity, unit_cost, total_cost,
                     currency, payment_terms, target_warehouse, min_stock_level,
-                    reorder_point, purchase_reason, notes, current_user, save_func
+                    reorder_point, purchase_reason, notes, current_user, save_func, company_code
                 )
             else:
                 st.error("필수 항목(상품명, 공급업체명, 수량, 단가)을 모두 입력해주세요.")
@@ -437,10 +473,14 @@ def create_inventory_replenishment_order(item_code, item_name, item_description,
                                        supplier_name, supplier_contact, supplier_email, supplier_phone,
                                        order_date, expected_arrival, quantity, unit_cost, total_cost,
                                        currency, payment_terms, target_warehouse, min_stock_level,
-                                       reorder_point, purchase_reason, notes, current_user, save_func):
+                                       reorder_point, purchase_reason, notes, current_user, save_func, company_code):
     """재고 보충 발주 생성"""
     # 발주서 번호 생성
     po_number = generate_document_number('POI', save_func)
+    
+    # 법인별 테이블
+    from utils.helpers import get_company_table
+    inventory_order_table = get_company_table('purchase_orders_inventory', company_code)
     
     inventory_order_data = {
         'po_number': po_number,
@@ -472,35 +512,39 @@ def create_inventory_replenishment_order(item_code, item_name, item_description,
     }
     
     # 재고 보충 발주 저장
-    save_func('purchase_orders_inventory', inventory_order_data)
+    save_func(inventory_order_table, inventory_order_data)
     
     st.success(f"✅ 재고 보충 발주서 {po_number}가 등록되었습니다!")
     st.rerun()
 
-def render_all_purchase_orders(load_func, update_func):
+def render_all_purchase_orders(load_func, update_func, company_code):
     """모든 발주서 조회"""
     st.subheader("📋 발주서 현황")
     
     tab1, tab2, tab3, tab4 = st.tabs(["🎯 고객 주문 발주", "📦 재고 보충 발주", "🔧 코드별 분할 발주", "🏠 내부 처리"])
     
     with tab1:
-        render_customer_order_purchases(load_func, update_func)
+        render_customer_order_purchases(load_func, update_func, company_code)
     
     with tab2:
-        render_inventory_replenishment_purchases(load_func, update_func)
+        render_inventory_replenishment_purchases(load_func, update_func, company_code)
     
     with tab3:
-        render_breakdown_order_purchases(load_func, update_func)
+        render_breakdown_order_purchases(load_func, update_func, company_code)
     
     with tab4:
-        render_internal_processings(load_func)
+        render_internal_processings(load_func, company_code)
 
-def render_breakdown_order_purchases(load_func, update_func):
+def render_breakdown_order_purchases(load_func, update_func, company_code):
     """코드별 분할 발주 목록"""
     st.subheader("🔧 코드별 분할 발주 현황")
     
+    # 법인별 테이블
+    from utils.helpers import get_company_table
+    supplier_order_table = get_company_table('purchase_orders_to_supplier', company_code)
+    
     # 코드별 분할 발주만 필터링
-    orders = load_func('purchase_orders_to_supplier') or []
+    orders = load_func(supplier_order_table) or []
     breakdown_orders = [order for order in orders if order.get('purchase_type') == 'breakdown_external']
     
     if breakdown_orders:
@@ -532,15 +576,19 @@ def render_breakdown_order_purchases(load_func, update_func):
                     )
                     
                     if st.button("상태 업데이트", key=f"breakdown_update_{order['id']}"):
-                        update_purchase_order_status(order['id'], new_status, update_func)
+                        update_purchase_order_status(order['id'], new_status, update_func, supplier_order_table)
                         st.success("상태가 업데이트되었습니다!")
                         st.rerun()
     else:
         st.info("등록된 코드별 분할 발주가 없습니다.")
 
-def render_customer_order_purchases(load_func, update_func):
+def render_customer_order_purchases(load_func, update_func, company_code):
     """고객 주문 발주 목록"""
-    orders = load_func('purchase_orders_to_supplier')
+    # 법인별 테이블
+    from utils.helpers import get_company_table
+    supplier_order_table = get_company_table('purchase_orders_to_supplier', company_code)
+    
+    orders = load_func(supplier_order_table)
     # 일반 고객 주문 발주만 표시 (코드별 분할 발주 제외)
     customer_orders = [order for order in orders if order.get('purchase_type') != 'breakdown_external']
     
@@ -573,15 +621,19 @@ def render_customer_order_purchases(load_func, update_func):
                     )
                     
                     if st.button("상태 업데이트", key=f"update_{order['id']}"):
-                        update_purchase_order_status(order['id'], new_status, update_func)
+                        update_purchase_order_status(order['id'], new_status, update_func, supplier_order_table)
                         st.success("상태가 업데이트되었습니다!")
                         st.rerun()
     else:
         st.info("등록된 고객 주문 발주가 없습니다.")
 
-def render_inventory_replenishment_purchases(load_func, update_func):
+def render_inventory_replenishment_purchases(load_func, update_func, company_code):
     """재고 보충 발주 목록"""
-    orders = load_func('purchase_orders_inventory')
+    # 법인별 테이블
+    from utils.helpers import get_company_table
+    inventory_order_table = get_company_table('purchase_orders_inventory', company_code)
+    
+    orders = load_func(inventory_order_table)
     
     if orders:
         import pandas as pd
@@ -613,15 +665,19 @@ def render_inventory_replenishment_purchases(load_func, update_func):
                     )
                     
                     if st.button("상태 업데이트", key=f"inv_update_{order['id']}"):
-                        update_inventory_order_status(order['id'], new_status, update_func)
+                        update_inventory_order_status(order['id'], new_status, update_func, inventory_order_table)
                         st.success("상태가 업데이트되었습니다!")
                         st.rerun()
     else:
         st.info("등록된 재고 보충 발주가 없습니다.")
 
-def render_internal_processings(load_func):
+def render_internal_processings(load_func, company_code):
     """내부 처리 목록"""
-    processings = load_func('internal_processing')
+    # 법인별 테이블
+    from utils.helpers import get_company_table
+    internal_table = get_company_table('internal_processing', company_code)
+    
+    processings = load_func(internal_table)
     
     if processings:
         import pandas as pd
@@ -632,19 +688,21 @@ def render_internal_processings(load_func):
     else:
         st.info("내부 재고 처리 기록이 없습니다.")
 
-def update_purchase_order_status(po_id, new_status, update_func):
+def update_purchase_order_status(po_id, new_status, update_func, table_name):
     """고객 주문 발주 상태 업데이트"""
-    update_func('purchase_orders_to_supplier', po_id, {
+    update_func(table_name, {
+        'id': po_id,
         'status': new_status,
         'updated_at': datetime.now()
-    })
+    }, "id")
 
-def update_inventory_order_status(po_id, new_status, update_func):
+def update_inventory_order_status(po_id, new_status, update_func, table_name):
     """재고 보충 발주 상태 업데이트"""
-    update_func('purchase_orders_inventory', po_id, {
+    update_func(table_name, {
+        'id': po_id,
         'status': new_status,
         'updated_at': datetime.now()
-    })
+    }, "id")
 
 def generate_document_number(doc_type, save_func):
     """문서 번호 생성"""

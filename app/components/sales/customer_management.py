@@ -169,9 +169,19 @@ POSITION_MAPPING = {
 # 직책 역매핑 (DB → UI 표시)
 POSITION_REVERSE = {v: k for k, v in POSITION_MAPPING.items()}
 
-def show_customer_management(load_func, save_func, update_func, delete_func):
+def show_customer_management(load_func, save_func, update_func, delete_func, current_user):
     """고객 관리 메인 페이지"""
     st.title("고객 관리 / Quản lý khách hàng")
+    
+    # 법인별 테이블명 생성
+    from utils.helpers import get_company_table
+    
+    company_code = current_user.get('company')
+    if not company_code:
+        st.error("법인 정보가 없습니다.")
+        return
+    
+    customer_table = get_company_table('customers', company_code)
     
     # 탭 구성 (통계 탭 추가)
     tab1, tab2, tab3, tab4 = st.tabs([
@@ -182,18 +192,18 @@ def show_customer_management(load_func, save_func, update_func, delete_func):
     ])
     
     with tab1:
-        render_customer_form(save_func)
+        render_customer_form(save_func, customer_table)
     
     with tab2:
-        render_customer_list(load_func, update_func, delete_func)
+        render_customer_list(load_func, update_func, delete_func, customer_table)
     
     with tab3:
-        render_customer_statistics(load_func)
+        render_customer_statistics(load_func, customer_table)
     
     with tab4:
-        render_csv_management(load_func, save_func)
+        render_csv_management(load_func, save_func, customer_table)
 
-def render_customer_form(save_func):
+def render_customer_form(save_func, customer_table):
     """고객 등록 폼"""
     st.subheader("🆕 고객 등록 / Đăng ký khách hàng")
     
@@ -362,8 +372,8 @@ def render_customer_form(save_func):
                 'created_at': datetime.now().isoformat()
             }
             
-            # 데이터 저장
-            result = save_func('customers', customer_data)
+            # 데이터 저장 (법인별 테이블 사용)
+            result = save_func(customer_table, customer_data)
             
             if result:
                 st.success("✅ 고객이 성공적으로 등록되었습니다 / Đã đăng ký khách hàng thành công")
@@ -371,7 +381,7 @@ def render_customer_form(save_func):
             else:
                 st.error("❌ 등록 중 오류가 발생했습니다 / Có lỗi xảy ra khi đăng ký")
 
-def render_customer_edit_form(customer, update_func):
+def render_customer_edit_form(customer, update_func, customer_table):
     """고객 정보 수정 폼"""
     customer_id = customer['id']
     st.subheader(f"✏️ 고객 정보 수정 / Chỉnh sửa thông tin khách hàng")
@@ -666,7 +676,7 @@ def render_customer_edit_form(customer, update_func):
                 'updated_at': datetime.now().isoformat()
             }
             
-            result = update_func('customers', updated_data)
+            result = update_func(customer_table, updated_data)
             
             if result:
                 st.success("✅ 고객 정보가 성공적으로 수정되었습니다 / Đã cập nhật thông tin khách hàng")
@@ -675,13 +685,12 @@ def render_customer_edit_form(customer, update_func):
             else:
                 st.error("❌ 수정 중 오류가 발생했습니다 / Có lỗi xảy ra khi cập nhật")
 
-
-def render_customer_list(load_func, update_func, delete_func):
+def render_customer_list(load_func, update_func, delete_func, customer_table):
     """고객 목록 (지출 요청서 스타일)"""
     st.header("고객 목록 / Danh sách khách hàng")
     
     try:
-        customers_data = load_func('customers')
+        customers_data = load_func(customer_table)
         
         if not customers_data:
             st.info("등록된 고객이 없습니다. / Chưa có khách hàng nào.")
@@ -797,11 +806,11 @@ def render_customer_list(load_func, update_func, delete_func):
                 value = customer.get(key)
                 if pd.isna(value) or value is None:
                     return default
-                return str(value).strip() if str(value).strip() else defaul
+                return str(value).strip() if str(value).strip() else default
             
             # 수정 모드 확인
             if st.session_state.get(f"edit_customer_{customer_id}", False):
-                render_customer_edit_form(customer, update_func)
+                render_customer_edit_form(customer, update_func, customer_table)
                 continue
             
             # 안전한 값 가져오기 (None 처리)
@@ -956,7 +965,7 @@ def render_customer_list(load_func, update_func, delete_func):
                             can_delete, message = check_customer_deletion_safety(customer_id, load_func)
                             
                             if can_delete:
-                                if delete_func('customers', customer_id):
+                                if delete_func(customer_table, customer_id):
                                     st.success("고객이 삭제되었습니다. / Đã xóa khách hàng.")
                                     st.rerun()
                                 else:
@@ -972,13 +981,13 @@ def render_customer_list(load_func, update_func, delete_func):
                                     }
                                     
                                     try:
-                                        success = update_func('customers', customer_id, deactivate_data)
+                                        success = update_func(customer_table, customer_id, deactivate_data)
                                         if success:
                                             st.success("비활성화되었습니다. / Đã vô hiệu hóa.")
                                             st.rerun()
                                     except:
                                         try:
-                                            success = update_func('customers', deactivate_data, customer_id)
+                                            success = update_func(customer_table, deactivate_data, customer_id)
                                             if success:
                                                 st.success("비활성화되었습니다. / Đã vô hiệu hóa.")
                                                 st.rerun()
@@ -998,13 +1007,12 @@ def render_customer_list(load_func, update_func, delete_func):
         logging.error(f"고객 목록 로드 오류: {str(e)}")
         st.error(f"고객 목록 로딩 중 오류가 발생했습니다 / Lỗi tải danh sách: {str(e)}")
 
-
-def render_customer_statistics(load_func):
+def render_customer_statistics(load_func, customer_table):
     """고객 통계 탭"""
     st.header("고객 통계 / Thống kê khách hàng")
     
     try:
-        customers_data = load_func('customers')
+        customers_data = load_func(customer_table)
         
         if not customers_data:
             st.info("통계를 표시할 고객 데이터가 없습니다. / Không có dữ liệu để hiển thị thống kê.")
@@ -1166,7 +1174,7 @@ def render_customer_statistics(load_func):
         logging.error(f"통계 로드 오류: {str(e)}")
         st.error(f"통계 로딩 중 오류가 발생했습니다 / Lỗi tải thống kê: {str(e)}")
 
-def render_csv_management(load_func, save_func):
+def render_csv_management(load_func, save_func, customer_table):
     """CSV 다운로드/업로드 관리"""
     st.header("CSV 파일 관리 / Quản lý file CSV")
     
@@ -1177,7 +1185,7 @@ def render_csv_management(load_func, save_func):
         
         if st.button("고객 목록 CSV 다운로드 / Tải danh sách KH", type="primary"):
             try:
-                customers_data = load_func('customers')
+                customers_data = load_func(customer_table)
                 
                 if not customers_data:
                     st.warning("다운로드할 고객 데이터가 없습니다. / Không có dữ liệu để tải.")
@@ -1267,7 +1275,7 @@ def render_csv_management(load_func, save_func):
                     
                     if st.button("CSV 데이터 업로드 / Tải lên dữ liệu", type="primary"):
                         upload_results = process_csv_upload(
-                            df, save_func, load_func, update_existing, skip_errors
+                            df, save_func, load_func, update_existing, skip_errors, customer_table
                         )
                         
                         # 결과 표시
@@ -1303,7 +1311,6 @@ def render_csv_management(load_func, save_func):
             mime="text/csv",
             key="download_template"
         )
-
 
 def generate_customer_csv(customers_df):
     """고객 데이터를 CSV로 변환"""
@@ -1369,7 +1376,7 @@ def generate_customer_csv(customers_df):
     csv_string = export_df.to_csv(index=False, encoding='utf-8-sig')
     return csv_string
 
-def process_csv_upload(df, save_func, load_func, update_existing, skip_errors):
+def process_csv_upload(df, save_func, load_func, update_existing, skip_errors, customer_table):
     """CSV 데이터 업로드 처리"""
     
     results = {
@@ -1383,7 +1390,7 @@ def process_csv_upload(df, save_func, load_func, update_existing, skip_errors):
     existing_customers = {}
     if update_existing:
         try:
-            existing_data = load_func('customers')
+            existing_data = load_func(customer_table)
             if existing_data:
                 for customer in existing_data:
                     email = customer.get('email', '').strip().lower()
@@ -1443,8 +1450,8 @@ def process_csv_upload(df, save_func, load_func, update_existing, skip_errors):
                 customer_data['id'] = existing_customer['id']
                 customer_data['updated_at'] = datetime.now().isoformat()
                 
-                # update_func 파라미터 사용
-                result = update_func('customers', customer_data)
+                # update_func 파라미터 사용 (법인별 테이블)
+                result = update_func(customer_table, customer_data)
                 
                 if result:
                     results['updated_count'] += 1
@@ -1462,9 +1469,9 @@ def process_csv_upload(df, save_func, load_func, update_existing, skip_errors):
                     raise ValueError(f"행 {idx + 2}: 중복 이메일 ({email})")
                     
             else:
-                # 신규 고객 등록
+                # 신규 고객 등록 (법인별 테이블)
                 customer_data['created_at'] = datetime.now().isoformat()
-                result = save_func('customers', customer_data)
+                result = save_func(customer_table, customer_data)
                 
                 if result:
                     results['success_count'] += 1

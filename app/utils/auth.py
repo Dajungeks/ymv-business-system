@@ -72,7 +72,10 @@ class AuthManager:
                             'department': account.get('company_name'),
                             'company_code': account.get('company_code'),
                             'country': account.get('country'),
-                            'approval_authority': account.get('approval_authority', True),
+                            'company': account.get('company_code'),  # 추가
+                            'is_super_admin': account.get('is_super_admin', False),  # 추가
+                            'approval_authority': account.get('approval_authority', False),  # False로 변경
+                            'is_corporate': True,  # 추가
                             'is_active': account.get('is_active', True)
                         }
                         st.session_state.user_type = "corporate"
