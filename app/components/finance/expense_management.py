@@ -210,7 +210,7 @@ def render_expense_form(load_data_func, save_data_func, current_user):
                 "notes": notes if notes.strip() else None,
                 "urgency": urgency,
                 "status": "pending",
-                "document_number": "TEMP",  # 임시 번호
+                "document_number": generate_document_number(load_data_func),
                 "created_at": datetime.now().isoformat(),
                 "updated_at": datetime.now().isoformat()
             }
@@ -1123,10 +1123,9 @@ def render_expense_statistics(load_data_func, calculate_expense_statistics_func)
                 st.write("**월별 금액**")
                 st.bar_chart(df_monthly.set_index('월')['금액'])
 
-
 def render_approval_management(load_data_func, update_data_func, get_current_user_func, 
                               get_approval_status_info_func):
-    """승인 관리 (CEO/Master 전용)"""
+    """승인 관리 (CEO/Master 전용) - 테이블 + ID 입력 방식"""
     
     current_user = get_current_user_func()
     if not current_user or current_user.get('role') not in ['Master', 'CEO']:
@@ -1153,110 +1152,153 @@ def render_approval_management(load_data_func, update_data_func, get_current_use
         st.info("승인 대기중인 지출요청서가 없습니다.")
         return
     
-    st.subheader(f"👨‍💼 승인 대기중인 지출요청서 ({len(pending_expenses)}건)")
+    st.subheader(f"✅ 지출요청서 승인 관리")
     
-    sort_option = st.selectbox(
-        "정렬 기준",
-        ["요청일순", "금액높은순", "금액낮은순"],
-        key="approval_sort"
-    )
+    st.write(f"📋 총 {len(pending_expenses)}건의 승인 대기")
     
-    if sort_option == "요청일순":
-        pending_expenses.sort(key=lambda x: x.get('created_at', ''))
-    elif sort_option == "금액높은순":
-        pending_expenses.sort(key=lambda x: x.get('amount', 0), reverse=True)
-    elif sort_option == "금액낮은순":
-        pending_expenses.sort(key=lambda x: x.get('amount', 0))
-    
-    for expense in pending_expenses:
-        requester_id = expense.get('requester') or expense.get('employee_id')
+    # 테이블 데이터 생성
+    table_data = []
+    for exp in pending_expenses:
+        requester_id = exp.get('requester') or exp.get('employee_id')
         employee_info = employee_dict.get(requester_id, {})
         employee_name = employee_info.get('name', '알 수 없음')
-        employee_id = employee_info.get('employee_id', f"ID{requester_id}")
         
         request_date = 'N/A'
-        if expense.get('created_at'):
+        if exp.get('created_at'):
             try:
-                dt = datetime.fromisoformat(str(expense['created_at']).replace('Z', '+00:00'))
+                dt = datetime.fromisoformat(str(exp['created_at']).replace('Z', '+00:00'))
                 request_date = dt.strftime('%Y-%m-%d')
             except:
-                request_date = str(expense['created_at'])[:10]
+                request_date = str(exp['created_at'])[:10]
         
-        expense_type = expense.get('expense_type', '기타')
-        amount = expense.get('amount', 0)
-        currency = expense.get('currency', 'VND')
+        table_data.append({
+            'ID': exp.get('id'),
+            '문서번호': exp.get('document_number', 'N/A'),
+            '요청자': employee_name,
+            '요청일': request_date,
+            '지출일': exp.get('expense_date', 'N/A'),
+            '지출유형': exp.get('expense_type', '기타'),
+            '금액': f"{exp.get('amount', 0):,.0f}",
+            '통화': exp.get('currency', 'VND'),
+            '결제방법': exp.get('payment_method', 'N/A'),
+            '긴급도': exp.get('urgency', '보통')
+        })
+    
+    # 테이블 표시
+    if table_data:
+        df = pd.DataFrame(table_data)
+        st.dataframe(df, use_container_width=True, height=400, hide_index=True)
         
-        with st.expander(
-            f"💰 [{request_date}] {employee_name} - {expense_type} ({amount:,} {currency})",
-            expanded=False
-        ):
-            col1, col2 = st.columns([2, 1])
+        st.markdown("---")
+        
+        # 승인/반려 처리
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            st.markdown("### ✅ 승인")
+            approve_ids_input = st.text_input(
+                "승인할 ID (쉼표로 구분)",
+                placeholder="예: 15, 14, 7",
+                key="approve_expense_ids"
+            )
             
-            with col1:
-                st.write("**요청 정보**")
-                st.write(f"• 요청자: {employee_name} ({employee_id})")
-                st.write(f"• 부서: {expense.get('department', 'N/A')}")
-                st.write(f"• 요청일: {request_date}")
-                st.write(f"• 지출일: {expense.get('expense_date', 'N/A')}")
-                st.write(f"• 지출 유형: {expense_type}")
-                st.write(f"• 금액: {amount:,} {currency}")
-                st.write(f"• 결제 방법: {expense.get('payment_method', 'N/A')}")
-                st.write(f"• 긴급도: {expense.get('urgency', '보통')}")
-                st.write(f"• 공급업체: {expense.get('vendor', 'N/A')}")
-                st.write(f"• 영수증 번호: {expense.get('receipt_number', 'N/A')}")
-                
-                st.write("**지출 내역**")
-                st.write(expense.get('description', '내용없음'))
-                
-                if expense.get('business_purpose'):
-                    st.write("**사업 목적**")
-                    st.write(expense.get('business_purpose'))
-            
-            with col2:
-                st.write("**승인 처리**")
-                
-                approval_comment = st.text_area(
-                    "처리 의견 (선택사항)",
-                    key=f"comment_{expense.get('id')}",
-                    height=80,
-                    help="승인 시: 선택사항, 반려 시: 필수 입력"
-                )
-                
-                button_col1, button_col2 = st.columns(2)
-                
-                with button_col1:
-                    if st.button("✅ 승인", key=f"approve_{expense.get('id')}", type="primary"):
-                        update_data = {
-                            'id': expense.get('id'),
-                            'status': 'approved',
-                            'approved_by': current_user.get('id'),
-                            'approved_at': datetime.now().isoformat(),
-                            'approval_comment': approval_comment if approval_comment else None,
-                            'updated_at': datetime.now().isoformat()
-                        }
+            if approve_ids_input:
+                try:
+                    approve_ids = [int(id.strip()) for id in approve_ids_input.split(',')]
+                    selected_expenses = [exp for exp in pending_expenses if exp.get('id') in approve_ids]
+                    
+                    if selected_expenses:
+                        # 통화별 합계
+                        currency_totals = {}
+                        for exp in selected_expenses:
+                            currency = exp.get('currency', 'VND')
+                            amount = exp.get('amount', 0)
+                            currency_totals[currency] = currency_totals.get(currency, 0) + amount
                         
-                        if update_data_func("expenses", update_data, "id"):
-                            st.success(f"✅ {employee_name}의 지출요청서를 승인했습니다.")
-                            st.rerun()
-                        else:
-                            st.error("승인 처리에 실패했습니다.")
-                
-                with button_col2:
-                    if st.button("❌ 반려", key=f"reject_{expense.get('id')}"):
-                        if not approval_comment or not approval_comment.strip():
-                            st.error("⚠️ 반려 사유를 반드시 입력해주세요!")
-                        else:
-                            update_data = {
-                                'id': expense.get('id'),
-                                'status': 'rejected',
-                                'approved_by': current_user.get('id'),
-                                'approved_at': datetime.now().isoformat(),
-                                'approval_comment': approval_comment,
-                                'updated_at': datetime.now().isoformat()
-                            }
+                        total_str = ", ".join([f"{amount:,.0f} {curr}" for curr, amount in currency_totals.items()])
+                        
+                        st.info(f"선택된 항목: {len(selected_expenses)}건 - {total_str}")
+                        
+                        if st.button(f"✅ 승인 처리 ({len(selected_expenses)}건)", type="primary", use_container_width=True):
+                            success_count = 0
                             
-                            if update_data_func("expenses", update_data, "id"):
-                                st.success(f"❌ {employee_name}의 지출요청서를 반려했습니다.")
+                            for exp in selected_expenses:
+                                update_data = {
+                                    'id': exp.get('id'),
+                                    'status': 'approved',
+                                    'approved_by': current_user.get('id'),
+                                    'approved_at': datetime.now().isoformat(),
+                                    'updated_at': datetime.now().isoformat()
+                                }
+                                
+                                if update_data_func("expenses", update_data, "id"):
+                                    success_count += 1
+                            
+                            if success_count == len(selected_expenses):
+                                st.success(f"✅ {len(selected_expenses)}건 승인 완료!")
+                                import time
+                                time.sleep(2)
                                 st.rerun()
                             else:
-                                st.error("반려 처리에 실패했습니다.")
+                                st.warning(f"⚠️ {success_count}/{len(selected_expenses)}건만 승인되었습니다.")
+                                import time
+                                time.sleep(2)
+                                st.rerun()
+                    else:
+                        st.warning("⚠️ 선택한 ID가 승인 대기 목록에 없습니다.")
+                except ValueError:
+                    st.error("⚠️ ID는 숫자로 입력해주세요.")
+        
+        with col2:
+            st.markdown("### ❌ 반려")
+            reject_ids_input = st.text_input(
+                "반려할 ID (쉼표로 구분)",
+                placeholder="예: 15, 14, 7",
+                key="reject_expense_ids"
+            )
+            
+            reject_reason = st.text_input("반려 사유 *", key="reject_expense_reason")
+            
+            if reject_ids_input:
+                try:
+                    reject_ids = [int(id.strip()) for id in reject_ids_input.split(',')]
+                    selected_expenses = [exp for exp in pending_expenses if exp.get('id') in reject_ids]
+                    
+                    if selected_expenses:
+                        st.info(f"선택된 항목: {len(selected_expenses)}건")
+                        
+                        if st.button(f"❌ 반려 처리 ({len(selected_expenses)}건)", type="secondary", use_container_width=True):
+                            if not reject_reason.strip():
+                                st.error("반려 사유를 입력해주세요.")
+                            else:
+                                success_count = 0
+                                
+                                for exp in selected_expenses:
+                                    update_data = {
+                                        'id': exp.get('id'),
+                                        'status': 'rejected',
+                                        'approved_by': current_user.get('id'),
+                                        'approved_at': datetime.now().isoformat(),
+                                        'approval_comment': reject_reason,
+                                        'updated_at': datetime.now().isoformat()
+                                    }
+                                    
+                                    if update_data_func("expenses", update_data, "id"):
+                                        success_count += 1
+                                
+                                if success_count == len(selected_expenses):
+                                    st.success(f"✅ {len(selected_expenses)}건 반려 완료!")
+                                    import time
+                                    time.sleep(2)
+                                    st.rerun()
+                                else:
+                                    st.warning(f"⚠️ {success_count}/{len(selected_expenses)}건만 반려되었습니다.")
+                                    import time
+                                    time.sleep(2)
+                                    st.rerun()
+                    else:
+                        st.warning("⚠️ 선택한 ID가 승인 대기 목록에 없습니다.")
+                except ValueError:
+                    st.error("⚠️ ID는 숫자로 입력해주세요.")
+
+
