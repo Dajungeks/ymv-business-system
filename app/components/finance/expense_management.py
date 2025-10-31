@@ -204,6 +204,12 @@ def render_expense_form(load_data_func, save_data_func, current_user, expense_ta
                 st.error("❌ 지출 유형을 선택해주세요.")
                 return
             
+            # 결제방법에 따라 reimbursement_status 초기값 설정
+            if payment_method in ['법인카드', '법인계좌']:
+                initial_reimbursement_status = 'not_required'
+            else:
+                initial_reimbursement_status = None  # 화던 확인 후 pending으로 변경
+
             # 지출 데이터 생성
             expense_data = {
                 "requester": selected_employee_id,
@@ -213,18 +219,14 @@ def render_expense_form(load_data_func, save_data_func, current_user, expense_ta
                 "amount": amount,
                 "currency": currency,
                 "payment_method": payment_method,
-                "vendor": vendor if vendor.strip() else None,
-                "description": description if description.strip() else None,
-                "business_purpose": business_purpose if business_purpose.strip() else None,
-                "receipt_number": receipt_number if receipt_number.strip() else None,
-                "notes": notes if notes.strip() else None,
-                "urgency": urgency,
+                # ... 기타 필드
                 "status": "pending",
+                "reimbursement_status": initial_reimbursement_status,  # ← 추가
                 "document_number": generate_document_number(load_data_func, expense_table),
                 "created_at": datetime.now().isoformat(),
                 "updated_at": datetime.now().isoformat()
             }
-            
+
             # 법인별 테이블에 저장
             if save_data_func(expense_table, expense_data):
                 st.success("✅ 지출 요청이 제출되었습니다!")
@@ -956,11 +958,11 @@ def render_invoice_check_tab(load_data_func, update_data_func, get_current_user_
                             for exp in selected_expenses:
                                 # 환급 상태 결정
                                 payment_method = exp.get('payment_method', '')
-                                if payment_method == '개인 신용카드':
-                                    reimbursement_status = 'pending'
-                                else:
+                                if payment_method in ['법인카드', '법인계좌']:
                                     reimbursement_status = 'not_required'
-                                
+                                else:
+                                    # 현금, 개인신용카드, 개인 계좌 이체 등 → 환급 필요
+                                    reimbursement_status = 'pending'
                                 update_data = {
                                     'id': exp.get('id'),
                                     'accounting_confirmed': True,
