@@ -69,13 +69,17 @@ class ConnectionWrapper:
         return response.data if response.data else []
     
     def _execute_insert(self, table, data):
-        """INSERT 쿼리 실행"""
+        """INSERT 쿼리 실행 - ID 반환"""
         if not data:
             raise ValueError("Insert data cannot be empty")
         
         response = self.client.table(table).insert(data).execute()
-        return response.data if response.data else []
-    
+        
+        # ID 반환 (첫 번째 레코드의 id)
+        if response.data and len(response.data) > 0:
+            return response.data[0].get('id')
+        return None
+        
     def _execute_update(self, table, data, filters):
         """UPDATE 쿼리 실행"""
         if not data or not filters:
@@ -150,15 +154,15 @@ class DatabaseOperations:
     
     def save_data(self, table, data):
         """
-        데이터 저장 (기존 save_data_to_supabase)
-        Save data to database table
+        데이터 저장 (ID 반환)
+        Save data to database table and return ID
         """
         try:
             result = self.db.execute_query("INSERT", table, data=data)
-            return len(result) > 0 if result else False
+            return result  # ID 또는 None 반환
         except Exception as e:
             st.error(f"데이터 저장 실패 ({table}): {str(e)}")
-            return False
+            return None
     
     def update_data(self, table, data, id_field="id"):
         """

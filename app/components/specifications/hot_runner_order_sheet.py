@@ -78,7 +78,7 @@ def show_hot_runner_order_management(load_func, save_func, update_func, current_
         render_ymk_approval_page(load_func, update_func, current_user, hot_runner_table)
     else:
         # 일반 사용자: 작성, 목록, 수정
-        tab1, tab2, tab3 = st.tabs(["📝 작성", "📋 목록", "🔍 검색/수정"])
+        tab1, tab2 = st.tabs(["📝 작성", "📋 목록"])
         
         with tab1:
             render_order_form(load_func, save_func, current_user, hot_runner_table)
@@ -86,9 +86,6 @@ def show_hot_runner_order_management(load_func, save_func, update_func, current_
         with tab2:
             render_order_list(load_func, update_func, current_user, hot_runner_table)
         
-        with tab3:
-            render_search_edit(load_func, update_func, save_func, current_user, hot_runner_table)
-
 
 def generate_order_number(load_func, hot_runner_table, quotation_id=None):
     """주문번호 생성 (HRO-YYMMDD-NNN) + Revision 처리"""
@@ -410,28 +407,62 @@ def render_order_list(load_func, update_func, current_user, hot_runner_table):
         df = pd.DataFrame(table_data)
         st.dataframe(df, use_container_width=True, hide_index=True)
         
-        st.markdown("---")
         
-        # 상세 보기 / 프린트 / 수정
-        col1, col2, col3 = st.columns(3)
+        st.markdown("---")
+        st.markdown("#### 🎯 작업 선택")
+        
+        # ID 입력 및 버튼 (1개 입력, 4개 버튼)
+        col1, col2, col3, col4, col5 = st.columns([2, 1, 1, 1, 1])
         
         with col1:
-            order_id = st.number_input("ID 입력", min_value=1, step=1, key="view_order_id")
-            if st.button("📄 상세 보기", key="view_btn_list"):
-                st.session_state['viewing_order_id'] = order_id
-                st.rerun()
+            selected_id = st.number_input("ID 입력", min_value=1, step=1, key="selected_order_id")
         
         with col2:
-            print_id = st.number_input("ID 입력", min_value=1, step=1, key="print_order_id")
-            if st.button("🖨️ 프린트", key="print_btn_list"):
-                st.session_state['printing_order_id'] = print_id
+            if st.button("📄 상세", key="view_btn_list", use_container_width=True):
+                st.session_state['viewing_order_id'] = selected_id
                 st.rerun()
         
         with col3:
-            edit_id = st.number_input("ID 입력", min_value=1, step=1, key="edit_order_id")
-            if st.button("✏️ 수정", key="edit_btn_list"):
-                st.session_state['editing_order_id'] = edit_id
+            if st.button("🖨️ 프린트", key="print_btn_list", use_container_width=True):
+                st.session_state['printing_order_id'] = selected_id
                 st.rerun()
+        
+        with col4:
+            # 수정 가능 여부 확인
+            selected_order = next((o for o in filtered_orders if o.get('id') == selected_id), None)
+            can_edit = selected_order and selected_order.get('status') in ['draft', 'rejected']
+            
+            if st.button("✏️ 수정", key="edit_btn_list", disabled=not can_edit, use_container_width=True):
+                st.session_state['editing_order_id'] = selected_id
+                st.rerun()
+        
+        with col5:
+            # 삭제 가능 여부 확인 (본인이 작성한 것만)
+            can_delete = selected_order and selected_order.get('created_by') == current_user.get('id')
+            
+            if st.button("🗑️ 삭제", key="delete_btn_list", disabled=not can_delete, use_container_width=True):
+                st.session_state['deleting_order_id'] = selected_id
+                st.rerun()
+        
+        # 삭제 확인
+        if st.session_state.get('deleting_order_id'):
+            st.warning(f"⚠️ ID {st.session_state['deleting_order_id']}를 정말 삭제하시겠습니까?")
+            col_a, col_b = st.columns(2)
+            
+            with col_a:
+                if st.button("✅ 확인", type="primary", key="confirm_delete_list"):
+                    update_data = {'status': 'deleted'}
+                    if update_func(hot_runner_table, st.session_state['deleting_order_id'], update_data):
+                        st.success("✅ 삭제되었습니다!")
+                        del st.session_state['deleting_order_id']
+                        st.rerun()
+                    else:
+                        st.error("❌ 삭제 실패")
+            
+            with col_b:
+                if st.button("❌ 취소", key="cancel_delete_list"):
+                    del st.session_state['deleting_order_id']
+                    st.rerun()
     else:
         st.info("조건에 맞는 규격 결정서가 없습니다.")
     
@@ -447,6 +478,13 @@ def render_order_list(load_func, update_func, current_user, hot_runner_table):
         render_print_preview(load_func, st.session_state['printing_order_id'], hot_runner_table)
         if st.button("❌ 닫기", key="close_print_list"):
             del st.session_state['printing_order_id']
+    
+    # 수정 모달
+    if st.session_state.get("editing_order_id"):
+        render_edit_form(load_func, update_func, current_user, hot_runner_table, st.session_state["editing_order_id"])
+        if st.button("❌ 닫기", key="close_edit_list"):
+            del st.session_state["editing_order_id"]
+            st.rerun()
             st.rerun()
 
 
@@ -686,41 +724,6 @@ def render_search_edit(load_func, update_func, save_func, current_user, hot_runn
                 del st.session_state['viewing_order_id']
                 st.rerun()
         
-        # 수정 폼 (재제출 기능 포함)
-        if st.session_state.get('editing_order_id'):
-            st.markdown("---")
-            st.markdown("### ✏️ 규격 결정서 수정")
-            
-            order_to_edit = [o for o in editable_orders 
-                           if o.get('id') == st.session_state['editing_order_id']]
-            
-            if order_to_edit:
-                order = order_to_edit[0]
-                
-                # 부결 사유 표시
-                if order.get('status') == 'rejected' and order.get('rejection_reason'):
-                    st.error(f"**부결 사유:** {order.get('rejection_reason')}")
-                
-                st.info("💡 수정 기능은 다음 단계에서 구현됩니다.")
-                
-                # 재제출 버튼
-                if st.button("📤 재제출 (YMK 승인 요청)", type="primary", key="resubmit_btn"):
-                    update_data = {
-                        'status': 'submitted',
-                        'submitted_at': datetime.now().isoformat(),
-                        'rejection_reason': None
-                    }
-                    
-                    if update_func(hot_runner_table, order.get('id'), update_data):
-                        st.success("✅ 재제출되었습니다!")
-                        del st.session_state['editing_order_id']
-                        st.rerun()
-                    else:
-                        st.error("❌ 재제출 실패")
-                
-                if st.button("🔙 취소", key="cancel_edit_btn"):
-                    del st.session_state['editing_order_id']
-                    st.rerun()
     else:
         st.info("조건에 맞는 규격 결정서가 없습니다.")
 
@@ -852,4 +855,280 @@ def render_ymk_approval_page(load_func, update_func, current_user, hot_runner_ta
                                 del st.session_state['ymk_rejecting']
                                 st.rerun()
                             else:
-                                st.error("❌ 부결 처리 실패")
+                                st.error("❌ 부결 처리 실패")        # 수정 폼
+        if st.session_state.get('editing_order_id'):
+            order_to_edit = [o for o in editable_orders 
+                           if o.get('id') == st.session_state['editing_order_id']]
+            
+            if order_to_edit:
+                render_edit_form(load_func, update_func, current_user, hot_runner_table, st.session_state['editing_order_id'])
+    else:
+        st.info("조건에 맞는 규격 결정서가 없습니다.")
+
+
+
+def render_edit_form(load_func, update_func, current_user, hot_runner_table, order_id):
+    """규격 결정서 수정 폼 (전체 필드)"""
+    
+    st.markdown("---")
+    st.markdown("### ✏️ 규격 결정서 수정")
+    
+    # 기존 데이터 로드
+    orders = load_func(hot_runner_table) if load_func else []
+    order = next((o for o in orders if o.get('id') == order_id), None)
+    
+    if not order:
+        st.error("❌ 해당 주문을 찾을 수 없습니다.")
+        return
+    
+    # 부결 사유 표시
+    if order.get('status') == 'rejected' and order.get('rejection_reason'):
+        st.error(f"**부결 사유:** {order.get('rejection_reason')}")
+    
+    # 기존 데이터를 세션에 로드
+    if 'edit_loaded' not in st.session_state:
+        st.session_state['selected_customer_name'] = order.get('customer_name', '')
+        st.session_state['selected_customer_id'] = order.get('customer_id')
+        st.session_state['auto_project_name'] = order.get('project_name', '')
+        st.session_state['auto_part_name'] = order.get('part_name', '')
+        st.session_state['auto_mold_no'] = order.get('mold_no', '')
+        st.session_state['auto_sales_rep_id'] = order.get('sales_contact')
+        st.session_state['auto_resin'] = order.get('resin', '')
+        st.session_state['quotation_mode'] = order.get('quotation_mode', 'B')
+        st.session_state['edit_loaded'] = True
+    
+    # Form 안: 입력 필드 (작성 폼과 동일)
+    with st.form("edit_order_form", clear_on_submit=False):
+        st.markdown("---")
+        
+        # 고객 정보
+        from components.specifications.customer_section import render_customer_section, validate_customer_data
+        customer_data = render_customer_section_edit(load_func, None, order, language='KO')
+        
+        st.markdown("---")
+        
+        # 기술 사양
+
+        from components.specifications.technical_section import render_technical_section
+        technical_data = render_technical_section(load_func, language='KO', key_prefix='edit_')
+        
+        st.markdown("---")
+        
+        # 게이트 정보
+        from components.specifications.gate_section import render_gate_section
+        gate_data = render_gate_section(language='KO', key_prefix='edit_')
+        
+        st.markdown("---")
+        
+        # 제출 버튼
+        col1, col2, col3 = st.columns([1, 1, 1])
+        
+        with col1:
+            save_button = st.form_submit_button("💾 수정 저장", type="primary", use_container_width=True)
+        
+        with col2:
+            resubmit_button = st.form_submit_button("📤 재제출", use_container_width=True)
+        
+        with col3:
+            cancel_button = st.form_submit_button("❌ 취소", use_container_width=True)
+    
+    # Form 밖: 저장 처리
+    if cancel_button:
+        del st.session_state['editing_order_id']
+        del st.session_state['edit_loaded']
+        clear_order_form_session()
+        st.rerun()
+    
+    if save_button or resubmit_button:
+        # 필수 입력 검증
+        is_valid, message = validate_customer_data(customer_data)
+        
+        if not is_valid:
+            st.error(f"❌ {message}")
+            return
+        
+        # 데이터 병합
+        update_data = {
+            'customer_id': customer_data.get('customer_id'),
+            'customer_name': customer_data.get('customer_name'),
+            'delivery_to': customer_data.get('delivery_to'),
+            'project_name': customer_data.get('project_name'),
+            'part_name': customer_data.get('part_name'),
+            'mold_no': customer_data.get('mold_no'),
+            'ymv_no': customer_data.get('ymv_no'),
+            'sales_contact': customer_data.get('sales_contact'),
+            'injection_ton': customer_data.get('injection_ton'),
+            'resin': customer_data.get('resin'),
+            'additive': customer_data.get('additive'),
+            'color_change': customer_data.get('color_change'),
+            'order_type': customer_data.get('order_type'),
+            
+            # 기술 사양
+            'base_dimensions': json.dumps(technical_data.get('base_dimensions')),
+            'base_processor': technical_data.get('base_processor'),
+            'cooling_pt_tap': technical_data.get('cooling_pt_tap'),
+            'nozzle_specs': json.dumps(technical_data.get('nozzle_specs')),
+            'manifold_type': technical_data.get('manifold_type'),
+            'manifold_standard': technical_data.get('manifold_standard'),
+            'sensor_type': technical_data.get('sensor_type'),
+            'timer_connector': json.dumps(technical_data.get('timer_connector')),
+            'heater_connector': json.dumps(technical_data.get('heater_connector')),
+            'id_card_type': technical_data.get('id_card_type'),
+            'nl_phi': technical_data.get('nl_phi'),
+            'nl_sr': technical_data.get('nl_sr'),
+            'locate_ring': technical_data.get('locate_ring'),
+            'hrs_system_type': technical_data.get('nozzle_specs', {}).get('hrs_system_type'),
+            
+            # 게이트 정보
+            'gate_data': json.dumps(gate_data.get('gate_data')),
+            'spare_list': gate_data.get('spare_list'),
+            'special_notes': gate_data.get('special_notes')
+        }
+        
+        # 재제출일 경우 상태 변경
+        if resubmit_button:
+            update_data['status'] = 'submitted'
+            update_data['submitted_at'] = datetime.now().isoformat()
+            update_data['rejection_reason'] = None
+        
+        # DB 업데이트
+        try:
+            update_data['id'] = order_id
+            if update_func(hot_runner_table, update_data):
+                if resubmit_button:
+                    st.success(f"✅ 수정 및 재제출되었습니다! (YMK 승인 대기)")
+                else:
+                    st.success("✅ 수정되었습니다!")
+                del st.session_state['editing_order_id']
+                del st.session_state['edit_loaded']
+                clear_order_form_session()
+                st.rerun()
+            else:
+                st.error("❌ 수정 실패")
+        except Exception as e:
+            st.error(f"❌ 수정 실패: {str(e)}")
+
+
+def render_customer_section_edit(load_func, save_func, order, language='KO'):
+    """수정용 고객 정보 섹션 (key 중복 방지)"""
+    
+    st.markdown(f"### 📋 고객 및 프로젝트 정보")
+    
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        customer_name = st.text_input(
+            f"🔴 고객사 *",
+            value=order.get('customer_name', ''),
+            key="edit_customer_name_input"
+        )
+        
+        project_name = st.text_input(
+            f"🔴 프로젝트명 *",
+            value=order.get('project_name', ''),
+            key="edit_project_name"
+        )
+        
+        mold_no = st.text_input(
+            "금형번호",
+            value=order.get('mold_no', ''),
+            key="edit_mold_no"
+        )
+    
+    with col2:
+        delivery_to = st.text_input(
+            f"🔴 납품처 *",
+            value=order.get('delivery_to', ''),
+            key="edit_delivery_to"
+        )
+        
+        part_name = st.text_input(
+            "부품명",
+            value=order.get('part_name', ''),
+            key="edit_part_name"
+        )
+        
+        ymv_no = st.text_input(
+            "YMV 번호",
+            value=order.get('ymv_no', ''),
+            key="edit_ymv_no"
+        )
+    
+    st.markdown("---")
+    
+    col3, col4 = st.columns(2)
+    
+    with col3:
+        employees = load_func('employees') if load_func else []
+        sales_employees = [e for e in employees if e.get('role') in ['Manager', 'Admin', 'CEO']]
+        
+        current_sales_id = order.get('sales_contact')
+        default_index = 0
+        for idx, emp in enumerate(sales_employees):
+            if emp.get('id') == current_sales_id:
+                default_index = idx
+                break
+        
+        employee_options = [f"{e.get('name', 'N/A')} - {e.get('position', '')}" for e in sales_employees]
+        selected_employee = st.selectbox(
+            f"🔴 영업담당 *",
+            employee_options,
+            index=default_index,
+            key="edit_sales_contact"
+        )
+        sales_contact_id = sales_employees[employee_options.index(selected_employee)].get('id')
+        
+        resin = st.text_input("수지", value=order.get('resin', ''), key="edit_resin")
+    
+    with col4:
+        injection_ton = st.number_input(
+            "사출기 TON",
+            value=int(order.get('injection_ton', 0)),
+            min_value=0,
+            step=10,
+            key="edit_injection_ton"
+        )
+        
+        additive = st.text_input("첨가제", value=order.get('additive', ''), key="edit_additive")
+    
+    st.markdown("---")
+    st.markdown(f"### 🔧 주문 옵션")
+    
+    col5, col6 = st.columns(2)
+    
+    with col5:
+        color_change_val = 1 if order.get('color_change') else 0
+        color_change = st.radio(
+            f"🔴 색상 변경 *",
+            ["없음", "있음"],
+            index=color_change_val,
+            horizontal=True,
+            key="edit_color_change"
+        )
+    
+    with col6:
+        order_type_options = ["SYSTEM", "SEMI", "TOTAL"]
+        order_type_index = order_type_options.index(order.get('order_type', 'SYSTEM')) if order.get('order_type') in order_type_options else 0
+        order_type = st.radio(
+            f"🔴 주문 타입 *",
+            order_type_options,
+            index=order_type_index,
+            horizontal=True,
+            key="edit_order_type"
+        )
+    
+    return {
+        'customer_id': order.get('customer_id'),
+        'customer_name': customer_name,
+        'delivery_to': delivery_to,
+        'project_name': project_name,
+        'part_name': part_name,
+        'mold_no': mold_no,
+        'ymv_no': ymv_no,
+        'sales_contact': sales_contact_id,
+        'injection_ton': injection_ton,
+        'resin': resin,
+        'additive': additive,
+        'color_change': color_change == "있음",
+        'order_type': order_type
+    }

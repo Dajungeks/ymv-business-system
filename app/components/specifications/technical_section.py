@@ -5,7 +5,7 @@ import pandas as pd
 import json
 from utils.language_config import get_label
 
-def render_product_code_search(load_func, language='KO'):
+def render_product_code_search(load_func, language='KO', key_prefix=''):
     """제품 CODE 검색 UI - Code 1~7 검색 가능 (제품 관리와 동일한 방식)"""
     
     st.markdown("#### 🔍 제품 CODE 검색")
@@ -24,14 +24,14 @@ def render_product_code_search(load_func, language='KO'):
         code_number = st.selectbox(
             "Code 선택",
             ["전체", "1", "2", "3", "4", "5", "6", "7"],
-            key="product_code_number_select"
+            key=f"{key_prefix}product_code_number_select"
         )
     
     with search_col2:
         search_term = st.text_input(
             "제품 CODE 또는 이름 검색",
             placeholder="예: HRS-YMO-ST-1-MCC-01-00",
-            key="product_code_search"
+            key=f"{key_prefix}product_code_search"
         )
     
     # 검색 결과
@@ -86,10 +86,10 @@ def render_product_code_search(load_func, language='KO'):
                 "선택할 제품 ID 입력",
                 min_value=1,
                 step=1,
-                key="selected_product_id_input"
+                key=f"{key_prefix}selected_product_id_input"
             )
             
-            if st.button("✓ 선택", type="primary"):
+            if st.button("✓ 선택", type="primary", key=f"{key_prefix}select_product_btn"):
                 selected_product = next((p for p in filtered_products if p.get('id') == selected_id), None)
                 if selected_product:
                     return selected_product.get('product_code', '')
@@ -101,7 +101,7 @@ def render_product_code_search(load_func, language='KO'):
     return None
 
 
-def render_technical_section(load_func, language='KO'):
+def render_technical_section(load_func, language='KO', key_prefix=''):
     """기술 사양 입력 섹션"""
     
     # BASE 정보
@@ -121,27 +121,27 @@ def render_technical_section(load_func, language='KO'):
         
         with base_cols[1]:
             st.markdown(f"**폭 (mm)**")
-            plate_w = st.number_input("", min_value=0.0, step=0.1, key="plate_width", label_visibility="collapsed")
-            top_w = st.number_input("", min_value=0.0, step=0.1, key="top_width", label_visibility="collapsed")
-            space_w = st.number_input("", min_value=0.0, step=0.1, key="space_width", label_visibility="collapsed")
-            holding_w = st.number_input("", min_value=0.0, step=0.1, key="holding_width", label_visibility="collapsed")
+            plate_w = st.number_input("", min_value=0.0, step=0.1, key=f"{key_prefix}plate_width", label_visibility="collapsed")
+            top_w = st.number_input("", min_value=0.0, step=0.1, key=f"{key_prefix}top_width", label_visibility="collapsed")
+            space_w = st.number_input("", min_value=0.0, step=0.1, key=f"{key_prefix}space_width", label_visibility="collapsed")
+            holding_w = st.number_input("", min_value=0.0, step=0.1, key=f"{key_prefix}holding_width", label_visibility="collapsed")
         
         with base_cols[2]:
             st.markdown(f"**길이 (mm)**")
-            plate_l = st.number_input("", min_value=0.0, step=0.1, key="plate_length", label_visibility="collapsed")
-            top_l = st.number_input("", min_value=0.0, step=0.1, key="top_length", label_visibility="collapsed")
-            space_l = st.number_input("", min_value=0.0, step=0.1, key="space_length", label_visibility="collapsed")
-            holding_l = st.number_input("", min_value=0.0, step=0.1, key="holding_length", label_visibility="collapsed")
+            plate_l = st.number_input("", min_value=0.0, step=0.1, key=f"{key_prefix}plate_length", label_visibility="collapsed")
+            top_l = st.number_input("", min_value=0.0, step=0.1, key=f"{key_prefix}top_length", label_visibility="collapsed")
+            space_l = st.number_input("", min_value=0.0, step=0.1, key=f"{key_prefix}space_length", label_visibility="collapsed")
+            holding_l = st.number_input("", min_value=0.0, step=0.1, key=f"{key_prefix}holding_length", label_visibility="collapsed")
         
         with base_cols[3]:
             st.markdown(f"**높이 (mm)**")
-            plate_h = st.number_input("", min_value=0.0, step=0.1, key="plate_height", label_visibility="collapsed")
-            top_h = st.number_input("", min_value=0.0, step=0.1, key="top_height", label_visibility="collapsed")
-            space_h = st.number_input("", min_value=0.0, step=0.1, key="space_height", label_visibility="collapsed")
-            holding_h = st.number_input("", min_value=0.0, step=0.1, key="holding_height", label_visibility="collapsed")
+            plate_h = st.number_input("", min_value=0.0, step=0.1, key=f"{key_prefix}plate_height", label_visibility="collapsed")
+            top_h = st.number_input("", min_value=0.0, step=0.1, key=f"{key_prefix}top_height", label_visibility="collapsed")
+            space_h = st.number_input("", min_value=0.0, step=0.1, key=f"{key_prefix}space_height", label_visibility="collapsed")
+            holding_h = st.number_input("", min_value=0.0, step=0.1, key=f"{key_prefix}holding_height", label_visibility="collapsed")
         
-        base_processor = st.text_input("BASE 가공", key="base_processor")
-        cooling_pt_tap = st.text_input("냉각 PT TAP", key="cooling_pt_tap")
+        base_processor = st.text_input("BASE 가공", key=f"{key_prefix}base_processor")
+        cooling_pt_tap = st.text_input("냉각 PT TAP", key=f"{key_prefix}cooling_pt_tap")
     
     # NOZZLE
     st.markdown("---")
@@ -160,7 +160,7 @@ def render_technical_section(load_func, language='KO'):
         st.text_input(
             "🔴 제품 CODE *",
             value=nozzle_code,
-            key="nozzle_code_display",
+            key=f"{key_prefix}nozzle_code_display",
             disabled=True,
             help="견적서에서 자동으로 가져온 제품 CODE입니다."
         )
@@ -170,10 +170,10 @@ def render_technical_section(load_func, language='KO'):
         st.info("📝 모드 B: 제품 CODE를 검색하거나 직접 선택하세요")
         
         # 검색 UI
-        searched_code = render_product_code_search(load_func, language)
+        searched_code = render_product_code_search(load_func, language, key_prefix)
         
         if searched_code:
-            st.session_state['searched_product_code'] = searched_code
+            st.session_state[f'{key_prefix}searched_product_code'] = searched_code
             st.success(f"✅ 선택된 CODE: {searched_code}")
         
         # 수동 선택 UI
@@ -187,7 +187,7 @@ def render_technical_section(load_func, language='KO'):
             product_code_select = st.selectbox(
                 "제품 CODE (1~7)",
                 ["1", "2", "3", "4", "5", "6", "7"],
-                key="product_code_select"
+                key=f"{key_prefix}product_code_select"
             )
         
         with col_code2:
@@ -195,19 +195,19 @@ def render_technical_section(load_func, language='KO'):
             mcc_code_select = st.selectbox(
                 "MCC CODE (01~04)",
                 ["01", "02", "03", "04"],
-                key="mcc_code_select"
+                key=f"{key_prefix}mcc_code_select"
             )
         
         # 최종 CODE 결정
-        if st.session_state.get('searched_product_code'):
-            nozzle_code = st.session_state['searched_product_code']
+        if st.session_state.get(f'{key_prefix}searched_product_code'):
+            nozzle_code = st.session_state[f'{key_prefix}searched_product_code']
         else:
             nozzle_code = f"HRS-YMO-ST-{product_code_select}-MCC-{mcc_code_select}-00"
         
         st.text_input(
             "🔴 제품 CODE *",
             value=nozzle_code,
-            key="nozzle_code_final"
+            key=f"{key_prefix}nozzle_code_final"
         )
     
     st.markdown("---")
@@ -223,7 +223,7 @@ def render_technical_section(load_func, language='KO'):
             "🔴 시스템 타입 *",
             ["Valve", "Open"],
             horizontal=True,
-            key="hrs_system_type",
+            key=f"{key_prefix}hrs_system_type",
             help="Valve: 게이트 타입 선택 가능 | Open: 게이트 선택 없음"
         )
         
@@ -233,7 +233,7 @@ def render_technical_section(load_func, language='KO'):
                 "🔴 Gate Type *",
                 ["STRAIGHT", "TAPER", "None"],
                 index=0,
-                key="gate_close_valve"
+                key=f"{key_prefix}gate_close_valve"
             )
         else:
             # Open 선택 시 비활성화
@@ -242,7 +242,7 @@ def render_technical_section(load_func, language='KO'):
                 "Gate Type",
                 ["STRAIGHT", "TAPER", "None"],
                 index=2,
-                key="gate_close_disabled",
+                key=f"{key_prefix}gate_close_disabled",
                 disabled=True
             )
             st.info("ℹ️ Open 타입은 게이트 선택이 없습니다.")
@@ -257,7 +257,7 @@ def render_technical_section(load_func, language='KO'):
                 min_value=0,
                 step=1,
                 value=auto_quantity,
-                key="nozzle_qty",
+                key=f"{key_prefix}nozzle_qty",
                 help="견적서에서 자동으로 입력된 수량입니다."
             )
         else:
@@ -265,7 +265,7 @@ def render_technical_section(load_func, language='KO'):
                 f"🔴 수량 *",
                 min_value=0,
                 step=1,
-                key="nozzle_qty"
+                key=f"{key_prefix}nozzle_qty"
             )
     
     with nozzle_col2:
@@ -273,7 +273,7 @@ def render_technical_section(load_func, language='KO'):
             f"🔴 HT 타입 *",
             ["COIL", "ALLOY"],
             horizontal=True,
-            key="ht_type"
+            key=f"{key_prefix}ht_type"
         )
     
     # MANIFOLD
@@ -287,7 +287,7 @@ def render_technical_section(load_func, language='KO'):
             f"🔴 MANIFOLD 타입 *",
             ["H", "I", "X", "T"],
             horizontal=True,
-            key="manifold_type"
+            key=f"{key_prefix}manifold_type"
         )
     
     with manifold_col2:
@@ -296,14 +296,14 @@ def render_technical_section(load_func, language='KO'):
             ["ISO", "General"],
             index=1,  # General이 기본값
             horizontal=True,
-            key="manifold_standard"
+            key=f"{key_prefix}manifold_standard"
         )
     
     st.text_input(
         f"HT 타입 (고정)",
         value="SHEATH HEATER",
         disabled=True,
-        key="manifold_ht_fixed"
+        key=f"{key_prefix}manifold_ht_fixed"
     )
     
     # 센서 (실린더 & 센서 → 센서로 변경)
@@ -314,7 +314,7 @@ def render_technical_section(load_func, language='KO'):
         f"🔴 센서 타입 *",
         ["J(I.C)", "K(C.A)"],
         horizontal=True,
-        key="sensor_type"
+        key=f"{key_prefix}sensor_type"
     )
     
     # TIMER & CONNECTOR
@@ -328,14 +328,14 @@ def render_technical_section(load_func, language='KO'):
             f"🔴 솔레노이드 전압 *",
             ["AC220V", "DC24V"],
             horizontal=True,
-            key="sol_volt"
+            key=f"{key_prefix}sol_volt"
         )
         
         sol_control = st.radio(
             f"🔴 솔레노이드 제어 *",
             ["개별", "통합"],
             horizontal=True,
-            key="sol_control"
+            key=f"{key_prefix}sol_control"
         )
     
     with timer_col2:
@@ -343,20 +343,20 @@ def render_technical_section(load_func, language='KO'):
             f"🔴 핀 타입 *",
             ["24PIN", "16PIN"],
             horizontal=True,
-            key="timer_pin_type"
+            key=f"{key_prefix}timer_pin_type"
         )
         
         timer_buried = st.radio(
             f"🔴 매립 *",
             ["없음", "있음"],
             horizontal=True,
-            key="timer_buried"
+            key=f"{key_prefix}timer_buried"
         )
     
     timer_location = st.selectbox(
         f"🔴 위치 *",
         ["G", "A", "B", "C", "D", "E", "F", "H", "I", "J", "K", "L", "UP"],
-        key="timer_location"
+        key=f"{key_prefix}timer_location"
     )
     
     # HEATER CONNECTOR
@@ -370,14 +370,14 @@ def render_technical_section(load_func, language='KO'):
             f"🔴 핀 타입 *",
             ["24PIN", "16PIN"],
             horizontal=True,
-            key="heater_pin_type"
+            key=f"{key_prefix}heater_pin_type"
         )
         
         con_type = st.radio(
             f"🔴 커넥터 타입 *",
             ["BOX", "HOUSING"],
             horizontal=True,
-            key="con_type"
+            key=f"{key_prefix}con_type"
         )
     
     with heater_col2:
@@ -385,13 +385,13 @@ def render_technical_section(load_func, language='KO'):
             f"🔴 매립 *",
             ["없음", "있음"],
             horizontal=True,
-            key="heater_buried"
+            key=f"{key_prefix}heater_buried"
         )
         
         heater_location = st.selectbox(
             f"🔴 위치 *",
             ["G", "A", "B", "C", "D", "E", "F", "H", "I", "J", "K", "L", "UP"],
-            key="heater_location"
+            key=f"{key_prefix}heater_location"
         )
     
     # ID CARD
@@ -402,7 +402,7 @@ def render_technical_section(load_func, language='KO'):
         f"🔴 ID 카드 타입 *",
         ["국내", "글로벌"],
         horizontal=True,
-        key="id_card_type"
+        key=f"{key_prefix}id_card_type"
     )
     
     # NL 정보
@@ -412,13 +412,13 @@ def render_technical_section(load_func, language='KO'):
     nl_col1, nl_col2, nl_col3 = st.columns(3)
     
     with nl_col1:
-        nl_phi = st.number_input("NL PHI", min_value=0.0, step=0.1, key="nl_phi")
+        nl_phi = st.number_input("NL PHI", min_value=0.0, step=0.1, key=f"{key_prefix}nl_phi")
     
     with nl_col2:
-        nl_sr = st.number_input("NL SR", min_value=0.0, step=0.1, key="nl_sr")
+        nl_sr = st.number_input("NL SR", min_value=0.0, step=0.1, key=f"{key_prefix}nl_sr")
     
     with nl_col3:
-        locate_ring = st.text_input("LOCATE RING", key="locate_ring")
+        locate_ring = st.text_input("LOCATE RING", key=f"{key_prefix}locate_ring")
     
     # 데이터 수집
     technical_data = {

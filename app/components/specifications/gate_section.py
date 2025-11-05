@@ -4,16 +4,16 @@ import streamlit as st
 import pandas as pd
 from utils.language_config import get_label
 
-def render_gate_section(language='KO'):
+def render_gate_section(language='KO', key_prefix=''):
     """Gate 정보 테이블 입력 섹션 - 실시간 미리보기"""
     
     st.markdown(f"### 📊 게이트 정보")
     
     # HRS 시스템 타입 확인
-    hrs_system_type = st.session_state.get('hrs_system_type', 'Valve')
+    hrs_system_type = st.session_state.get(f'{key_prefix}hrs_system_type', 'Valve')
     
     # 노즐 수량 확인 (게이트 수 결정)
-    nozzle_qty = st.session_state.get('nozzle_qty', 0)
+    nozzle_qty = st.session_state.get(f'{key_prefix}nozzle_qty', 0)
     gate_count = min(max(nozzle_qty, 1), 20)  # 최소 1개, 최대 20개
     
     # Valve 타입일 때만 게이트 정보 입력
@@ -21,8 +21,8 @@ def render_gate_section(language='KO'):
         st.info(f"✅ Valve 시스템: 노즐 수량({nozzle_qty})에 따라 게이트 {gate_count}개 활성화")
         
         # Gate 데이터 초기화
-        if 'gate_data' not in st.session_state:
-            st.session_state['gate_data'] = {
+        if f'{key_prefix}gate_data' not in st.session_state:
+            st.session_state[f'{key_prefix}gate_data'] = {
                 f'G{i}': {'gate_phi': 0.0, 'length': 0.0, 'cylinder': 'None'}
                 for i in range(1, 21)  # 최대 20개
             }
@@ -51,30 +51,30 @@ def render_gate_section(language='KO'):
                             f"게이트 Φ (mm)",
                             min_value=0.0,
                             step=0.1,
-                            key=f"{gate_no}_phi",
-                            value=st.session_state['gate_data'][gate_no]['gate_phi']
+                            key=f"{key_prefix}{gate_no}_phi",
+                            value=st.session_state[f'{key_prefix}gate_data'][gate_no]['gate_phi']
                         )
-                        st.session_state['gate_data'][gate_no]['gate_phi'] = gate_phi
+                        st.session_state[f'{key_prefix}gate_data'][gate_no]['gate_phi'] = gate_phi
                     
                     with sub_col2:
                         gate_length = st.number_input(
                             f"길이 (mm)",
                             min_value=0.0,
                             step=0.1,
-                            key=f"{gate_no}_length",
-                            value=st.session_state['gate_data'][gate_no]['length']
+                            key=f"{key_prefix}{gate_no}_length",
+                            value=st.session_state[f'{key_prefix}gate_data'][gate_no]['length']
                         )
-                        st.session_state['gate_data'][gate_no]['length'] = gate_length
+                        st.session_state[f'{key_prefix}gate_data'][gate_no]['length'] = gate_length
                     
                     with sub_col3:
                         # 실린더 선택
                         cylinder = st.selectbox(
                             "실린더",
                             cylinder_options,
-                            index=cylinder_options.index(st.session_state['gate_data'][gate_no].get('cylinder', 'None')),
-                            key=f"{gate_no}_cylinder"
+                            index=cylinder_options.index(st.session_state[f'{key_prefix}gate_data'][gate_no].get('cylinder', 'None')),
+                            key=f"{key_prefix}{gate_no}_cylinder"
                         )
-                        st.session_state['gate_data'][gate_no]['cylinder'] = cylinder
+                        st.session_state[f'{key_prefix}gate_data'][gate_no]['cylinder'] = cylinder
                     
                     st.markdown("---")
                 else:
@@ -101,30 +101,30 @@ def render_gate_section(language='KO'):
                             f"게이트 Φ (mm)",
                             min_value=0.0,
                             step=0.1,
-                            key=f"{gate_no}_phi",
-                            value=st.session_state['gate_data'][gate_no]['gate_phi']
+                            key=f"{key_prefix}{gate_no}_phi",
+                            value=st.session_state[f'{key_prefix}gate_data'][gate_no]['gate_phi']
                         )
-                        st.session_state['gate_data'][gate_no]['gate_phi'] = gate_phi
+                        st.session_state[f'{key_prefix}gate_data'][gate_no]['gate_phi'] = gate_phi
                     
                     with sub_col2:
                         gate_length = st.number_input(
                             f"길이 (mm)",
                             min_value=0.0,
                             step=0.1,
-                            key=f"{gate_no}_length",
-                            value=st.session_state['gate_data'][gate_no]['length']
+                            key=f"{key_prefix}{gate_no}_length",
+                            value=st.session_state[f'{key_prefix}gate_data'][gate_no]['length']
                         )
-                        st.session_state['gate_data'][gate_no]['length'] = gate_length
+                        st.session_state[f'{key_prefix}gate_data'][gate_no]['length'] = gate_length
                     
                     with sub_col3:
                         # 실린더 선택
                         cylinder = st.selectbox(
                             "실린더",
                             cylinder_options,
-                            index=cylinder_options.index(st.session_state['gate_data'][gate_no].get('cylinder', 'None')),
-                            key=f"{gate_no}_cylinder"
+                            index=cylinder_options.index(st.session_state[f'{key_prefix}gate_data'][gate_no].get('cylinder', 'None')),
+                            key=f"{key_prefix}{gate_no}_cylinder"
                         )
-                        st.session_state['gate_data'][gate_no]['cylinder'] = cylinder
+                        st.session_state[f'{key_prefix}gate_data'][gate_no]['cylinder'] = cylinder
                     
                     st.markdown("---")
                 else:
@@ -143,9 +143,9 @@ def render_gate_section(language='KO'):
             gate_no = f'G{i}'
             active_gate_data.append({
                 'NO': gate_no,
-                '게이트 Φ (mm)': st.session_state['gate_data'][gate_no]['gate_phi'],
-                '길이 (mm)': st.session_state['gate_data'][gate_no]['length'],
-                '실린더': st.session_state['gate_data'][gate_no].get('cylinder', 'None')
+                '게이트 Φ (mm)': st.session_state[f'{key_prefix}gate_data'][gate_no]['gate_phi'],
+                '길이 (mm)': st.session_state[f'{key_prefix}gate_data'][gate_no]['length'],
+                '실린더': st.session_state[f'{key_prefix}gate_data'][gate_no].get('cylinder', 'None')
             })
         
         if active_gate_data:
@@ -170,8 +170,8 @@ def render_gate_section(language='KO'):
         st.info("ℹ️ Open 시스템: 게이트 정보 입력이 필요하지 않습니다.")
         
         # 빈 게이트 데이터
-        if 'gate_data' not in st.session_state:
-            st.session_state['gate_data'] = {
+        if f'{key_prefix}gate_data' not in st.session_state:
+            st.session_state[f'{key_prefix}gate_data'] = {
                 f'G{i}': {'gate_phi': 0.0, 'length': 0.0, 'cylinder': 'None'}
                 for i in range(1, 21)  # 최대 20개
             }
@@ -183,18 +183,18 @@ def render_gate_section(language='KO'):
     spare_list = st.text_area(
         "SPARE LIST",
         height=100,
-        key="spare_list"
+        key=f"{key_prefix}spare_list"
     )
     
     special_notes = st.text_area(
         "Special Notes",
         height=100,
-        key="special_notes"
+        key=f"{key_prefix}special_notes"
     )
     
     # 데이터 반환
     gate_data = {
-        'gate_data': st.session_state['gate_data'],
+        'gate_data': st.session_state[f'{key_prefix}gate_data'],
         'spare_list': spare_list,
         'special_notes': special_notes,
         'hrs_system_type': hrs_system_type
@@ -203,9 +203,9 @@ def render_gate_section(language='KO'):
     return gate_data
 
 
-def reset_gate_data():
+def reset_gate_data(key_prefix=''):
     """Gate 데이터 초기화"""
-    st.session_state['gate_data'] = {
+    st.session_state[f'{key_prefix}gate_data'] = {
         f'G{i}': {'gate_phi': 0.0, 'length': 0.0, 'cylinder': 'None'}
         for i in range(1, 21)  # 최대 20개
     }

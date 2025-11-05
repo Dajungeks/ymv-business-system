@@ -55,6 +55,7 @@ from components.system.multilingual_input import MultilingualInputComponent
 
 # 내부 컴포넌트 - Specifications
 from components.specifications.hot_runner_order_sheet import show_hot_runner_order_management
+from components.specifications.spec_decision_approval import spec_decision_approval
 
 # 유틸리티 모듈
 from utils.database import create_database_operations
@@ -105,6 +106,10 @@ def should_show_menu(menu_name, current_user):
     if not current_user:
         return False
     
+    # CEO: 모든 메뉴 표시
+    if current_user.get('role') == 'CEO':
+        return True
+    
     # YMV 법인장: 모든 메뉴 표시
     if current_user.get('is_super_admin', False):
         return True
@@ -131,9 +136,9 @@ def should_show_menu(menu_name, current_user):
     if menu_name in allowed_for_all_corporate:
         return True
     
-    # 승인 권한 보유 법인 (YMK) 추가 메뉴
-    if current_user.get('approval_authority', False):
-        approval_menus = ["규격 결정서"]  # 승인 목적으로 전체 조회
+    # 승인 권한 보유 법인 (YMK) + CEO 추가 메뉴
+    if current_user.get('approval_authority', False) or current_user.get('role') == 'CEO':
+        approval_menus = ["규격 결정서 승인"]
         if menu_name in approval_menus:
             return True
     
@@ -253,7 +258,7 @@ def show_expense_management_page():
         calculate_expense_statistics,
         create_csv_download,
         render_print_form,
-        current_user  # ← 이 줄 추가!
+        current_user
     )
 
 def show_reimbursement_management_page():
@@ -319,7 +324,7 @@ def show_product_management_page():
             save_func=db_operations.save_data,
             update_func=db_operations.update_data,
             delete_func=db_operations.delete_data,
-            current_user=current_user  # ← 이 줄 추가!
+            current_user=current_user
         )
     except Exception as e:
         st.error(f"제품 관리 페이지 로드 중 오류가 발생했습니다: {str(e)}")
@@ -340,13 +345,13 @@ def show_supplier_management_page():
 def show_customer_management_page():
     """고객 관리 페이지"""
     try:
-        current_user = auth_manager.get_current_user()  # ← 추가!
+        current_user = auth_manager.get_current_user()
         show_customer_management(
             load_func=db_operations.load_data,
             save_func=db_operations.save_data,
             update_func=db_operations.update_data,
             delete_func=db_operations.delete_data,
-            current_user=current_user  # ← 추가!
+            current_user=current_user
         )
     except Exception as e:
         st.error(f"고객 관리 페이지 로드 중 오류: {str(e)}")
@@ -431,6 +436,10 @@ def show_hot_runner_order_sheet_page():
         auth_manager.get_current_user()
     )
 
+def show_spec_decision_approval_page():
+    """규격결정서 승인 페이지 (YMK/CEO 전용)"""
+    spec_decision_approval()
+
 # ===========================================
 # 메인 애플리케이션
 # ===========================================
@@ -514,6 +523,13 @@ def main():
             if st.button("🔥 규격 결정서", use_container_width=True,
                         type="primary" if st.session_state.current_page == "규격 결정서" else "secondary"):
                 st.session_state.current_page = "규격 결정서"
+                st.rerun()
+        
+        # YMK/CEO 전용 승인 페이지
+        if should_show_menu("규격 결정서 승인", current_user):
+            if st.button("✅ 규격결정서 승인", use_container_width=True,
+                        type="primary" if st.session_state.current_page == "규격결정서 승인" else "secondary"):
+                st.session_state.current_page = "규격결정서 승인"
                 st.rerun()
         
         if should_show_menu("실적 관리", current_user):
@@ -609,6 +625,8 @@ def main():
         show_quotation_management_page()
     elif current_page == "규격 결정서":
         show_hot_runner_order_sheet_page()
+    elif current_page == "규격결정서 승인":
+        show_spec_decision_approval_page()
     elif current_page == "실적 관리":
         show_performance_management(db_operations.load_data, db_operations.update_data)
     elif current_page == "영업 프로세스":

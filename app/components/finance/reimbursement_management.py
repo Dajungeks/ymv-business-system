@@ -166,36 +166,14 @@ def render_reimbursement_pending(load_data_func, update_data_func, get_current_u
                     
                     st.caption(f"💡 기본값: 요청자 ({default_display})")
                     
-                    if st.button(f"🖨️ 환급 프린트 ({len(selected_expenses)}건)", type="primary", use_container_width=True):
-                        # 임시 상태로 먼저 업데이트
-                        success_count = 0
-                        for exp in selected_expenses:
-                            result = update_data_func(expense_table, {
-                                'id': exp.get('id'),
-                                'reimbursement_status': 'printed',
-                                'reimbursement_document_number': 'TEMP',
-                                'reimbursement_recipient': selected_recipient_id,  # ← 추가
-                                'updated_at': datetime.now().isoformat()
-                            }, "id")
-                            
-                            if result:
-                                success_count += 1
-                        
-                        if success_count == len(selected_expenses):
-                            import time
-                            time.sleep(0.5)
-                            
-                            # 문서번호 생성
+                    # 2개 버튼: 프린트 / 환급 완료 처리
+                    col_btn1, col_btn2 = st.columns(2)
+                    
+                    with col_btn1:
+                        if st.button(f"🖨️ 환급 프린트 ({len(selected_expenses)}건)", type="secondary", use_container_width=True):
+                            # 문서번호 생성 (상태 변경 없이)
                             from components.system.document_number import generate_document_number
                             document_number = generate_document_number('PAY', load_func=load_data_func)
-                            
-                            # 실제 문서번호로 업데이트
-                            for exp in selected_expenses:
-                                update_data_func(expense_table, {
-                                    'id': exp.get('id'),
-                                    'reimbursement_document_number': document_number,
-                                    'updated_at': datetime.now().isoformat()
-                                }, "id")
                             
                             # 통화별 그룹핑
                             grouped_by_currency = defaultdict(list)
@@ -203,16 +181,41 @@ def render_reimbursement_pending(load_data_func, update_data_func, get_current_u
                                 currency = exp.get('currency', 'VND')
                                 grouped_by_currency[currency].append(exp)
                             
-                            # 프린트 데이터 저장
+                            # 프린트 데이터 저장 (상태 변경 없음)
                             st.session_state['print_reimbursement'] = {
-                                'employee_id': selected_recipient_id,  # ← 선택한 환급 대상자
+                                'employee_id': selected_recipient_id,
                                 'grouped_expenses': dict(grouped_by_currency),
-                                'document_number': document_number
+                                'document_number': document_number,
+                                'is_preview': True  # 미리보기 모드
                             }
-                            st.success(f"✅ {success_count}건 프린트 준비 완료! 문서번호: {document_number}")
+                            st.success(f"✅ 프린트 준비 완료! 문서번호: {document_number}")
                             st.rerun()
-                        else:
-                            st.error(f"⚠️ {success_count}/{len(selected_expenses)}건만 처리되었습니다.")
+                    
+                    with col_btn2:
+                        if st.button(f"✅ 환급 완료 처리 ({len(selected_expenses)}건)", type="primary", use_container_width=True):
+                            # 문서번호 생성
+                            from components.system.document_number import generate_document_number
+                            document_number = generate_document_number('PAY', load_func=load_data_func)
+                            
+                            # 상태를 printed로 변경
+                            success_count = 0
+                            for exp in selected_expenses:
+                                result = update_data_func(expense_table, {
+                                    'id': exp.get('id'),
+                                    'reimbursement_status': 'printed',
+                                    'reimbursement_document_number': document_number,
+                                    'reimbursement_recipient': selected_recipient_id,
+                                    'updated_at': datetime.now().isoformat()
+                                }, "id")
+                                
+                                if result:
+                                    success_count += 1
+                            
+                            if success_count == len(selected_expenses):
+                                st.success(f"✅ {success_count}건 환급 완료 처리! 문서번호: {document_number}")
+                                st.rerun()
+                            else:
+                                st.error(f"⚠️ {success_count}/{len(selected_expenses)}건만 처리되었습니다.")
                 else:
                     st.warning("⚠️ 선택한 ID가 환급 대상 목록에 없습니다.")
             except ValueError:
@@ -512,35 +515,30 @@ def render_reimbursement_completed(load_data_func, get_current_user_func, expens
     
     # 테이블 데이터 생성
     table_data = []
-    for exp in pending_expenses:
+    for exp in filtered_expenses:
         requester_id = exp.get('requester')
         emp_info = employee_dict.get(requester_id, {})
         emp_name = emp_info.get('name', '알 수 없음')
         
-        # 화던 상태 표시
-        hoadon_status = "✅" if exp.get('accounting_confirmed') else "⏳"
-        
-        # 환급 상태 표시
-        reimbursement_status = exp.get('reimbursement_status', 'pending')
-        status_map = {
-            'pending': '대기',
-            'printed': '환급완료',
-            'completed': '최종완료',
-            'not_required': '환급불필요'
-        }
-        status_display = status_map.get(reimbursement_status, reimbursement_status)
+        # 환급일 추출
+        reimbursed_at = exp.get('reimbursed_at', 'N/A')
+        if reimbursed_at != 'N/A':
+            try:
+                dt = datetime.fromisoformat(str(reimbursed_at).replace('Z', '+00:00'))
+                reimbursed_at = dt.strftime('%Y-%m-%d')
+            except:
+                pass
         
         table_data.append({
             'ID': exp.get('id'),
+            '환급문서번호': exp.get('reimbursement_document_number', 'N/A'),
             '지출요청서번호': exp.get('document_number', 'N/A'),
             '요청자': emp_name,
             '지출일': exp.get('expense_date', 'N/A'),
             '유형': exp.get('expense_type', 'N/A'),
             '금액': f"{exp.get('amount', 0):,.0f}",
             '통화': exp.get('currency', 'VND'),
-            '환급상태': status_display,
-            '화던(Hóa đơn)': hoadon_status,
-            '결제방법': exp.get('payment_method', 'N/A')
+            '환급일': reimbursed_at
         })
     
     if table_data:

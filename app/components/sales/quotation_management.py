@@ -56,8 +56,13 @@ def render_product_selection_for_quotation(load_func, mode='new'):
     
     try:
         all_codes = load_func('product_codes') or []
-        products_data = load_func('products') or []
         
+        # 법인별 제품 테이블
+        current_user = st.session_state.get('current_user', {})
+        company_code = current_user.get('company', 'YMV')
+        from utils.helpers import get_company_table
+        products_table = get_company_table('products', company_code)
+        products_data = load_func(products_table) or []  # ✅        
         if not all_codes:
             st.warning("등록된 제품 코드가 없습니다.")
             return
@@ -223,7 +228,7 @@ def filter_codes_by_selections(codes, selections):
     return filtered
 
 def render_quotation_form(save_func, load_func, update_func, customer_table, quotation_table):
-    """견적서 작성 폼 - 신규만"""
+    """견적서 작성 폼 - 고객 선택 + 전체 양식"""
     
     # 수정 모드는 목록에서 처리
     if st.session_state.get('editing_quotation_id'):
@@ -234,12 +239,93 @@ def render_quotation_form(save_func, load_func, update_func, customer_table, quo
             st.rerun()
         return
     
-    if st.session_state.get('show_quotation_input_form', False):
-        render_quotation_form_with_customer(save_func, load_func, customer_table, quotation_table)
-        return
-    
     st.header("새 견적서 작성")
-    render_customer_search_for_quotation(load_func, customer_table)
+    
+    # ✅ 고객 검색 UI
+    st.subheader("🔍 고객 검색")
+    
+    try:
+        customers_data = load_func(customer_table) 
+        if not customers_data:
+            st.warning("등록된 고객이 없습니다.")
+            return
+        
+        customers_df = pd.DataFrame(customers_data)
+        st.caption("고객사명 또는 담당자명으로 검색하세요.")
+        
+        col1, col2 = st.columns([4, 1])
+        with col1:
+            search_term = st.text_input("검색어", placeholder="고객사명 또는 담당자명", key="customer_search_quotation_new")
+        with col2:
+            st.write("")
+            st.write("")
+            search_btn = st.button("🔍 검색", use_container_width=True, type="primary", key="search_customer_new")
+        
+        if search_term or search_btn:
+            if search_term:
+                mask = (
+                    customers_df['company_name_original'].str.contains(search_term, case=False, na=False) |
+                    customers_df['company_name_short'].str.contains(search_term, case=False, na=False) |
+                    customers_df['contact_person'].str.contains(search_term, case=False, na=False)
+                )
+                filtered_customers = customers_df[mask]
+            else:
+                filtered_customers = customers_df
+            
+            st.markdown("---")
+            
+            if not filtered_customers.empty:
+                st.info(f"🔍 {len(filtered_customers)}개 고객 매칭")
+                
+                table_data = []
+                for _, customer in filtered_customers.iterrows():
+                    display_name = customer.get('company_name_short') or customer.get('company_name_original')
+                    table_data.append({
+                        'ID': customer.get('id', ''),
+                        'Company': display_name,
+                        'Contact': customer.get('contact_person', ''),
+                        'Email': customer.get('email', ''),
+                        'Phone': customer.get('phone', '')
+                    })
+                
+                df = pd.DataFrame(table_data)
+                st.dataframe(df, use_container_width=True, hide_index=True)
+                
+                st.markdown("---")
+                
+                col1, col2, col3 = st.columns([3, 1, 3])
+                with col1:
+                    customer_id_input = st.text_input("선택할 고객 ID", placeholder="ID 입력", key="customer_id_input_quot_new")
+                with col2:
+                    if st.button("➡️ 선택", use_container_width=True, type="primary", key="select_customer_new"):
+                        if customer_id_input and customer_id_input.strip().isdigit():
+                            customer_id = int(customer_id_input.strip())
+                            selected = filtered_customers[filtered_customers['id'] == customer_id]
+                            if not selected.empty:
+                                st.session_state.selected_customer_for_quotation = selected.iloc[0].to_dict()
+                                st.rerun()
+                            else:
+                                st.error(f"❌ ID {customer_id}를 찾을 수 없습니다.")
+                        else:
+                            st.error("❌ 올바른 ID를 입력하세요.")
+            else:
+                st.warning("⚠️ 검색 결과가 없습니다.")
+        else:
+            st.info("💡 검색어를 입력하고 검색 버튼을 클릭하세요.")
+    except Exception as e:
+        st.error(f"❌ 고객 검색 중 오류: {str(e)}")
+    
+    # ✅ 고객 선택되면 바로 양식 표시
+    if st.session_state.get('selected_customer_for_quotation'):
+        st.markdown("---")
+        st.markdown("---")
+        
+        current_user = st.session_state.get('current_user', {})
+        company_code = current_user.get('company', 'YMV')
+        from utils.helpers import get_company_table
+        product_table = get_company_table('products', company_code)
+        
+        render_quotation_form_with_customer(save_func, load_func, customer_table, quotation_table, product_table)
 
 def render_customer_search_for_quotation(load_func, customer_table):
     """고객 검색"""
@@ -247,7 +333,7 @@ def render_customer_search_for_quotation(load_func, customer_table):
     
     try:
         # 법인별 고객 테이블에서 로드
-        customers_data = load_func(customer_table)
+        customers_data = load_func(customer_table) 
         if not customers_data:
             st.warning("등록된 고객이 없습니다.")
             return
@@ -318,8 +404,9 @@ def render_customer_search_for_quotation(load_func, customer_table):
     except Exception as e:
         st.error(f"❌ 고객 검색 중 오류: {str(e)}")
 
-def render_quotation_form_with_customer(save_func, load_func, customer_table, quotation_table):
-    """선택한 고객으로 견적서 작성"""
+
+def render_quotation_form_with_customer(save_func, load_func, customer_table, quotation_table, product_table):
+    """선택한 고객으로 견적서 작성 - 여러 제품 추가 가능"""
     selected_customer = st.session_state.get('selected_customer_for_quotation', {})
     
     if not selected_customer:
@@ -341,7 +428,7 @@ def render_quotation_form_with_customer(save_func, load_func, customer_table, qu
     st.markdown("---")
     
     employees_data = load_func('employees')
-    products_data = load_func('products')
+    products_data = load_func(product_table)
     
     employees_df = pd.DataFrame(employees_data) if employees_data else pd.DataFrame()
     products_df = pd.DataFrame(products_data) if products_data else pd.DataFrame()
@@ -362,147 +449,117 @@ def render_quotation_form_with_customer(save_func, load_func, customer_table, qu
     selected_employee = st.selectbox("영업담당자", employee_options, key="quotation_employee_select_new")
     sales_rep_id = int(selected_employee.split('[')[-1].split(']')[0])
     
-    st.markdown("---")
-    st.subheader("🚚 물류사 선택")
-    
-    logistics_data = load_func('logistics_companies')
-    logistics_df = pd.DataFrame(logistics_data) if logistics_data else pd.DataFrame()
-    
-    if logistics_df.empty:
-        st.warning("⚠️ 등록된 물류사가 없습니다.")
-        logistics_company_id = None
-        logistics_total_cost = 0
-        logistics_company_name = None
+    st.markdown("---")   
+    st.subheader("📦 제품 항목 추가")
+
+    # 견적 항목 리스트 초기화
+    if 'quotation_items' not in st.session_state:
+        st.session_state.quotation_items = []
+
+    # ✅ 최대 5개 제한 표시
+    st.info(f"📋 현재 {len(st.session_state.quotation_items)}/5 개 제품 추가됨")
+
+    # ✅ 최대 5개 제한 체크
+    if len(st.session_state.quotation_items) >= 5:
+        st.warning("⚠️ 최대 5개 제품까지만 추가할 수 있습니다.")
+        st.caption("제품을 추가하려면 먼저 기존 항목을 삭제하세요.")
     else:
-        active_logistics = logistics_df[logistics_df['is_active'] == True]
-        
-        if active_logistics.empty:
-            st.warning("⚠️ 활성화된 물류사가 없습니다.")
-            logistics_company_id = None
-            logistics_total_cost = 0
-            logistics_company_name = None
+        # 제품 선택 및 추가
+        if not st.session_state.get('selected_product_for_quotation_new'):
+            render_product_selection_for_quotation(load_func, mode='new')
         else:
-            logistics_options = [f"{row['company_name']} ({row['transport_type']}) - ${row['total_cost']:,.2f}" for _, row in active_logistics.iterrows()]
-            selected_logistics = st.selectbox("물류사", logistics_options, key="quotation_logistics_select_new")
-            selected_index = logistics_options.index(selected_logistics)
-            selected_logistics_data = active_logistics.iloc[selected_index]
+            selected_product_data = st.session_state.selected_product_for_quotation_new
             
-            logistics_company_id = int(selected_logistics_data['id'])
-            logistics_company_name = selected_logistics_data['company_name']
-            logistics_total_cost = float(selected_logistics_data['total_cost'])
+            st.success(f"✅ 선택된 제품: {selected_product_data.get('product_code', '')} - {selected_product_data.get('product_name_vn', '')}")
             
-            with st.expander("물류사 상세 정보", expanded=False):
-                col1, col2, col3, col4 = st.columns(4)
-                with col1:
-                    st.metric("중국 내륙", f"${selected_logistics_data['china_inland_cost']:,.2f}")
-                with col2:
-                    st.metric("중국 통관", f"${selected_logistics_data['china_customs_cost']:,.2f}")
-                with col3:
-                    st.metric("베트남 통관", f"${selected_logistics_data['vietnam_customs_cost']:,.2f}")
-                with col4:
-                    st.metric("베트남 내륙", f"${selected_logistics_data['vietnam_inland_cost']:,.2f}")
-    
-    st.markdown("---")
-    
-    if not st.session_state.get('selected_product_for_quotation_new'):
-        render_product_selection_for_quotation(load_func, mode='new')
-        return
-    
-    selected_product_data = st.session_state.selected_product_for_quotation_new
-    
-    col1, col2 = st.columns([1, 4])
-    with col1:
-        if st.button("🔄 다른 제품 선택"):
-            st.session_state.pop('selected_product_for_quotation_new', None)
-            st.rerun()
-    
-    st.success(f"✅ 선택된 제품: {selected_product_data.get('product_code', '')} - {selected_product_data.get('product_name_vn', '')}")
-    
-    st.markdown("---")
-    st.subheader("📦 제품 정보 및 가격 계산")
-    
-    prod_col1, prod_col2 = st.columns(2)
-    
-    with prod_col1:
-        st.text_input("제품 코드", value=selected_product_data.get('product_code', ''), disabled=True, key="prod_code_new")
-        cost_price_usd = float(selected_product_data.get('cost_price_usd', 0))
-        if cost_price_usd > 0:
-            st.info(f"🏷️ 제품 원가: ${cost_price_usd:,.2f} USD")
-    
-    with prod_col2:
-        st.text_input("제품명 (베트남어)", value=selected_product_data.get('product_name_vn', ''), disabled=True, key="prod_name_new")
-    
-    st.markdown("---")
-    
-    input_col, result_col = st.columns([1, 1])
-    
-    with input_col:
-        st.markdown("#### 📝 입력 정보")
-        quantity = st.number_input("수량", min_value=1, value=1, key="quotation_quantity_new")
-        exchange_rate = st.number_input("USD → VND 환율", min_value=1000.0, value=26387.45, step=100.0, format="%.0f", key="exchange_rate_new")
-        actual_selling_price_vnd = float(selected_product_data.get('actual_selling_price_vnd', 0))
-        unit_price_vnd = st.number_input("판매가격 (VND)", min_value=0.0, value=actual_selling_price_vnd, step=10000.0, format="%.0f", key="quotation_unit_price_vnd_new")
-        st.caption(f"💱 USD 기준: ${unit_price_vnd / exchange_rate:,.2f}")
-        discount_rate = st.number_input("할인율 (%)", min_value=0.0, max_value=100.0, value=0.0, format="%.1f", key="quotation_discount_new")
-        vat_rate = st.selectbox("VAT율 (%)", [0.0, 7.0, 10.0], index=2, key="quotation_vat_new")
-    
-    with result_col:
-        st.markdown("#### 💵 계산 결과")
-        
-        if quantity > 0 and unit_price_vnd > 0:
-            discounted_price_vnd = unit_price_vnd * (1 - discount_rate / 100)
-            subtotal_vnd = quantity * discounted_price_vnd
-            vat_amount_vnd = subtotal_vnd * (vat_rate / 100)
-            final_amount_vnd = subtotal_vnd + vat_amount_vnd
-            
-            discounted_price_usd = discounted_price_vnd / exchange_rate
-            final_amount_usd = final_amount_vnd / exchange_rate
-            
-            st.markdown("**💰 가격 계산 (VND)**")
-            
-            price_col1, price_col2, price_col3 = st.columns(3)
-            with price_col1:
-                st.metric("할인 후 단가", f"{discounted_price_vnd:,.0f}")
-                st.caption(f"${discounted_price_usd:,.2f}")
-            with price_col2:
-                st.metric("소계", f"{subtotal_vnd:,.0f}")
-                st.caption(f"VAT: {vat_amount_vnd:,.0f}")
-            with price_col3:
-                st.metric("최종 금액", f"{final_amount_vnd:,.0f}")
-                st.caption(f"${final_amount_usd:,.2f}")
-            
-            if cost_price_usd > 0 and logistics_total_cost > 0:
-                logistics_per_unit = logistics_total_cost / quantity
-                total_cost_usd = cost_price_usd + logistics_per_unit
-                margin = ((discounted_price_usd - total_cost_usd) / discounted_price_usd) * 100
-                margin_amount_usd = discounted_price_usd - total_cost_usd
-                margin_amount_vnd = margin_amount_usd * exchange_rate
-                
-                st.markdown("---")
-                st.markdown("**📊 비용 및 마진 분석**")
-                
-                margin_col1, margin_col2, margin_col3 = st.columns(3)
-                with margin_col1:
-                    st.info("**📦 물류비**")
-                    st.write(f"총: ${logistics_total_cost:,.2f}")
-                    st.write(f"개당: ${logistics_per_unit:,.2f}")
-                with margin_col2:
-                    st.info("**💵 총 비용**")
-                    st.write(f"원가: ${cost_price_usd:,.2f}")
-                    st.write(f"물류: ${logistics_per_unit:,.2f}")
-                    st.write(f"**합계: ${total_cost_usd:,.2f}**")
-                with margin_col3:
-                    if margin > 0:
-                        st.success("**📈 예상 마진**")
-                        st.write(f"**{margin:.1f}%**")
-                        st.write(f"${margin_amount_usd:,.2f}")
-                        st.caption(f"≈ {margin_amount_vnd:,.0f} VND")
+            col1, col2, col3, col4 = st.columns(4)
+            with col1:
+                item_quantity = st.number_input("수량", min_value=1, value=1, key="item_qty_temp")
+            with col2:
+                item_unit_price = st.number_input("단가 (VND)", min_value=0.0, value=float(selected_product_data.get('actual_selling_price_vnd', 0)), step=10000.0, format="%.0f", key="item_price_temp")
+            with col3:
+                st.metric("합계", f"{item_quantity * item_unit_price:,.0f} VND")
+            with col4:
+                st.write("")
+                st.write("")
+                if st.button("➕ 항목 추가", type="primary", use_container_width=True):
+                    if len(st.session_state.quotation_items) < 5:  # ✅ 다시 한번 체크
+                        item = {
+                            'product_id': selected_product_data.get('id'),
+                            'product_code': selected_product_data.get('product_code'),
+                            'product_name_vn': selected_product_data.get('product_name_vn'),
+                            'product_name_en': selected_product_data.get('product_name_en'),
+                            'quantity': item_quantity,
+                            'unit_price_vnd': item_unit_price,
+                            'line_total': item_quantity * item_unit_price,
+                            'cost_price_usd': selected_product_data.get('cost_price_usd', 0)
+                        }
+                        st.session_state.quotation_items.append(item)
+                        st.session_state.pop('selected_product_for_quotation_new', None)
+                        st.success("✅ 항목이 추가되었습니다!")
+                        st.rerun()
                     else:
-                        st.error("**📉 손실**")
-                        st.write(f"**{abs(margin):.1f}%**")
-                        st.write(f"${abs(margin_amount_usd):,.2f}")
-            elif cost_price_usd > 0:
-                st.warning("⚠️ 물류사를 선택하면 정확한 마진을 계산할 수 있습니다.")
+                        st.error("❌ 최대 5개까지만 추가 가능합니다.")
+
+    # 추가된 항목 목록 표시
+    if st.session_state.quotation_items:
+        st.markdown("---")
+        st.subheader("📋 견적 항목 목록")
+        
+        items_data = []
+        for idx, item in enumerate(st.session_state.quotation_items):
+            items_data.append({
+                'No': idx + 1,
+                'Code': item['product_code'],
+                '품명': item['product_name_vn'],
+                '수량': f"{item['quantity']:,}",
+                '단가': f"{item['unit_price_vnd']:,.0f}",
+                '합계': f"{item['line_total']:,.0f}",
+                '삭제': idx
+            })
+        
+        df_items = pd.DataFrame(items_data)
+        st.dataframe(df_items[['No', 'Code', '품명', '수량', '단가', '합계']], use_container_width=True, hide_index=True)
+        
+        # 항목 삭제
+        col1, col2 = st.columns([3, 1])
+        with col1:
+            delete_idx = st.number_input("삭제할 항목 번호", min_value=1, max_value=len(st.session_state.quotation_items), value=1, key="delete_item_idx")
+        with col2:
+            st.write("")
+            st.write("")
+            if st.button("🗑️ 삭제", use_container_width=True):
+                st.session_state.quotation_items.pop(delete_idx - 1)
+                st.success("✅ 항목이 삭제되었습니다!")
+                st.rerun()
+        
+        # 총 금액 계산
+        exchange_rate = 26387.45
+        total_vnd = sum(item['line_total'] for item in st.session_state.quotation_items)
+        discount_rate = st.number_input("전체 할인율 (%)", min_value=0.0, max_value=100.0, value=0.0, format="%.1f", key="quotation_discount_new")
+        vat_rate = st.selectbox("VAT율 (%)", [0.0, 7.0, 10.0], index=2, key="quotation_vat_new")
+        
+        discounted_total = total_vnd * (1 - discount_rate / 100)
+        vat_amount = discounted_total * (vat_rate / 100)
+        final_amount = discounted_total + vat_amount
+        
+        st.markdown("---")
+        st.subheader("💰 금액 계산")
+        
+        calc_col1, calc_col2, calc_col3 = st.columns(3)
+        with calc_col1:
+            st.metric("소계", f"{total_vnd:,.0f} VND")
+        with calc_col2:
+            st.metric("할인 후", f"{discounted_total:,.0f} VND")
+            st.caption(f"VAT: {vat_amount:,.0f}")
+        with calc_col3:
+            st.metric("최종 금액", f"{final_amount:,.0f} VND")
+            st.caption(f"${final_amount / exchange_rate:,.2f}")
+    
+    # 항목이 없으면 저장 불가
+    if not st.session_state.quotation_items:
+        st.warning("⚠️ 최소 1개 이상의 제품을 추가해주세요.")
+        return
     
     with st.form("quotation_form_new"):
         st.subheader("기본 정보")
@@ -563,101 +620,97 @@ def render_quotation_form_with_customer(save_func, load_func, customer_table, qu
             final_save = st.form_submit_button("정식저장", type="primary", use_container_width=True)
         
         if temp_save or final_save:
-            quantity = st.session_state.get("quotation_quantity_new", 1)
-            unit_price_vnd = st.session_state.get("quotation_unit_price_vnd_new", 0)
             discount_rate = st.session_state.get("quotation_discount_new", 0)
             vat_rate = st.session_state.get("quotation_vat_new", 7.0)
-            exchange_rate = st.session_state.get("exchange_rate_new", 26387.45)
+            exchange_rate = 26387.45
             
-            discounted_price_vnd = unit_price_vnd * (1 - discount_rate / 100)
-            subtotal_vnd = quantity * discounted_price_vnd
-            vat_amount_vnd = subtotal_vnd * (vat_rate / 100)
-            final_amount_vnd = subtotal_vnd + vat_amount_vnd
-            
-            unit_price_usd = unit_price_vnd / exchange_rate
-            discounted_price_usd = discounted_price_vnd / exchange_rate
-            final_amount_usd = final_amount_vnd / exchange_rate
-            
-            estimated_margin = None
-            estimated_logistics_per_unit = 0
-            
-            if logistics_total_cost > 0 and quantity > 0:
-                estimated_logistics_per_unit = logistics_total_cost / quantity
-            
-            if cost_price_usd > 0:
-                total_cost_usd = cost_price_usd + estimated_logistics_per_unit
-                if total_cost_usd > 0:
-                    estimated_margin = ((discounted_price_usd - total_cost_usd) / discounted_price_usd) * 100
+            total_vnd = sum(item['line_total'] for item in st.session_state.quotation_items)
+            discounted_total = total_vnd * (1 - discount_rate / 100)
+            vat_amount = discounted_total * (vat_rate / 100)
+            final_amount = discounted_total + vat_amount
             
             customer_company_name = selected_customer.get('company_name_original')
             
+
+            # 견적서 기본 정보
             quotation_data = {
-                'customer_name': customer_company_name,
-                'company': customer_company_name,
+                'customer_name': customer_company_name[:100],
+                'company': customer_company_name[:200],
                 'quote_date': quote_date.isoformat(),
                 'valid_until': valid_until.isoformat(),
-                'item_name': selected_product_data.get('product_name_en', ''),
-                'quantity': quantity,
-                'unit_price': unit_price_vnd,
                 'customer_id': selected_customer['id'],
-                'contact_person': selected_customer.get('contact_person'),
-                'email': selected_customer.get('email'),
-                'phone': selected_customer.get('phone'),
+                'contact_person': (selected_customer.get('contact_person') or '')[:100],  # ✅ 수정
+                'email': (selected_customer.get('email') or '')[:100],  # ✅ 수정
+                'phone': (selected_customer.get('phone') or '')[:20],  # ✅ 수정
                 'customer_address': selected_customer.get('address'),
-                'quote_number': quote_number,
+                'quote_number': quote_number[:30],
                 'revision_number': 'Rv00',
                 'currency': 'VND',
                 'status': 'Draft' if temp_save else 'Sent',
                 'sales_rep_id': sales_rep_id,
-                'item_code': selected_product_data.get('product_code', ''),
-                'item_name_en': selected_product_data.get('product_name_en', ''),
-                'item_name_vn': selected_product_data.get('product_name_vn', ''),
-                'std_price': unit_price_vnd,
-                'unit_price_vnd': unit_price_vnd,
-                'unit_price_usd': unit_price_usd,
+                'item_name': None,
+                'item_code': None,
+                'item_name_en': None,
+                'item_name_vn': None,
+                'quantity': None,
+                'unit_price': None,
+                'unit_price_vnd': None,
+                'std_price': None,
+                'discounted_price': None,
                 'discount_rate': discount_rate,
-                'discounted_price': discounted_price_vnd,
-                'discounted_price_vnd': discounted_price_vnd,
-                'discounted_price_usd': discounted_price_usd,
                 'vat_rate': vat_rate,
-                'vat_amount': vat_amount_vnd,
-                'final_amount': final_amount_vnd,
-                'final_amount_usd': final_amount_usd,
+                'vat_amount': vat_amount,
+                'final_amount': final_amount,
+                'final_amount_usd': final_amount / exchange_rate,
                 'exchange_rate': exchange_rate,
-                'project_name': safe_strip(project_name),
-                'part_name': safe_strip(part_name),
-                'mold_no': safe_strip(mold_number),
-                'mold_number': safe_strip(mold_number),
+                'project_name': (safe_strip(project_name) or None)[:200] if safe_strip(project_name) else None,
+                'part_name': (safe_strip(part_name) or None)[:200] if safe_strip(part_name) else None,
+                'mold_number': (safe_strip(mold_number) or None)[:100] if safe_strip(mold_number) else None,
                 'part_weight': part_weight if part_weight > 0 else None,
-                'hrs_info': safe_strip(hrs_info),
-                'resin_type': safe_strip(resin_type),
-                'resin_additive': safe_strip(resin_additive),
-                'sol_voltage': sol_voltage,
-                'payment_terms': safe_strip(payment_terms),
+                'hrs_info': (safe_strip(hrs_info) or None)[:200] if safe_strip(hrs_info) else None,
+                'resin_type': (safe_strip(resin_type) or None)[:100] if safe_strip(resin_type) else None,
+                'resin_additive': (safe_strip(resin_additive) or None)[:200] if safe_strip(resin_additive) else None,
+                'sol_voltage': sol_voltage[:20],
+                'payment_terms': (safe_strip(payment_terms) or None)[:200] if safe_strip(payment_terms) else None,
                 'delivery_date': delivery_date.isoformat() if delivery_date else None,
                 'lead_time_days': lead_time_days,
-                'remark': safe_strip(remarks),
                 'remarks': safe_strip(remarks),
-                'cost_price_usd': cost_price_usd,
-                'logistics_company_id': logistics_company_id,
-                'logistics_company_name': logistics_company_name,
-                'estimated_logistics_total': logistics_total_cost,
-                'estimated_logistics_per_unit': estimated_logistics_per_unit,
-                'estimated_margin_rate': estimated_margin,
                 'created_at': datetime.now().isoformat(),
                 'updated_at': datetime.now().isoformat()
             }
+
+            # 견적서 저장
+            quotation_id = save_func(quotation_table, quotation_data)
             
-            # 법인별 테이블에 저장
-            if save_func(quotation_table, quotation_data):
+            if quotation_id:
+                # quotation_items 저장
+                # 법인별 quotation_items 테이블
+                current_user = st.session_state.get('current_user', {})
+                company_code = current_user.get('company', 'YMV')
+                from utils.helpers import get_company_table
+                quotation_items_table = f'quotation_items_{company_code.lower()}'  # 'quotation_items_ymv'
+
+                # quotation_items 저장
+                for item in st.session_state.quotation_items:
+                    item_data = {
+                        'quotation_id': quotation_id,
+                        'product_id': item['product_id'],
+                        'item_description': f"{item['product_code']} - {item['product_name_vn']}",
+                        'quantity': item['quantity'],
+                        'unit_price': item['unit_price_vnd'],
+                        'line_total': item['line_total']
+                    }
+                    save_func(quotation_items_table, item_data)  # ✅
+
                 save_type = "임시저장" if temp_save else "정식저장"
                 st.success(f"✅ 견적서가 성공적으로 {save_type}되었습니다!")
                 st.session_state.pop('selected_customer_for_quotation', None)
                 st.session_state.show_quotation_input_form = False
-                st.session_state.pop('selected_product_for_quotation_new', None)
+                st.session_state.pop('quotation_items', None)
                 st.rerun()
             else:
                 st.error("❌ 견적서 저장에 실패했습니다.")
+
 
 def render_quotation_list(load_func, update_func, delete_func, save_func, 
                          customer_table, quotation_table):
@@ -666,9 +719,10 @@ def render_quotation_list(load_func, update_func, delete_func, save_func,
     # 프린트 모드 체크
     if st.session_state.get('print_quotation'):
         print_quotation = st.session_state['print_quotation']
+        customer_table_for_print = st.session_state.get('print_customer_table', customer_table)
         
         # HTML 생성
-        html_content = generate_quotation_html(print_quotation, load_func)
+        html_content = generate_quotation_html(print_quotation, load_func, customer_table_for_print)
         
         # HTML 표시
         st.components.v1.html(html_content, height=800, scrolling=True)
@@ -677,6 +731,11 @@ def render_quotation_list(load_func, update_func, delete_func, save_func,
         if st.button("← 목록으로 돌아가기", type="primary"):
             del st.session_state['print_quotation']
             st.rerun()
+        return
+    
+    # 수정 모드 체크
+    if st.session_state.get('editing_quotation_id'):
+        render_quotation_edit_inline(load_func, update_func, save_func, delete_func, customer_table, quotation_table)
         return
     
     st.subheader("📋 견적서 목록")
@@ -746,17 +805,24 @@ def render_quotation_list(load_func, update_func, delete_func, save_func,
     st.markdown("---")
     
     # 컨트롤 버튼
-    render_quotation_controls(load_func, update_func, delete_func, save_func, quotation_table)
+    render_quotation_controls(load_func, update_func, delete_func, save_func, quotation_table, customer_table)
 
-def render_quotation_edit_inline(load_func, update_func, save_func, customer_table, quotation_table):
-    """목록 내 인라인 수정 - 전체 폼"""
+def render_quotation_edit_inline(load_func, update_func, save_func, delete_func, customer_table, quotation_table):
+    """목록 내 인라인 수정 - 여러 제품 지원"""
+   
     editing_data = st.session_state.get('editing_quotation_data', {})
     
     st.header("견적서 수정")
     
-    customers_data = load_func('customers')
+    current_user = st.session_state.get('current_user', {})
+    company_code = current_user.get('company', 'YMV')
+    from utils.helpers import get_company_table
+    
+    customers_data = load_func(customer_table)
     employees_data = load_func('employees')
-    products_data = load_func('products')
+    products_table = get_company_table('products', company_code)
+    products_data = load_func(products_table)
+    quotation_items_table = f'quotation_items_{company_code.lower()}'  # 'quotation_items_ymv'
     
     customers_df = pd.DataFrame(customers_data) if customers_data else pd.DataFrame()
     employees_df = pd.DataFrame(employees_data) if employees_data else pd.DataFrame()
@@ -765,6 +831,31 @@ def render_quotation_edit_inline(load_func, update_func, save_func, customer_tab
     if customers_df.empty or employees_df.empty or products_df.empty:
         st.warning("필요한 데이터가 없습니다.")
         return
+    
+    # ✅ 기존 quotation_items 로드
+    if 'editing_quotation_items' not in st.session_state:
+        existing_items_data = load_func(quotation_items_table)
+        if existing_items_data:
+            existing_items = [item for item in existing_items_data if item.get('quotation_id') == editing_data['id']]
+            
+            # 제품 정보와 매칭
+            st.session_state.editing_quotation_items = []
+            for item in existing_items:
+                product = products_df[products_df['id'] == item.get('product_id')]
+                if not product.empty:
+                    product_data = product.iloc[0]
+                    st.session_state.editing_quotation_items.append({
+                        'product_id': item.get('product_id'),
+                        'product_code': product_data.get('product_code'),
+                        'product_name_vn': product_data.get('product_name_vn'),
+                        'product_name_en': product_data.get('product_name_en'),
+                        'quantity': item.get('quantity', 1),
+                        'unit_price_vnd': item.get('unit_price', 0),
+                        'line_total': item.get('line_total', 0),
+                        'cost_price_usd': product_data.get('cost_price_usd', 0)
+                    })
+        else:
+            st.session_state.editing_quotation_items = []
     
     st.subheader("고객 및 담당자")
     col1, col2 = st.columns(2)
@@ -778,7 +869,7 @@ def render_quotation_edit_inline(load_func, update_func, save_func, customer_tab
             except:
                 pass
         
-        selected_customer = st.selectbox("고객사", customer_options, index=default_customer_index, key="quotation_customer_select")
+        selected_customer = st.selectbox("고객사", customer_options, index=default_customer_index, key="quotation_customer_select_edit")
         customer_id = int(selected_customer.split('(')[-1].split(')')[0])
         selected_customer_data = customers_df[customers_df['id'] == customer_id].iloc[0]
         
@@ -797,165 +888,120 @@ def render_quotation_edit_inline(load_func, update_func, save_func, customer_tab
             except:
                 pass
         
-        selected_employee = st.selectbox("영업담당자", employee_options, index=default_employee_index, key="quotation_employee_select")
+        selected_employee = st.selectbox("영업담당자", employee_options, index=default_employee_index, key="quotation_employee_select_edit")
         sales_rep_id = int(selected_employee.split('[')[-1].split(']')[0])
     
-    st.markdown("---")
-    st.subheader("🚚 물류사 선택")
+    st.subheader("📦 제품 항목 추가/수정")
     
-    logistics_data = load_func('logistics_companies')
-    logistics_df = pd.DataFrame(logistics_data) if logistics_data else pd.DataFrame()
+    # ✅ 최대 5개 제한 표시
+    st.info(f"📋 현재 {len(st.session_state.editing_quotation_items)}/5 개 제품")
     
-    if logistics_df.empty:
-        st.warning("⚠️ 등록된 물류사가 없습니다.")
-        logistics_company_id = None
-        logistics_total_cost = 0
-        logistics_company_name = None
-    else:
-        active_logistics = logistics_df[logistics_df['is_active'] == True]
-        
-        if active_logistics.empty:
-            st.warning("⚠️ 활성화된 물류사가 없습니다.")
-            logistics_company_id = None
-            logistics_total_cost = 0
-            logistics_company_name = None
+    # ✅ 제품 추가 UI (5개 미만일 때만)
+    if len(st.session_state.editing_quotation_items) < 5:
+        if not st.session_state.get('selected_product_for_quotation_edit'):
+            render_product_selection_for_quotation(load_func, mode='edit')
         else:
-            logistics_options = [f"{row['company_name']} ({row['transport_type']}) - ${row['total_cost']:,.2f}" for _, row in active_logistics.iterrows()]
+            selected_product_data = st.session_state.selected_product_for_quotation_edit
             
-            default_logistics_index = 0
-            if editing_data.get('logistics_company_id'):
-                try:
-                    default_logistics_index = next(i for i, row in enumerate(active_logistics.iterrows()) if row[1]['id'] == editing_data['logistics_company_id'])
-                except:
-                    pass
+            st.success(f"✅ 선택된 제품: {selected_product_data.get('product_code', '')} - {selected_product_data.get('product_name_vn', '')}")
             
-            selected_logistics = st.selectbox("물류사", logistics_options, index=default_logistics_index, key="quotation_logistics_select")
-            selected_index = logistics_options.index(selected_logistics)
-            selected_logistics_data = active_logistics.iloc[selected_index]
-            
-            logistics_company_id = int(selected_logistics_data['id'])
-            logistics_company_name = selected_logistics_data['company_name']
-            logistics_total_cost = float(selected_logistics_data['total_cost'])
-            
-            with st.expander("물류사 상세 정보", expanded=False):
-                col1, col2, col3, col4 = st.columns(4)
-                with col1:
-                    st.metric("중국 내륙", f"${selected_logistics_data['china_inland_cost']:,.2f}")
-                with col2:
-                    st.metric("중국 통관", f"${selected_logistics_data['china_customs_cost']:,.2f}")
-                with col3:
-                    st.metric("베트남 통관", f"${selected_logistics_data['vietnam_customs_cost']:,.2f}")
-                with col4:
-                    st.metric("베트남 내륙", f"${selected_logistics_data['vietnam_inland_cost']:,.2f}")
-    
-    st.markdown("---")
-    st.subheader("제품 선택")
-    
-    if not st.session_state.get('selected_product_for_quotation_edit'):
-        existing_product = products_df[products_df['product_code'] == editing_data.get('item_code')]
-        if not existing_product.empty:
-            st.session_state.selected_product_for_quotation_edit = existing_product.iloc[0].to_dict()
-    
-    if st.session_state.get('show_product_selector_edit'):
-        render_product_selection_for_quotation(load_func, mode='edit')
-        return
-    
-    selected_product_data = st.session_state.get('selected_product_for_quotation_edit', {})
-    
-    if not selected_product_data:
-        st.warning("제품 정보를 불러올 수 없습니다.")
-        return
-    
-    col1, col2 = st.columns([1, 4])
-    with col1:
-        if st.button("🔄 다른 제품 선택"):
-            st.session_state.show_product_selector_edit = True
-            st.rerun()
-    
-    st.success(f"✅ 선택된 제품: {selected_product_data.get('product_code', '')} - {selected_product_data.get('product_name_vn', '')}")
-    
-    st.markdown("---")
-    st.subheader("📦 제품 정보 및 가격 계산")
-    
-    prod_col1, prod_col2 = st.columns(2)
-    
-    with prod_col1:
-        st.text_input("제품 코드", value=selected_product_data.get('product_code', ''), disabled=True, key="prod_code_edit")
-        cost_price_usd = float(selected_product_data.get('cost_price_usd', 0))
-        if cost_price_usd > 0:
-            st.info(f"🏷️ 제품 원가: ${cost_price_usd:,.2f} USD")
-    
-    with prod_col2:
-        st.text_input("제품명 (베트남어)", value=selected_product_data.get('product_name_vn', ''), disabled=True, key="prod_name_edit")
-    
-    st.markdown("---")
-    
-    input_col, result_col = st.columns([1, 1])
-    
-    with input_col:
-        st.markdown("#### 📝 입력 정보")
-        quantity = st.number_input("수량", min_value=1, value=int(editing_data.get('quantity') or 1), key="quotation_quantity_edit")
-        exchange_rate = st.number_input("USD → VND 환율", min_value=1000.0, value=float(editing_data.get('exchange_rate') or 26387.45), step=100.0, format="%.0f", key="exchange_rate_edit")
-        unit_price_vnd = st.number_input("판매가격 (VND)", min_value=0.0, value=float(editing_data.get('unit_price_vnd') or 0), step=10000.0, format="%.0f", key="quotation_unit_price_vnd_edit")
-        st.caption(f"💱 USD 기준: ${unit_price_vnd / exchange_rate:,.2f}")
-        discount_rate = st.number_input("할인율 (%)", min_value=0.0, max_value=100.0, value=float(editing_data.get('discount_rate') or 0.0), format="%.1f", key="quotation_discount_edit")
-        vat_rate = st.selectbox("VAT율 (%)", [0.0, 7.0, 10.0], index=[0.0, 7.0, 10.0].index(editing_data.get('vat_rate') or 10.0) if (editing_data.get('vat_rate') or 10.0) in [0.0, 7.0, 10.0] else 2, key="quotation_vat_edit")
-    
-    with result_col:
-        st.markdown("#### 💵 계산 결과")
-        
-        if quantity > 0 and unit_price_vnd > 0:
-            discounted_price_vnd = unit_price_vnd * (1 - discount_rate / 100)
-            subtotal_vnd = quantity * discounted_price_vnd
-            vat_amount_vnd = subtotal_vnd * (vat_rate / 100)
-            final_amount_vnd = subtotal_vnd + vat_amount_vnd
-            
-            discounted_price_usd = discounted_price_vnd / exchange_rate
-            final_amount_usd = final_amount_vnd / exchange_rate
-            
-            st.markdown("**💰 가격 계산 (VND)**")
-            
-            price_col1, price_col2, price_col3 = st.columns(3)
-            with price_col1:
-                st.metric("할인 후 단가", f"{discounted_price_vnd:,.0f}")
-                st.caption(f"${discounted_price_usd:,.2f}")
-            with price_col2:
-                st.metric("소계", f"{subtotal_vnd:,.0f}")
-                st.caption(f"VAT: {vat_amount_vnd:,.0f}")
-            with price_col3:
-                st.metric("최종 금액", f"{final_amount_vnd:,.0f}")
-                st.caption(f"${final_amount_usd:,.2f}")
-            
-            if cost_price_usd > 0 and logistics_total_cost > 0:
-                logistics_per_unit = logistics_total_cost / quantity
-                total_cost_usd = cost_price_usd + logistics_per_unit
-                margin = ((discounted_price_usd - total_cost_usd) / discounted_price_usd) * 100
-                margin_amount_usd = discounted_price_usd - total_cost_usd
-                margin_amount_vnd = margin_amount_usd * exchange_rate
-                
-                st.markdown("---")
-                st.markdown("**📊 비용 및 마진 분석**")
-                
-                margin_col1, margin_col2, margin_col3 = st.columns(3)
-                with margin_col1:
-                    st.info("**📦 물류비**")
-                    st.write(f"총: ${logistics_total_cost:,.2f}")
-                    st.write(f"개당: ${logistics_per_unit:,.2f}")
-                with margin_col2:
-                    st.info("**💵 총 비용**")
-                    st.write(f"원가: ${cost_price_usd:,.2f}")
-                    st.write(f"물류: ${logistics_per_unit:,.2f}")
-                    st.write(f"**합계: ${total_cost_usd:,.2f}**")
-                with margin_col3:
-                    if margin > 0:
-                        st.success("**📈 예상 마진**")
-                        st.write(f"**{margin:.1f}%**")
-                        st.write(f"${margin_amount_usd:,.2f}")
-                        st.caption(f"≈ {margin_amount_vnd:,.0f} VND")
+            col1, col2, col3, col4 = st.columns(4)
+            with col1:
+                item_quantity = st.number_input("수량", min_value=1, value=1, key="item_qty_temp_edit")
+            with col2:
+                item_unit_price = st.number_input("단가 (VND)", min_value=0.0, value=float(selected_product_data.get('actual_selling_price_vnd', 0)), step=10000.0, format="%.0f", key="item_price_temp_edit")
+            with col3:
+                st.metric("합계", f"{item_quantity * item_unit_price:,.0f} VND")
+            with col4:
+                st.write("")
+                st.write("")
+                if st.button("➕ 항목 추가", type="primary", use_container_width=True, key="add_item_edit"):
+                    if len(st.session_state.editing_quotation_items) < 5:
+                        item = {
+                            'product_id': selected_product_data.get('id'),
+                            'product_code': selected_product_data.get('product_code'),
+                            'product_name_vn': selected_product_data.get('product_name_vn'),
+                            'product_name_en': selected_product_data.get('product_name_en'),
+                            'quantity': item_quantity,
+                            'unit_price_vnd': item_unit_price,
+                            'line_total': item_quantity * item_unit_price,
+                            'cost_price_usd': selected_product_data.get('cost_price_usd', 0)
+                        }
+                        st.session_state.editing_quotation_items.append(item)
+                        st.session_state.pop('selected_product_for_quotation_edit', None)
+                        st.success("✅ 항목이 추가되었습니다!")
+                        st.rerun()
                     else:
-                        st.error("**📉 손실**")
-                        st.write(f"**{abs(margin):.1f}%**")
-                        st.write(f"${abs(margin_amount_usd):,.2f}")
+                        st.error("❌ 최대 5개까지만 추가 가능합니다.")
+    else:
+        st.warning("⚠️ 최대 5개 제품까지만 추가할 수 있습니다.")
+    
+    # ✅ 추가된 항목 목록 표시
+    if st.session_state.editing_quotation_items:
+        st.markdown("---")
+        st.subheader("📋 견적 항목 목록")
+        
+        items_data = []
+        for idx, item in enumerate(st.session_state.editing_quotation_items):
+            items_data.append({
+                'No': idx + 1,
+                'Code': item['product_code'],
+                '품명': item['product_name_vn'],
+                '수량': f"{item['quantity']:,}",
+                '단가': f"{item['unit_price_vnd']:,.0f}",
+                '합계': f"{item['line_total']:,.0f}",
+                '삭제': idx
+            })
+        
+        df_items = pd.DataFrame(items_data)
+        st.dataframe(df_items[['No', 'Code', '품명', '수량', '단가', '합계']], use_container_width=True, hide_index=True)
+        
+        # 항목 삭제
+        col1, col2 = st.columns([3, 1])
+        with col1:
+            delete_idx = st.number_input("삭제할 항목 번호", min_value=1, max_value=len(st.session_state.editing_quotation_items), value=1, key="delete_item_idx_edit")
+        with col2:
+            st.write("")
+            st.write("")
+            if st.button("🗑️ 삭제", use_container_width=True, key="delete_item_edit"):
+                st.session_state.editing_quotation_items.pop(delete_idx - 1)
+                st.success("✅ 항목이 삭제되었습니다!")
+                st.rerun()
+        
+        # 총 금액 계산
+        exchange_rate = 26387.45
+        total_vnd = sum(item['line_total'] for item in st.session_state.editing_quotation_items)
+        discount_rate = st.number_input("전체 할인율 (%)", min_value=0.0, max_value=100.0, value=float(editing_data.get('discount_rate', 0.0)), format="%.1f", key="quotation_discount_edit")
+        vat_rate = st.selectbox("VAT율 (%)", [0.0, 7.0, 10.0], index=[0.0, 7.0, 10.0].index(editing_data.get('vat_rate', 10.0)) if editing_data.get('vat_rate', 10.0) in [0.0, 7.0, 10.0] else 2, key="quotation_vat_edit")
+        
+        discounted_total = total_vnd * (1 - discount_rate / 100)
+        vat_amount = discounted_total * (vat_rate / 100)
+        final_amount = discounted_total + vat_amount
+        
+        st.markdown("---")
+        st.subheader("💰 금액 계산")
+        
+        calc_col1, calc_col2, calc_col3 = st.columns(3)
+        with calc_col1:
+            st.metric("소계", f"{total_vnd:,.0f} VND")
+        with calc_col2:
+            st.metric("할인 후", f"{discounted_total:,.0f} VND")
+            st.caption(f"VAT: {vat_amount:,.0f}")
+        with calc_col3:
+            st.metric("최종 금액", f"{final_amount:,.0f} VND")
+            st.caption(f"${final_amount / exchange_rate:,.2f}")
+    
+    # 항목이 없으면 저장 불가
+    if not st.session_state.editing_quotation_items:
+        st.warning("⚠️ 최소 1개 이상의 제품을 추가해주세요.")
+        if st.button("❌ 취소", use_container_width=True, key="cancel_edit_no_items"):
+            st.session_state.pop('editing_quotation_id', None)
+            st.session_state.pop('editing_quotation_data', None)
+            st.session_state.pop('editing_quotation_items', None)
+            st.session_state.pop('selected_product_for_quotation_edit', None)
+            st.session_state.pop('show_product_selector_edit', None)
+            st.rerun()
+        return
     
     with st.form("quotation_form_edit"):
         st.subheader("기본 정보")
@@ -994,22 +1040,22 @@ def render_quotation_edit_inline(load_func, update_func, save_func, customer_tab
         col1, col2 = st.columns(2)
         
         with col1:
-                        payment_terms = st.radio(
-                            "결제 조건",
-                            ["T/T 30 days", "T/T 60 days", "T/T 90 days", "L/C at sight", "CAD"],
-                            horizontal=True,
-                            index=0,  # 기본값 또는 editing_data에서 찾기
-                            key="payment_terms_edit"
-                        )
-                        
-                        st.text_input(
-                            "납기일 / Delivery Date",
-                            value="15 ngày làm việc sau khi phê duyệt PO và bản vẽ / 15 working days after PO & drawing approval",
-                            disabled=True,
-                            key="delivery_terms_edit"
-                        )
-                        
-                        delivery_date = None
+            payment_terms = st.radio(
+                "결제 조건",
+                ["T/T 30 days", "T/T 60 days", "T/T 90 days", "L/C at sight", "CAD"],
+                horizontal=True,
+                index=0,
+                key="payment_terms_edit"
+            )
+            
+            st.text_input(
+                "납기일 / Delivery Date",
+                value="15 ngày làm việc sau khi phê duyệt PO và bản vẽ / 15 working days after PO & drawing approval",
+                disabled=True,
+                key="delivery_terms_edit"
+            )
+            
+            delivery_date = None
         with col2:
             lead_time_days = st.number_input("리드타임(일)", min_value=0, value=int(editing_data.get('lead_time_days') or 30))
             remarks = st.text_area("비고", value=editing_data.get('remarks', editing_data.get('remark')) or '')
@@ -1026,97 +1072,96 @@ def render_quotation_edit_inline(load_func, update_func, save_func, customer_tab
             current_revision = editing_data.get('revision_number', 'Rv00')
             new_revision = get_next_revision_number(current_revision)
             
-            quantity = st.session_state.get("quotation_quantity_edit", 1)
-            unit_price_vnd = st.session_state.get("quotation_unit_price_vnd_edit", 0)
             discount_rate = st.session_state.get("quotation_discount_edit", 0)
             vat_rate = st.session_state.get("quotation_vat_edit", 7.0)
-            exchange_rate = st.session_state.get("exchange_rate_edit", 26387.45)
+            exchange_rate = 26387.45
             
-            discounted_price_vnd = unit_price_vnd * (1 - discount_rate / 100)
-            subtotal_vnd = quantity * discounted_price_vnd
-            vat_amount_vnd = subtotal_vnd * (vat_rate / 100)
-            final_amount_vnd = subtotal_vnd + vat_amount_vnd
-            
-            unit_price_usd = unit_price_vnd / exchange_rate
-            discounted_price_usd = discounted_price_vnd / exchange_rate
-            final_amount_usd = final_amount_vnd / exchange_rate
-            
-            margin = None
-            estimated_logistics_per_unit = 0
-            if logistics_total_cost > 0 and quantity > 0:
-                estimated_logistics_per_unit = logistics_total_cost / quantity
-            
-            if cost_price_usd > 0:
-                total_cost_usd = cost_price_usd + estimated_logistics_per_unit
-                if total_cost_usd > 0:
-                    margin = ((discounted_price_usd - total_cost_usd) / discounted_price_usd) * 100
+            total_vnd = sum(item['line_total'] for item in st.session_state.editing_quotation_items)
+            discounted_total = total_vnd * (1 - discount_rate / 100)
+            vat_amount = discounted_total * (vat_rate / 100)
+            final_amount = discounted_total + vat_amount
             
             customer_company_name = selected_customer_data.get('company_name_original')
             
             quotation_data = {
                 'id': editing_data['id'],
-                'customer_name': customer_company_name,
-                'company': customer_company_name,
+                'customer_name': customer_company_name[:100],
+                'company': customer_company_name[:200],
                 'quote_date': quote_date.isoformat(),
                 'valid_until': valid_until.isoformat(),
-                'item_name': selected_product_data.get('product_name_en', ''),
-                'quantity': quantity,
-                'unit_price': unit_price_vnd,
                 'customer_id': customer_id,
-                'contact_person': selected_customer_data.get('contact_person'),
-                'email': selected_customer_data.get('email'),
-                'phone': selected_customer_data.get('phone'),
+                'contact_person': (selected_customer_data.get('contact_person') or '')[:100],
+                'email': (selected_customer_data.get('email') or '')[:100],
+                'phone': (selected_customer_data.get('phone') or '')[:20],
                 'customer_address': selected_customer_data.get('address'),
                 'quote_number': editing_data['quote_number'],
                 'revision_number': new_revision,
                 'currency': 'VND',
                 'status': editing_data.get('status', 'Draft'),
                 'sales_rep_id': sales_rep_id,
-                'item_code': selected_product_data.get('product_code', ''),
-                'item_name_en': selected_product_data.get('product_name_en', ''),
-                'item_name_vn': selected_product_data.get('product_name_vn', ''),
-                'std_price': unit_price_vnd,
-                'unit_price_vnd': unit_price_vnd,
-                'unit_price_usd': unit_price_usd,
+                'item_name': None,
+                'item_code': None,
+                'item_name_en': None,
+                'item_name_vn': None,
+                'quantity': None,
+                'unit_price': None,
+                'unit_price_vnd': None,
+                'std_price': None,
+                'discounted_price': None,
                 'discount_rate': discount_rate,
-                'discounted_price': discounted_price_vnd,
-                'discounted_price_vnd': discounted_price_vnd,
-                'discounted_price_usd': discounted_price_usd,
                 'vat_rate': vat_rate,
-                'vat_amount': vat_amount_vnd,
-                'final_amount': final_amount_vnd,
-                'final_amount_usd': final_amount_usd,
+                'vat_amount': vat_amount,
+                'final_amount': final_amount,
+                'final_amount_usd': final_amount / exchange_rate,
                 'exchange_rate': exchange_rate,
-                'project_name': safe_strip(project_name),
-                'part_name': safe_strip(part_name),
-                'mold_no': safe_strip(mold_number),
-                'mold_number': safe_strip(mold_number),
+                'project_name': (safe_strip(project_name) or None)[:200] if safe_strip(project_name) else None,
+                'part_name': (safe_strip(part_name) or None)[:200] if safe_strip(part_name) else None,
+                'mold_number': (safe_strip(mold_number) or None)[:100] if safe_strip(mold_number) else None,
                 'part_weight': part_weight if part_weight > 0 else None,
-                'hrs_info': safe_strip(hrs_info),
-                'resin_type': safe_strip(resin_type),
-                'resin_additive': safe_strip(resin_additive),
-                'sol_voltage': sol_voltage,
-                'payment_terms': safe_strip(payment_terms),
+                'hrs_info': (safe_strip(hrs_info) or None)[:200] if safe_strip(hrs_info) else None,
+                'resin_type': (safe_strip(resin_type) or None)[:100] if safe_strip(resin_type) else None,
+                'resin_additive': (safe_strip(resin_additive) or None)[:200] if safe_strip(resin_additive) else None,
+                'sol_voltage': sol_voltage[:20],
+                'payment_terms': (safe_strip(payment_terms) or None)[:200] if safe_strip(payment_terms) else None,
                 'delivery_date': delivery_date.isoformat() if delivery_date else None,
                 'lead_time_days': lead_time_days,
-                'remark': safe_strip(remarks),
                 'remarks': safe_strip(remarks),
-                'cost_price_usd': cost_price_usd,
-                'logistics_company_id': logistics_company_id,
-                'logistics_company_name': logistics_company_name,
-                'estimated_logistics_total': logistics_total_cost,
-                'estimated_logistics_per_unit': estimated_logistics_per_unit,
-                'margin_rate': margin,
                 'updated_at': datetime.now().isoformat()
             }
             
             try:
+                # ✅ 견적서 업데이트
                 success = update_func(quotation_table, quotation_data)
+                
                 if success:
+                    # ✅ 기존 quotation_items 삭제
+                    try:
+                        existing_items = load_func(quotation_items_table)
+                        if existing_items:
+                            for item in existing_items:
+                                if item.get('quotation_id') == editing_data['id']:
+                                    item_id = item.get('item_id')
+                                    if item_id:
+                                        delete_func(quotation_items_table, item_id, id_field='item_id')
+                    except Exception as delete_error:
+                        st.warning(f"기존 항목 삭제 중 오류: {str(delete_error)}")
+                    
+                    # ✅ 새 quotation_items 저장
+                    for item in st.session_state.editing_quotation_items:
+                        item_data = {
+                            'quotation_id': editing_data['id'],
+                            'product_id': item['product_id'],
+                            'item_description': f"{item['product_code']} - {item['product_name_vn']}",
+                            'quantity': item['quantity'],
+                            'unit_price': item['unit_price_vnd'],
+                            'line_total': item['line_total']
+                        }
+                        save_func(quotation_items_table, item_data)
+                    
                     st.success(f"✅ 견적서가 수정되었습니다! (Rev: {new_revision})")
                     st.session_state.pop('editing_quotation_id', None)
                     st.session_state.pop('editing_quotation_data', None)
-                    st.session_state.pop('active_tab', None)
+                    st.session_state.pop('editing_quotation_items', None)
                     st.session_state.pop('selected_product_for_quotation_edit', None)
                     st.session_state.pop('show_product_selector_edit', None)
                     st.rerun()
@@ -1128,7 +1173,7 @@ def render_quotation_edit_inline(load_func, update_func, save_func, customer_tab
         if cancel_btn:
             st.session_state.pop('editing_quotation_id', None)
             st.session_state.pop('editing_quotation_data', None)
-            st.session_state.pop('active_tab', None)
+            st.session_state.pop('editing_quotation_items', None)
             st.session_state.pop('selected_product_for_quotation_edit', None)
             st.session_state.pop('show_product_selector_edit', None)
             st.info("✅ 수정이 취소되었습니다.")
@@ -1342,8 +1387,7 @@ def get_next_revision_number(current_revision):
     except:
         return "Rv01"
 
-
-def generate_quotation_html(quotation, load_func, language='한국어'):
+def generate_quotation_html(quotation, load_func, customer_table, language='한국어'):
     """견적서 HTML 생성"""
     try:
         import base64
@@ -1360,8 +1404,20 @@ def generate_quotation_html(quotation, load_func, language='한국어'):
         except Exception as e:
             logging.error(f"스탬프 이미지 로드 오류: {str(e)}")
         
-        customers_data = load_func('customers')
+        customers_data = load_func(customer_table)
         employees_data = load_func('employees')
+        
+        # ✅ quotation_items 로드
+        current_user = st.session_state.get('current_user', {})
+        company_code = current_user.get('company', 'YMV')
+        from utils.helpers import get_company_table
+        quotation_items_table = f'quotation_items_{company_code.lower()}'  # 'quotation_items_ymv'
+        quotation_items_data = load_func(quotation_items_table)
+        
+        # 해당 견적서의 항목만 필터링
+        items = []
+        if quotation_items_data:
+            items = [item for item in quotation_items_data if item.get('quotation_id') == quotation.get('id')]
         
         customers_df = pd.DataFrame(customers_data) if customers_data else pd.DataFrame()
         employees_df = pd.DataFrame(employees_data) if employees_data else pd.DataFrame()
@@ -1393,8 +1449,73 @@ def generate_quotation_html(quotation, load_func, language='한국어'):
         if stamp_base64:
             stamp_img_tag = f'<img src="{stamp_base64}" class="stamp-image" alt="Company Stamp" />'
         
+
+        # ✅ 제품 테이블 HTML 생성 (3행 구조)
+        items_rows = ""
+        if items:
+            for idx, item in enumerate(items, 1):
+                item_desc = item.get('item_description', '')
+                # 제품 코드와 제품명 분리
+                parts = item_desc.split(' - ')
+                item_code = parts[0] if len(parts) > 0 else ''
+                item_name_vn = parts[1] if len(parts) > 1 else item_desc
+                
+                qty = item.get('quantity', 0)
+                unit_price = item.get('unit_price', 0)
+                line_total = item.get('line_total', 0)
+                discount_rate = quotation.get('discount_rate', 0)
+                discounted_price = unit_price * (1 - discount_rate / 100)
+                
+                # 3행 구조: 1) 기본 정보, 2) 베트남어 제품명, 3) 비고
+                items_rows += f"""
+                    <tr>
+                        <td rowspan="3" style="vertical-align: top; padding-top: 30px; font-weight: bold;">{idx}</td>
+                        <td style="font-size: 10px;">{item_code}</td>
+                        <td style="font-weight: bold;">{qty:,}</td>
+                        <td class="text-right" style="font-size: 10px;">{unit_price:,.0f}</td>
+                        <td style="font-weight: bold;">{discount_rate:.1f}%</td>
+                        <td class="text-right" style="font-size: 10px; font-weight: bold;">{discounted_price:,.0f}</td>
+                        <td class="text-right" style="font-size: 10px; font-weight: bold;">{line_total:,.0f}</td>
+                    </tr>
+                    <tr>
+                        <td colspan="6" style="padding: 6px; border-top: none; text-align: left; color: #000;">
+                            {item_name_vn}
+                        </td>
+                    </tr>
+                    <tr>
+                        <td colspan="6" style="padding: 8px; border-top: none; text-align: left;">
+                            {quotation.get('remarks', '')}
+                        </td>
+                    </tr>
+                """
+        else:
+            items_rows = """
+                <tr>
+                    <td rowspan="3" style="vertical-align: top; padding-top: 30px; font-weight: bold;">1</td>
+                    <td style="font-size: 10px;">No Item</td>
+                    <td style="font-weight: bold;">0</td>
+                    <td class="text-right" style="font-size: 10px;">0</td>
+                    <td style="font-weight: bold;">0.0%</td>
+                    <td class="text-right" style="font-size: 10px; font-weight: bold;">0</td>
+                    <td class="text-right" style="font-size: 10px; font-weight: bold;">0</td>
+                </tr>
+                <tr>
+                    <td colspan="6" style="padding: 8px; border-top: none; text-align: left; color: #000;"></td>
+                </tr>
+                <tr>
+                    <td colspan="6" style="padding: 8px; border-top: none; text-align: left;"></td>
+                </tr>
+            """
         
-            html_template = f"""
+        # ✅ 총액 계산
+        discount_rate = quotation.get('discount_rate', 0)
+        vat_rate = quotation.get('vat_rate', 0)
+        subtotal = sum(item.get('line_total', 0) for item in items) if items else 0
+        discounted_total = subtotal * (1 - discount_rate / 100)
+        vat_amount = quotation.get('vat_amount', 0)
+        final_amount = quotation.get('final_amount', 0)
+        
+        html_template = f"""
 <!DOCTYPE html>
 <html lang="ko">
 <head>
@@ -1489,25 +1610,7 @@ def generate_quotation_html(quotation, load_func, language='한국어'):
                     </tr>
                 </thead>
                 <tbody>
-                    <tr>
-                        <td rowspan="3" style="vertical-align: top; padding-top: 30px; font-weight: bold;">1</td>
-                        <td style="font-size: 10px;">{quotation.get('item_code', '')}</td>
-                        <td style="font-weight: bold;">{quotation.get('quantity', 1):,}</td>
-                        <td class="text-right" style="font-size: 10px;">{quotation.get('std_price', 0):,.0f}</td>
-                        <td style="font-weight: bold;">{quotation.get('discount_rate', 0):.1f}%</td>
-                        <td class="text-right" style="font-size: 10px; font-weight: bold;">{quotation.get('discounted_price', 0):,.0f}</td>
-                        <td class="text-right" style="font-size: 10px; font-weight: bold;">{(quotation.get('quantity', 1) * quotation.get('discounted_price', 0)):,.0f}</td>
-                    </tr>
-                    <tr>
-                        <td colspan="6" style="padding: 8px; border-top: none; text-align: left; color: #000;">
-                            {quotation.get('item_name_vn', '')}
-                        </td>
-                    </tr>
-                    <tr>
-                        <td colspan="6" style="padding: 8px; border-top: none; text-align: left;">
-                            {quotation.get('remark', quotation.get('remarks', ''))}
-                        </td>
-                    </tr>
+                    {items_rows}
                 </tbody>
             </table>
         </div>
@@ -1515,19 +1618,19 @@ def generate_quotation_html(quotation, load_func, language='한국어'):
             <div class="totals">
                 <table>
                     <tr>
-                        <td class="text-right">TOTAL {quotation.get('currency', 'VND')} Excl. VAT</td>
-                        <td>{quotation.get('currency', 'VND')}</td>
-                        <td class="text-right">{(quotation.get('quantity', 1) * quotation.get('discounted_price', 0)):,.0f}</td>
+                        <td class="text-right">TOTAL VND Excl. VAT</td>
+                        <td>VND</td>
+                        <td class="text-right">{discounted_total:,.0f}</td>
                     </tr>
                     <tr>
-                        <td class="text-right">TOTAL {quotation.get('currency', 'VND')} {quotation.get('vat_rate', 0):.1f}% VAT</td>
-                        <td>{quotation.get('currency', 'VND')}</td>
-                        <td class="text-right">{quotation.get('vat_amount', 0):,.0f}</td>
+                        <td class="text-right">TOTAL VND {vat_rate:.1f}% VAT</td>
+                        <td>VND</td>
+                        <td class="text-right">{vat_amount:,.0f}</td>
                     </tr>
                     <tr class="total-row">
-                        <td class="text-right">TOTAL {quotation.get('currency', 'VND')} Incl. VAT</td>
-                        <td>{quotation.get('currency', 'VND')}</td>
-                        <td class="text-right">{quotation.get('final_amount', 0):,.0f}</td>
+                        <td class="text-right">TOTAL VND Incl. VAT</td>
+                        <td>VND</td>
+                        <td class="text-right">{final_amount:,.0f}</td>
                     </tr>
                 </table>
             </div>
@@ -1541,9 +1644,9 @@ def generate_quotation_html(quotation, load_func, language='한국어'):
                     </tr>
                     <tr>
                         <td>Mold No.:</td>
-                        <td>{quotation.get('mold_no', quotation.get('mold_number', ''))}</td>
+                        <td>{quotation.get('mold_number', '')}</td>
                         <td>Part Weight:</td>
-                        <td>{quotation.get('part_weight', '')} g</td>
+                        <td>{quotation.get('part_weight') or ''} g</td>
                     </tr>
                     <tr>
                         <td>HRS Info:</td>
@@ -1553,7 +1656,7 @@ def generate_quotation_html(quotation, load_func, language='한국어'):
                     </tr>
                     <tr>
                         <td>Remark:</td>
-                        <td>{quotation.get('remark', quotation.get('remarks', ''))}</td>
+                        <td>{quotation.get('remarks', '')}</td>
                         <td>Valid Date:</td>
                         <td>{quotation.get('valid_until', '')}</td>
                     </tr>
@@ -1564,8 +1667,8 @@ def generate_quotation_html(quotation, load_func, language='한국어'):
                         <td>{employee_info.get('name', '')}</td>
                     </tr>
                     <tr>
-                        <td>Sol/Material:</td>
-                        <td>{quotation.get('sol_material', '')}</td>
+                        <td>Sol/Voltage:</td>
+                        <td>{quotation.get('sol_voltage', '')}</td>
                         <td>Contact:</td>
                         <td>{employee_info.get('email', '')}</td>
                     </tr>
@@ -1577,7 +1680,7 @@ def generate_quotation_html(quotation, load_func, language='한국어'):
                     </tr>
                     <tr>
                         <td>Delivery Date:</td>
-                        <td>15 ngày làm việc sau khi phê duyệt PO và bản vẽ<br/>15 working days after PO & drawing approval</td>
+                        <td>15 working days after PO & drawing approval</td>
                         <td>Account:</td>
                         <td style="font-size: 9px;">700-038-038199 (Shinhan Bank Vietnam)</td>
                     </tr>
@@ -1603,7 +1706,7 @@ def generate_quotation_html(quotation, load_func, language='한국어'):
     except Exception as e:
         logging.error(f"HTML 생성 오류: {str(e)}")
         return f"<html><body><h1>오류: {str(e)}</h1></body></html>"
-    
+
 def render_quotation_table_with_status_control(quotations_df, update_func, save_func):
     """견적서 테이블 + 상태 변경 기능"""
     if quotations_df.empty:
@@ -1785,7 +1888,7 @@ def create_sales_process_from_quotation(quotation_dict, save_func):
             'message': str(e)
         }
 
-def render_quotation_controls(load_func, update_func, delete_func, save_func, quotation_table):
+def render_quotation_controls(load_func, update_func, delete_func, save_func, quotation_table, customer_table):
     """견적서 수정/삭제/인쇄/상태변경 통합 컨트롤"""
     st.markdown("---")
     
@@ -1795,10 +1898,9 @@ def render_quotation_controls(load_func, update_func, delete_func, save_func, qu
         quotation_id_input = st.text_input("견적서 ID", placeholder="ID 입력", key="quotation_control_id")
     
     with col2:
-        if st.button("✏️ 수정", use_container_width=True, type="primary"):
+        if st.button("✏️ 수정", use_container_width=True, type="primary", key="btn_edit_quot"):  # ✅ key 추가
             if quotation_id_input and quotation_id_input.strip().isdigit():
                 quotation_id = int(quotation_id_input.strip())
-                # 법인별 테이블에서 로드
                 quotations = load_func(quotation_table) or []
                 found = next((q for q in quotations if q.get('id') == quotation_id), None)
                 
@@ -1812,7 +1914,7 @@ def render_quotation_controls(load_func, update_func, delete_func, save_func, qu
                 st.error("❌ 올바른 ID를 입력하세요.")
     
     with col3:
-        if st.button("🗑️ 삭제", use_container_width=True):
+        if st.button("🗑️ 삭제", use_container_width=True, key="btn_delete_quot"):  # ✅ key 추가
             if quotation_id_input and quotation_id_input.strip().isdigit():
                 st.session_state.deleting_quotation_id = int(quotation_id_input.strip())
                 st.rerun()
@@ -1820,16 +1922,15 @@ def render_quotation_controls(load_func, update_func, delete_func, save_func, qu
                 st.error("❌ 올바른 ID를 입력하세요.")
     
     with col4:
-        if st.button("🖨️ 프린트", use_container_width=True):
+        if st.button("🖨️ 프린트", use_container_width=True, key="btn_print_quot"):  # ✅ key 추가
             if quotation_id_input and quotation_id_input.strip().isdigit():
                 quotation_id = int(quotation_id_input.strip())
-                # 법인별 테이블에서 로드
                 quotations = load_func(quotation_table) or []
                 found = next((q for q in quotations if q.get('id') == quotation_id), None)
                 
                 if found:
-                    # 프린트 모드로 전환
                     st.session_state['print_quotation'] = found
+                    st.session_state['print_customer_table'] = customer_table
                     st.rerun()
                 else:
                     st.error(f"❌ ID {quotation_id}를 찾을 수 없습니다.")
@@ -1845,10 +1946,9 @@ def render_quotation_controls(load_func, update_func, delete_func, save_func, qu
         )
     
     with col6:
-        if st.button("✅ 변경", use_container_width=True):
+        if st.button("✅ 변경", use_container_width=True, key="btn_status_quot"):  # ✅ key 추가
             if quotation_id_input and quotation_id_input.strip().isdigit():
                 quotation_id = int(quotation_id_input.strip())
-                # 법인별 테이블에서 로드
                 quotations = load_func(quotation_table) or []
                 found = next((q for q in quotations if q.get('id') == quotation_id), None)
                 
@@ -1859,7 +1959,6 @@ def render_quotation_controls(load_func, update_func, delete_func, save_func, qu
                         'updated_at': datetime.now().isoformat()
                     }
                     
-                    # 법인별 테이블로 업데이트
                     if update_func(quotation_table, update_data):
                         st.success(f"✅ 상태가 {new_status}로 변경되었습니다!")
                         
@@ -1881,7 +1980,6 @@ def render_quotation_controls(load_func, update_func, delete_func, save_func, qu
         
         with del_col1:
             if st.button("✅ 예", key="confirm_del_quot"):
-                # 법인별 테이블에서 삭제
                 if delete_func(quotation_table, st.session_state.deleting_quotation_id):
                     st.success("✅ 삭제 완료!")
                     st.session_state.pop('deleting_quotation_id', None)
@@ -1891,3 +1989,5 @@ def render_quotation_controls(load_func, update_func, delete_func, save_func, qu
             if st.button("❌ 아니오", key="cancel_del_quot"):
                 st.session_state.pop('deleting_quotation_id', None)
                 st.rerun()
+
+

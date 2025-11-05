@@ -13,8 +13,14 @@ def render_quotation_selection(load_func, language='KO'):
     # 모드 A: 견적서 연결
     st.info("💡 모드 A: Approved 상태의 견적서를 선택하여 고객 정보와 제품 CODE를 자동으로 가져옵니다.")
     
-    # Approved 상태의 견적서만 조회
-    all_quotations = load_func('quotations') if load_func else []
+    # 현재 유저의 법인 코드
+    current_user = st.session_state.get('current_user', {})
+    company_code = current_user.get('company', 'YMV')
+    
+    # 법인별 테이블에서 견적서 조회
+    from utils.helpers import get_company_table
+    quotation_table = get_company_table('quotations', company_code)
+    all_quotations = load_func(quotation_table) if load_func else []
     approved_quotations = [q for q in all_quotations if q.get('status') == 'Approved']
     
     if not approved_quotations:
@@ -134,7 +140,14 @@ def render_customer_search(load_func, language='KO'):
     st.markdown(f"### 🔍 고객사 검색")
     st.info("💡 모드 B: 견적서 없이 독립적으로 작성합니다. 고객 정보와 제품 CODE를 직접 입력합니다.")
     
-    customers = load_func('customers') if load_func else []
+    # 현재 유저의 법인 코드
+    current_user = st.session_state.get('current_user', {})
+    company_code = current_user.get('company', 'YMV')
+    
+    # 법인별 테이블에서 고객사 조회
+    from utils.helpers import get_company_table
+    customer_table = get_company_table('customers', company_code)
+    customers = load_func(customer_table) if load_func else []
     
     if not customers:
         st.warning("등록된 고객사가 없습니다.")
