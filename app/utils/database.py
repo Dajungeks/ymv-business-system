@@ -24,8 +24,8 @@ class ConnectionWrapper:
 def get_connection() -> ConnectionWrapper:
     """Supabase 연결 가져오기"""
     try:
-        url = st.secrets["supabase"]["url"]
-        key = st.secrets["supabase"]["key"]
+        url = st.secrets["SUPABASE_URL"]  # ✅ 맞음
+        key = st.secrets["SUPABASE_ANON_KEY"]  # ✅ 맞음    
         client = create_client(url, key)
         return ConnectionWrapper(client)
     except Exception as e:
