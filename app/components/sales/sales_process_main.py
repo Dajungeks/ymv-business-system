@@ -1,11 +1,12 @@
 import streamlit as st
 
 from components.sales.sales_process_dashboard import show_sales_process_dashboard
-from components.inventory.purchase_order_management import show_purchase_order_management
-from components.inventory.inventory_management import show_inventory_management
-from components.finance.profit_analysis import show_profit_analysis
+#from components.inventory.purchase_order_management import show_purchase_order_management
+#from components.inventory.inventory_management import show_inventory_management
+#from components.finance.profit_analysis import show_profit_analysis
 from datetime import datetime, date, timedelta
 from components.system.document_number import generate_document_number
+
 
 def show_sales_process_management(load_func, save_func, update_func, delete_func, 
                                 get_current_user_func, check_permission_func, 
@@ -22,7 +23,7 @@ def show_sales_process_management(load_func, save_func, update_func, delete_func
     
     st.title("🎯 영업 프로세스 관리")
     
-    # 탭 구성 (코드별 발주 탭 추가)
+    # 탭 구성
     tab1, tab2, tab3, tab4, tab5 = st.tabs([
         "📊 영업 현황", 
         "📦 발주 관리", 
@@ -32,20 +33,20 @@ def show_sales_process_management(load_func, save_func, update_func, delete_func
     ])
     
     with tab1:
-        # 영업 프로세스 현황 + 코드별 발주 분할 기능
+        # 영업 프로세스 현황
         show_enhanced_sales_dashboard(load_func, save_func, update_func, current_user)
     
     with tab2:
-        # 발주 관리 (고객 주문 기반 + 재고 보충)
-        show_purchase_order_management(load_func, save_func, update_func, current_user)
+        st.info("📦 발주 관리 기능은 준비 중입니다.")
+        # show_purchase_order_management(load_func, save_func, update_func, current_user)
     
     with tab3:
-        # 재고 관리 (입고/검수/출고)
-        show_inventory_management(load_func, save_func, update_func, current_user)
+        st.info("📋 재고 관리 기능은 준비 중입니다.")
+        # show_inventory_management(load_func, save_func, update_func, current_user)
     
     with tab4:
-        # 수익 분석
-        show_profit_analysis(load_func)
+        st.info("💰 수익 분석 기능은 준비 중입니다.")
+        # show_profit_analysis(load_func)
     
     with tab5:
         # 신규: 코드별 발주 통합 관리
@@ -53,7 +54,7 @@ def show_sales_process_management(load_func, save_func, update_func, delete_func
     
     # 하단 정보 표시
     render_system_info(load_func, current_user)
-
+    
 def show_enhanced_sales_dashboard(load_func, save_func, update_func, current_user):
     """향상된 영업 대시보드 - 상태 변경 + 코드별 발주 기능"""
     st.header("📊 영업 프로세스 현황")
