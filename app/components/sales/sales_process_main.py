@@ -54,7 +54,7 @@ def show_sales_process_management(load_func, save_func, update_func, delete_func
     
     # 하단 정보 표시
     render_system_info(load_func, current_user)
-    
+
 def show_enhanced_sales_dashboard(load_func, save_func, update_func, current_user):
     """향상된 영업 대시보드 - 상태 변경 + 코드별 발주 기능"""
     st.header("📊 영업 프로세스 현황")
@@ -458,9 +458,9 @@ def get_status_display_name(status, status_type='process'):
 
 MODULE_FUNCTIONS = {
     'dashboard': show_enhanced_sales_dashboard,
-    'purchase_order': show_purchase_order_management,
-    'inventory': show_inventory_management,
-    'profit_analysis': show_profit_analysis,
+    #'purchase_order': show_purchase_order_management,
+    #'inventory': show_inventory_management,
+    #'profit_analysis': show_profit_analysis,
     'code_breakdown': show_code_breakdown_management
 }
 
