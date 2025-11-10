@@ -23,7 +23,7 @@ from supabase import create_client, Client
 # 내부 컴포넌트 - Sales
 from components.sales.customer_management import show_customer_management
 from components.sales.quotation_management import show_quotation_management
-from components.sales.sales_process_main import show_sales_process_management
+from components.sales.sales_process_main import show_sales_process_main as show_sales_process_management
 from components.sales.performance_management import show_performance_management
 from components.sales.sales_activity import show_sales_activity 
 
