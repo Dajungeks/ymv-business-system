@@ -1,275 +1,305 @@
-"""
-YMV ERP 시스템 데이터베이스 유틸리티
-Database utilities for YMV ERP System
-규칙 18: ConnectionWrapper 클래스 구현
-"""
-
 import streamlit as st
-from datetime import datetime
+from supabase import create_client, Client
 import logging
+from typing import Optional, Dict, Any, List
+from datetime import datetime, date, timedelta
 
+# 로깅 설정
+logging.basicConfig(level=logging.INFO)
 
 class ConnectionWrapper:
-    """
-    데이터베이스 연결 관리 클래스 (규칙 18)
-    Database connection management class
-    """
+    """Supabase 연결 래퍼 클래스"""
     
-    def __init__(self, supabase_client):
-        """ConnectionWrapper 초기화"""
-        self.client = supabase_client
-        self.logger = self._setup_logger()
+    def __init__(self, client: Client):
+        self.client = client
     
-    def _setup_logger(self):
-        """로깅 설정"""
-        logger = logging.getLogger('ymv_db')
-        if not logger.handlers:
-            handler = logging.StreamHandler()
-            formatter = logging.Formatter(
-                '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-            )
-            handler.setFormatter(formatter)
-            logger.addHandler(handler)
-            logger.setLevel(logging.INFO)
-        return logger
-    
-    def execute_query(self, operation, table, data=None, filters=None, columns="*"):
-        """
-        안전한 쿼리 실행
-        Safe query execution with error handling
-        """
+    def table(self, table_name: str):
+        """테이블 접근"""
         try:
-            self.logger.info(f"Executing {operation} on table {table}")
-            
-            if operation == "SELECT":
-                return self._execute_select(table, columns, filters)
-            elif operation == "INSERT":
-                return self._execute_insert(table, data)
-            elif operation == "UPDATE":
-                return self._execute_update(table, data, filters)
-            elif operation == "DELETE":
-                return self._execute_delete(table, filters)
-            else:
-                raise ValueError(f"Unsupported operation: {operation}")
-                
+            return self.client.table(table_name)
         except Exception as e:
-            self.logger.error(f"Database operation failed: {str(e)}")
-            self._handle_error(operation, table, e)
-            return None
-    
-    def _execute_select(self, table, columns, filters):
-        """SELECT 쿼리 실행"""
-        query = self.client.table(table).select(columns)
+            logging.error(f"테이블 접근 오류 ({table_name}): {str(e)}")
+            raise
+
+def get_connection() -> ConnectionWrapper:
+    """Supabase 연결 가져오기"""
+    try:
+        url = st.secrets["supabase"]["url"]
+        key = st.secrets["supabase"]["key"]
+        client = create_client(url, key)
+        return ConnectionWrapper(client)
+    except Exception as e:
+        logging.error(f"Supabase 연결 오류: {str(e)}")
+        raise
+
+# ============================================
+# 범용 CRUD 함수
+# ============================================
+
+def save_data(table_name: str, data: Dict[str, Any]) -> Optional[Dict]:
+    """데이터 저장"""
+    try:
+        conn = get_connection()
+        result = conn.table(table_name).insert(data).execute()
+        
+        if result.data:
+            logging.info(f"데이터 저장 성공: {table_name}")
+            return result.data[0]
+        return None
+    except Exception as e:
+        logging.error(f"데이터 저장 오류 ({table_name}): {str(e)}")
+        return None
+
+def load_data(table_name: str, filters: Optional[Dict[str, Any]] = None) -> List[Dict]:
+    """데이터 로드"""
+    try:
+        conn = get_connection()
+        query = conn.table(table_name).select("*")
         
         if filters:
             for key, value in filters.items():
                 query = query.eq(key, value)
         
-        response = query.execute()
-        return response.data if response.data else []
-    
-    def _execute_insert(self, table, data):
-        """INSERT 쿼리 실행 - ID 반환"""
-        if not data:
-            raise ValueError("Insert data cannot be empty")
-        
-        response = self.client.table(table).insert(data).execute()
-        
-        # ID 반환 (첫 번째 레코드의 id)
-        if response.data and len(response.data) > 0:
-            return response.data[0].get('id')
-        return None
-        
-    def _execute_update(self, table, data, filters):
-        """UPDATE 쿼리 실행"""
-        if not data or not filters:
-            raise ValueError("Update data and filters are required")
-        
-        # ID 필드 추출
-        id_field = filters.get('id_field', 'id')
-        record_id = data.get(id_field)
-        
-        if not record_id:
-            raise ValueError(f"Record ID ({id_field}) is required for update")
-        
-        # 업데이트 데이터에서 ID 제거
-        update_data = data.copy()
-        update_data.pop(id_field, None)
-        
-        response = self.client.table(table).update(update_data).eq(id_field, record_id).execute()
-        return response.data if response.data else []
-    
-    def _execute_delete(self, table, filters):
-        """DELETE 쿼리 실행"""
-        if not filters:
-            raise ValueError("Delete filters are required")
-        
-        id_field = filters.get('id_field', 'id')
-        record_id = filters.get('id')
-        
-        if not record_id:
-            raise ValueError("Record ID is required for delete")
-        
-        response = self.client.table(table).delete().eq(id_field, record_id).execute()
-        return True
-    
-    def _handle_error(self, operation, table, error):
-        """에러 처리 및 사용자 알림"""
-        error_msg = f"Database {operation} operation failed on table {table}: {str(error)}"
-        self.logger.error(error_msg)
-        st.error(f"데이터베이스 작업 실패: {str(error)}")
-    
-    def get_connection_status(self):
-        """연결 상태 확인"""
-        try:
-            # 간단한 쿼리로 연결 테스트
-            response = self.client.table("employees").select("id").limit(1).execute()
-            return True
-        except Exception as e:
-            self.logger.error(f"Connection test failed: {str(e)}")
-            return False
-
-
-class DatabaseOperations:
-    """
-    데이터베이스 작업 클래스
-    Database operations class using ConnectionWrapper
-    """
-    
-    def __init__(self, connection_wrapper):
-        """DatabaseOperations 초기화"""
-        self.db = connection_wrapper
-    
-    def load_data(self, table, columns="*", filters=None):
-        """
-        데이터 로드 (기존 load_data_from_supabase)
-        Load data from database table
-        """
-        try:
-            result = self.db.execute_query("SELECT", table, columns=columns, filters=filters)
-            return result if result is not None else []
-        except Exception as e:
-            st.error(f"데이터 로드 실패 ({table}): {str(e)}")
-            return []
-    
-    def save_data(self, table, data):
-        """
-        데이터 저장 (ID 반환)
-        Save data to database table and return ID
-        """
-        try:
-            result = self.db.execute_query("INSERT", table, data=data)
-            return result  # ID 또는 None 반환
-        except Exception as e:
-            st.error(f"데이터 저장 실패 ({table}): {str(e)}")
-            return None
-    
-    def update_data(self, table, data, id_field="id"):
-        """
-        데이터 업데이트 (기존 update_data_in_supabase)
-        Update data in database table
-        """
-        try:
-            filters = {'id_field': id_field, 'id': data.get(id_field)}
-            result = self.db.execute_query("UPDATE", table, data=data, filters=filters)
-            return result is not None and len(result) >= 0
-        except Exception as e:
-            st.error(f"데이터 업데이트 실패 ({table}): {str(e)}")
-            return False
-    
-    def delete_data(self, table, item_id, id_field="id"):
-        """
-        데이터 삭제 (기존 delete_data_from_supabase)
-        Delete data from database table
-        """
-        try:
-            filters = {'id_field': id_field, 'id': item_id}
-            result = self.db.execute_query("DELETE", table, filters=filters)
-            return result is True
-        except Exception as e:
-            st.error(f"데이터 삭제 실패 ({table}): {str(e)}")
-            return False
-    
-    def get_table_info(self, table):
-        """테이블 정보 조회"""
-        try:
-            # 테이블의 첫 번째 레코드로 구조 파악
-            result = self.load_data(table, columns="*")
-            if result:
-                return {
-                    'columns': list(result[0].keys()),
-                    'record_count': len(result),
-                    'sample_record': result[0]
-                }
-            return {'columns': [], 'record_count': 0, 'sample_record': None}
-        except Exception as e:
-            st.error(f"테이블 정보 조회 실패 ({table}): {str(e)}")
-            return None
-    
-    def bulk_insert(self, table, data_list):
-        """대량 데이터 삽입"""
-        try:
-            result = self.db.execute_query("INSERT", table, data=data_list)
-            return len(result) > 0 if result else False
-        except Exception as e:
-            st.error(f"대량 삽입 실패 ({table}): {str(e)}")
-            return False
-    
-    def count_records(self, table, filters=None):
-        """레코드 수 조회"""
-        try:
-            result = self.load_data(table, columns="id", filters=filters)
-            return len(result) if result else 0
-        except Exception as e:
-            st.error(f"레코드 수 조회 실패 ({table}): {str(e)}")
-            return 0
-
-
-def create_database_operations(supabase_client):
-    """
-    DatabaseOperations 인스턴스 생성 헬퍼 함수
-    Helper function to create DatabaseOperations instance
-    """
-    connection_wrapper = ConnectionWrapper(supabase_client)
-    return DatabaseOperations(connection_wrapper)
-
-
-# 하위 호환성을 위한 래퍼 함수들
-def load_data_from_supabase(table, columns="*", filters=None, db_ops=None):
-    """하위 호환성 래퍼 함수"""
-    if db_ops:
-        return db_ops.load_data(table, columns, filters)
-    else:
-        # 임시 처리 - main.py 리팩토링 완료 후 제거 예정
-        st.warning("DatabaseOperations 인스턴스가 필요합니다.")
+        result = query.execute()
+        return result.data if result.data else []
+    except Exception as e:
+        logging.error(f"데이터 로드 오류 ({table_name}): {str(e)}")
         return []
 
-def save_data_to_supabase(table, data, db_ops=None):
-    """하위 호환성 래퍼 함수"""
-    if db_ops:
-        return db_ops.save_data(table, data)
-    else:
-        st.warning("DatabaseOperations 인스턴스가 필요합니다.")
+def update_data(table_name: str, data: Dict[str, Any]) -> bool:
+    """데이터 수정"""
+    try:
+        record_id = data.pop('id')
+        data['updated_at'] = datetime.now().isoformat()
+        
+        conn = get_connection()
+        result = conn.table(table_name).update(data).eq('id', record_id).execute()
+        
+        if result.data:
+            logging.info(f"데이터 수정 성공: {table_name}, id={record_id}")
+            return True
+        return False
+    except Exception as e:
+        logging.error(f"데이터 수정 오류 ({table_name}): {str(e)}")
         return False
 
-def update_data_in_supabase(table, data, id_field="id", db_ops=None):
-    """하위 호환성 래퍼 함수"""
-    if db_ops:
-        return db_ops.update_data(table, data, id_field)
-    else:
-        st.warning("DatabaseOperations 인스턴스가 필요합니다.")
-        return False
-
-def delete_data_from_supabase(table, item_id, id_field="id", db_ops=None):
-    """하위 호환성 래퍼 함수"""
-    if db_ops:
-        return db_ops.delete_data(table, item_id, id_field)
-    else:
-        st.warning("DatabaseOperations 인스턴스가 필요합니다.")
+def delete_data(table_name: str, record_id: int) -> bool:
+    """데이터 삭제"""
+    try:
+        conn = get_connection()
+        result = conn.table(table_name).delete().eq('id', record_id).execute()
+        
+        logging.info(f"데이터 삭제 성공: {table_name}, id={record_id}")
+        return True
+    except Exception as e:
+        logging.error(f"데이터 삭제 오류 ({table_name}, id={record_id}): {str(e)}")
         return False
 
 # ============================================
-# 물류 관리 함수 (Supabase 기반)
+# 고객 관련 함수
+# ============================================
+
+def load_customers(table_name: str) -> List[Dict]:
+    """고객 목록 로드"""
+    return load_data(table_name)
+
+def save_customer(table_name: str, data: Dict[str, Any]) -> Optional[Dict]:
+    """고객 저장"""
+    return save_data(table_name, data)
+
+def update_customer(table_name: str, data: Dict[str, Any]) -> bool:
+    """고객 수정"""
+    return update_data(table_name, data)
+
+def delete_customer(table_name: str, customer_id: int) -> bool:
+    """고객 삭제"""
+    return delete_data(table_name, customer_id)
+
+# ============================================
+# 견적 관련 함수
+# ============================================
+
+def load_quotations(table_name: str) -> List[Dict]:
+    """견적서 목록 로드"""
+    try:
+        conn = get_connection()
+        result = conn.table(table_name).select("*").order('created_at', desc=True).execute()
+        return result.data if result.data else []
+    except Exception as e:
+        logging.error(f"견적서 로드 오류 ({table_name}): {str(e)}")
+        return []
+
+def save_quotation(table_name: str, data: Dict[str, Any]) -> Optional[Dict]:
+    """견적서 저장"""
+    return save_data(table_name, data)
+
+def update_quotation(table_name: str, data: Dict[str, Any]) -> bool:
+    """견적서 수정"""
+    return update_data(table_name, data)
+
+def delete_quotation(table_name: str, quotation_id: int) -> bool:
+    """견적서 삭제"""
+    return delete_data(table_name, quotation_id)
+
+def get_next_quotation_number(table_name: str, year: int) -> str:
+    """다음 견적 번호 생성"""
+    try:
+        conn = get_connection()
+        
+        result = conn.table(table_name)\
+            .select("quotation_number")\
+            .ilike('quotation_number', f'{year}%')\
+            .execute()
+        
+        if result.data:
+            numbers = [int(q['quotation_number'].split('-')[-1]) for q in result.data if q.get('quotation_number')]
+            next_num = max(numbers) + 1 if numbers else 1
+        else:
+            next_num = 1
+        
+        return f"{year}-{next_num:04d}"
+    except Exception as e:
+        logging.error(f"견적 번호 생성 오류 ({table_name}): {str(e)}")
+        return f"{year}-0001"
+
+# ============================================
+# 영업 활동 관련 함수
+# ============================================
+
+def save_sales_activity(table_name: str, data: Dict[str, Any]) -> Optional[Dict]:
+    """영업 활동 저장"""
+    try:
+        conn = get_connection()
+        result = conn.table(table_name).insert(data).execute()
+        
+        if result.data:
+            logging.info(f"영업 활동 저장 성공: {table_name}")
+            return result.data[0]
+        return None
+    except Exception as e:
+        logging.error(f"영업 활동 저장 오류 ({table_name}): {str(e)}")
+        return None
+
+def load_sales_activities(table_name: str, limit: Optional[int] = None) -> List[Dict]:
+    """전체 영업 활동 로드"""
+    try:
+        conn = get_connection()
+        query = conn.table(table_name).select("*").order('activity_date', desc=True)
+        
+        if limit:
+            query = query.limit(limit)
+        
+        result = query.execute()
+        return result.data if result.data else []
+    except Exception as e:
+        logging.error(f"영업 활동 로드 오류 ({table_name}): {str(e)}")
+        return []
+
+def load_customer_activities(table_name: str, customer_id: int) -> List[Dict]:
+    """고객별 영업 활동 로드"""
+    try:
+        conn = get_connection()
+        result = conn.table(table_name)\
+            .select("*")\
+            .eq('customer_id', customer_id)\
+            .order('activity_date', desc=True)\
+            .execute()
+        
+        return result.data if result.data else []
+    except Exception as e:
+        logging.error(f"고객 영업 활동 로드 오류 ({table_name}, customer_id={customer_id}): {str(e)}")
+        return []
+
+def update_sales_activity(table_name: str, data: Dict[str, Any]) -> bool:
+    """영업 활동 수정"""
+    try:
+        activity_id = data.pop('id')
+        data['updated_at'] = datetime.now().isoformat()
+        
+        conn = get_connection()
+        result = conn.table(table_name)\
+            .update(data)\
+            .eq('id', activity_id)\
+            .execute()
+        
+        if result.data:
+            logging.info(f"영업 활동 수정 성공: {table_name}, id={activity_id}")
+            return True
+        return False
+    except Exception as e:
+        logging.error(f"영업 활동 수정 오류 ({table_name}): {str(e)}")
+        return False
+
+def delete_sales_activity(table_name: str, activity_id: int) -> bool:
+    """영업 활동 삭제"""
+    try:
+        conn = get_connection()
+        result = conn.table(table_name)\
+            .delete()\
+            .eq('id', activity_id)\
+            .execute()
+        
+        logging.info(f"영업 활동 삭제 성공: {table_name}, id={activity_id}")
+        return True
+    except Exception as e:
+        logging.error(f"영업 활동 삭제 오류 ({table_name}, id={activity_id}): {str(e)}")
+        return False
+
+def get_activity_statistics(table_name: str, start_date: Optional[str] = None, end_date: Optional[str] = None) -> List[Dict]:
+    """영업 활동 통계"""
+    try:
+        conn = get_connection()
+        query = conn.table(table_name).select("*")
+        
+        if start_date:
+            query = query.gte('activity_date', start_date)
+        if end_date:
+            query = query.lte('activity_date', end_date)
+        
+        result = query.execute()
+        return result.data if result.data else []
+    except Exception as e:
+        logging.error(f"영업 활동 통계 오류 ({table_name}): {str(e)}")
+        return []
+
+def load_activities_by_date_range(table_name: str, start_date: str, end_date: str) -> List[Dict]:
+    """날짜 범위로 영업 활동 로드"""
+    try:
+        conn = get_connection()
+        result = conn.table(table_name)\
+            .select("*")\
+            .gte('activity_date', start_date)\
+            .lte('activity_date', end_date)\
+            .order('activity_date', desc=True)\
+            .execute()
+        
+        return result.data if result.data else []
+    except Exception as e:
+        logging.error(f"날짜 범위 활동 로드 오류 ({table_name}): {str(e)}")
+        return []
+
+def get_upcoming_actions(table_name: str, days: int = 7) -> List[Dict]:
+    """다가오는 후속 조치 로드"""
+    try:
+        today = date.today()
+        future_date = today + timedelta(days=days)
+        
+        conn = get_connection()
+        result = conn.table(table_name)\
+            .select("*")\
+            .gte('next_action_date', today.isoformat())\
+            .lte('next_action_date', future_date.isoformat())\
+            .not_.is_('next_action_date', 'null')\
+            .order('next_action_date', desc=False)\
+            .execute()
+        
+        return result.data if result.data else []
+    except Exception as e:
+        logging.error(f"다가오는 후속 조치 로드 오류 ({table_name}): {str(e)}")
+        return []
+
+# ============================================
+# 물류 관리 함수 (기존 코드 유지)
 # ============================================
 
 def get_supabase_client():
@@ -279,11 +309,7 @@ def get_supabase_client():
         return None
     return st.session_state.supabase
 
-
-# ============================================
 # FSC 규칙 관리 함수
-# ============================================
-
 def get_fsc_rules(search_query=None, status_filter=None):
     """FSC 규칙 목록 조회"""
     client = get_supabase_client()
@@ -309,7 +335,6 @@ def get_fsc_rules(search_query=None, status_filter=None):
         st.error(f"FSC 규칙 조회 실패: {str(e)}")
         return []
 
-
 def get_fsc_rule_by_id(rule_id):
     """특정 FSC 규칙 조회"""
     client = get_supabase_client()
@@ -322,7 +347,6 @@ def get_fsc_rule_by_id(rule_id):
     except Exception as e:
         st.error(f"FSC 규칙 조회 실패: {str(e)}")
         return None
-
 
 def save_fsc_rule(rule_name, min_charge, brackets_json):
     """새 FSC 규칙 저장"""
@@ -346,7 +370,6 @@ def save_fsc_rule(rule_name, min_charge, brackets_json):
     except Exception as e:
         return False, str(e)
 
-
 def update_fsc_rule(rule_id, rule_name, min_charge, brackets_json):
     """FSC 규칙 수정"""
     client = get_supabase_client()
@@ -368,7 +391,6 @@ def update_fsc_rule(rule_id, rule_name, min_charge, brackets_json):
     except Exception as e:
         return False, str(e)
 
-
 def delete_fsc_rule(rule_id):
     """FSC 규칙 삭제(비활성화)"""
     client = get_supabase_client()
@@ -381,7 +403,6 @@ def delete_fsc_rule(rule_id):
     except Exception as e:
         st.error(f"FSC 규칙 삭제 실패: {str(e)}")
         return False
-
 
 def calculate_fsc(rule_id, weight):
     """FSC 금액 계산"""
@@ -396,11 +417,9 @@ def calculate_fsc(rule_id, weight):
     min_charge = float(rule['min_charge'])
     brackets = rule['brackets']
     
-    # JSON 파싱
     import json
     brackets_dict = json.loads(brackets) if isinstance(brackets, str) else brackets
     
-    # 적용 구간 찾기
     applied_bracket = None
     unit_price = 0
     
@@ -436,11 +455,7 @@ def calculate_fsc(rule_id, weight):
         'min_charge_applied': final_fsc == min_charge
     }, None
 
-
-# ============================================
 # Trucking 규칙 관리 함수
-# ============================================
-
 def get_trucking_rules(search_query=None, type_filter=None, status_filter=None):
     """Trucking 규칙 목록 조회"""
     client = get_supabase_client()
@@ -469,7 +484,6 @@ def get_trucking_rules(search_query=None, type_filter=None, status_filter=None):
         st.error(f"Trucking 규칙 조회 실패: {str(e)}")
         return []
 
-
 def get_trucking_rule_by_id(rule_id):
     """특정 Trucking 규칙 조회"""
     client = get_supabase_client()
@@ -482,7 +496,6 @@ def get_trucking_rule_by_id(rule_id):
     except Exception as e:
         st.error(f"Trucking 규칙 조회 실패: {str(e)}")
         return None
-
 
 def save_trucking_rule(rule_name, charge_type, calculation_method, fixed_charge=None, weight_brackets=None):
     """새 Trucking 규칙 저장"""
@@ -508,7 +521,6 @@ def save_trucking_rule(rule_name, charge_type, calculation_method, fixed_charge=
     except Exception as e:
         return False, str(e)
 
-
 def update_trucking_rule(rule_id, rule_name, charge_type, calculation_method, fixed_charge=None, weight_brackets=None):
     """Trucking 규칙 수정"""
     client = get_supabase_client()
@@ -532,7 +544,6 @@ def update_trucking_rule(rule_id, rule_name, charge_type, calculation_method, fi
     except Exception as e:
         return False, str(e)
 
-
 def delete_trucking_rule(rule_id):
     """Trucking 규칙 삭제(비활성화)"""
     client = get_supabase_client()
@@ -545,7 +556,6 @@ def delete_trucking_rule(rule_id):
     except Exception as e:
         st.error(f"Trucking 규칙 삭제 실패: {str(e)}")
         return False
-
 
 def calculate_trucking(rule_id, weight):
     """Trucking 금액 계산"""
@@ -563,7 +573,6 @@ def calculate_trucking(rule_id, weight):
     fixed_charge = rule.get('fixed_charge')
     weight_brackets = rule.get('weight_brackets')
     
-    # 고정 요금
     if calculation_method == 'FIXED':
         return {
             'rule_name': rule_name,
@@ -574,11 +583,9 @@ def calculate_trucking(rule_id, weight):
             'details': f'고정요금: ${fixed_charge:,.2f}'
         }, None
     
-    # 중량 기반
     import json
     brackets_dict = json.loads(weight_brackets) if isinstance(weight_brackets, str) else weight_brackets
     
-    # 적용 구간 찾기
     applied_bracket = None
     unit_price = 0
     
@@ -613,3 +620,52 @@ def calculate_trucking(rule_id, weight):
         'final_charge': calculated_charge,
         'details': f'{applied_bracket}kg 구간: ${unit_price}/kg × {weight}kg'
     }, None
+
+# ============================================
+# 기타 유틸리티 함수
+# ============================================
+
+def test_connection() -> bool:
+    """데이터베이스 연결 테스트"""
+    try:
+        conn = get_connection()
+        result = conn.table('customers_ymv').select("id").limit(1).execute()
+        logging.info("데이터베이스 연결 성공")
+        return True
+    except Exception as e:
+        logging.error(f"데이터베이스 연결 실패: {str(e)}")
+        return False
+    
+def create_database_operations(supabase_client):
+    """
+    DatabaseOperations 인스턴스 생성 (main.py 호환용)
+    """
+    # 간단한 래퍼 클래스 반환
+    class SimpleDBOperations:
+        def __init__(self, client):
+            self.client = client
+        
+        def load_data(self, table_name, filters=None):
+            return load_data(table_name, filters)
+        
+        def save_data(self, table_name, data):
+            return save_data(table_name, data)
+        
+        def update_data(self, table_name, data):
+            return update_data(table_name, data)
+        
+        def delete_data(self, table_name, record_id):
+            return delete_data(table_name, record_id)
+    
+    return SimpleDBOperations(supabase_client)
+
+def test_connection() -> bool:
+    """데이터베이스 연결 테스트"""
+    try:
+        conn = get_connection()
+        result = conn.table('customers_ymv').select("id").limit(1).execute()
+        logging.info("데이터베이스 연결 성공")
+        return True
+    except Exception as e:
+        logging.error(f"데이터베이스 연결 실패: {str(e)}")
+        return False

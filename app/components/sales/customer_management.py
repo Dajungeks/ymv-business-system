@@ -686,7 +686,7 @@ def render_customer_edit_form(customer, update_func, customer_table):
                 st.error("❌ 수정 중 오류가 발생했습니다 / Có lỗi xảy ra khi cập nhật")
 
 def render_customer_list(load_func, update_func, delete_func, customer_table):
-    """고객 목록 (지출 요청서 스타일)"""
+    """고객 목록 (테이블 형식)"""
     st.header("고객 목록 / Danh sách khách hàng")
     
     try:
@@ -706,128 +706,230 @@ def render_customer_list(load_func, update_func, delete_func, customer_table):
             st.info("등록된 고객이 없습니다. / Chưa có khách hàng nào.")
             return
         
-        # 필터링 옵션 (5개 컬럼)
-        col1, col2, col3, col4, col5 = st.columns(5)
+        # 🔍 검색 패널 (항상 펼쳐진 상태)
+        st.subheader("🔍 검색 / Tìm kiếm")
         
-        with col1:
-            status_filter = st.selectbox(
-                "상태 / Trạng thái",
-                ["전체 / Tất cả", "active", "inactive", "potential"],
-                key="customer_status_filter"
+        search_col1, search_col2, search_col3, search_col4 = st.columns([3, 2, 2, 1])
+        
+        with search_col1:
+            search_name = st.text_input(
+                "회사명 검색 / Tìm tên công ty",
+                placeholder="회사명 입력 / Nhập tên",
+                key="search_customer_name",
+                label_visibility="collapsed"
             )
         
-        with col2:
-            # 업종 필터 옵션 (UI 표시용 한글/베트남어)
-            business_types_ui = list(BUSINESS_TYPE_MAPPING.keys())
-            business_types_ui.insert(0, "전체 / Tất cả")
-            type_filter = st.selectbox(
-                "업종 / Ngành nghề",
-                business_types_ui,
-                key="customer_type_filter"
+        with search_col2:
+            # 업종 필터
+            business_types = ["전체 / Tất cả"]
+            if 'business_type' in customers_df.columns:
+                unique_types = customers_df['business_type'].dropna().unique().tolist()
+                for db_type in unique_types:
+                    ui_type = BUSINESS_TYPE_REVERSE.get(db_type, db_type)
+                    if ui_type not in business_types:
+                        business_types.append(ui_type)
+            
+            search_business_type = st.selectbox(
+                "업종",
+                business_types,
+                key="search_business_type",
+                label_visibility="collapsed"
             )
         
-        with col3:
-            countries = ["전체 / Tất cả", "Vietnam", "Korea", "Japan", "China", "Thailand", "USA", "기타 / Khác"]
-            country_filter = st.selectbox(
-                "국가 / Quốc gia",
+        with search_col3:
+            # 국가 필터
+            countries = ["전체 / Tất cả"]
+            if 'country' in customers_df.columns:
+                unique_countries = customers_df['country'].dropna().unique().tolist()
+                countries.extend(sorted(unique_countries))
+            
+            search_country = st.selectbox(
+                "국가",
                 countries,
-                key="customer_country_filter"
+                key="search_country",
+                label_visibility="collapsed"
             )
         
-        with col4:
-            kam_filter = st.selectbox(
-                "KAM 할당 / KAM",
-                ["전체 / Tất cả", "할당됨 / Đã gán", "미할당 / Chưa gán"],
-                key="customer_kam_filter"
-            )
+        with search_col4:
+            if st.button("🔍 검색", use_container_width=True, type="primary"):
+                pass  # 검색은 자동으로 적용됨
         
-        with col5:
-            sort_order = st.selectbox(
-                "정렬 / Sắp xếp",
-                ["최신순 / Mới nhất", "오래된순 / Cũ nhất", "회사명순 / Theo tên"],
-                key="customer_sort_order"
-            )
+        # 추가 필터 (접을 수 있음)
+        with st.expander("🔧 추가 필터 / Bộ lọc thêm"):
+            filter_col1, filter_col2, filter_col3, filter_col4 = st.columns(4)
+            
+            with filter_col1:
+                # 도시 필터
+                cities = ["전체 / Tất cả"]
+                if search_country != "전체 / Tất cả" and 'city' in customers_df.columns:
+                    country_customers = customers_df[customers_df['country'] == search_country]
+                    unique_cities = country_customers['city'].dropna().unique().tolist()
+                    cities.extend(sorted(unique_cities))
+                elif 'city' in customers_df.columns:
+                    unique_cities = customers_df['city'].dropna().unique().tolist()
+                    cities.extend(sorted(unique_cities))
+                
+                search_city = st.selectbox(
+                    "도시 / Thành phố",
+                    cities,
+                    key="search_city"
+                )
+            
+            with filter_col2:
+                search_status = st.selectbox(
+                    "상태 / Trạng thái",
+                    ["전체 / Tất cả", "active", "inactive", "potential"],
+                    key="search_status"
+                )
+            
+            with filter_col3:
+                search_kam = st.selectbox(
+                    "KAM 할당",
+                    ["전체 / Tất cả", "할당됨", "미할당"],
+                    key="search_kam"
+                )
+            
+            with filter_col4:
+                search_contact = st.text_input(
+                    "담당자명",
+                    placeholder="담당자명",
+                    key="search_contact_person"
+                )
+            
+            # 등록일 범위
+            date_col1, date_col2 = st.columns(2)
+            with date_col1:
+                search_date_from = st.date_input(
+                    "등록일 시작 / Từ ngày",
+                    value=None,
+                    key="search_date_from"
+                )
+            with date_col2:
+                search_date_to = st.date_input(
+                    "등록일 종료 / Đến ngày",
+                    value=None,
+                    key="search_date_to"
+                )
+            
+            # 초기화 버튼
+            if st.button("🔄 검색 초기화 / Đặt lại", use_container_width=True):
+                for key in ['search_customer_name', 'search_business_type', 'search_status', 
+                           'search_country', 'search_city', 'search_kam', 'search_contact_person',
+                           'search_date_from', 'search_date_to']:
+                    if key in st.session_state:
+                        del st.session_state[key]
+                st.rerun()
         
         # 데이터 필터링
         filtered_df = customers_df.copy()
         
-        # 상태 필터
-        if status_filter != "전체 / Tất cả":
-            filtered_df = filtered_df[filtered_df['status'] == status_filter]
+        # 1. 이름 검색
+        if search_name and search_name.strip():
+            search_term = search_name.strip().lower()
+            mask = (
+                filtered_df['company_name_original'].fillna('').str.lower().str.contains(search_term, na=False) |
+                filtered_df['company_name_short'].fillna('').str.lower().str.contains(search_term, na=False) |
+                filtered_df['company_name_english'].fillna('').str.lower().str.contains(search_term, na=False)
+            )
+            filtered_df = filtered_df[mask]
         
-        # 업종 필터 (UI 선택값 → DB 영어값으로 변환)
-        if type_filter != "전체 / Tất cả":
-            type_filter_db = BUSINESS_TYPE_MAPPING.get(type_filter)
-            if type_filter_db:
-                filtered_df = filtered_df[filtered_df['business_type'] == type_filter_db]
+        # 2. 업종 필터
+        if search_business_type != "전체 / Tất cả":
+            business_type_db = BUSINESS_TYPE_MAPPING.get(search_business_type, search_business_type)
+            filtered_df = filtered_df[filtered_df['business_type'] == business_type_db]
         
-        # 국가 필터
-        if country_filter != "전체 / Tất cả":
-            filtered_df = filtered_df[filtered_df['country'] == country_filter]
+        # 3. 국가 필터
+        if search_country != "전체 / Tất cả":
+            filtered_df = filtered_df[filtered_df['country'] == search_country]
         
-        # KAM 할당 필터
-        if kam_filter == "할당됨 / Đã gán":
+        # 4. 도시 필터
+        if search_city != "전체 / Tất cả":
+            filtered_df = filtered_df[filtered_df['city'] == search_city]
+        
+        # 5. 상태 필터
+        if search_status != "전체 / Tất cả":
+            filtered_df = filtered_df[filtered_df['status'] == search_status]
+        
+        # 6. KAM 할당 필터
+        if search_kam == "할당됨":
             filtered_df = filtered_df[filtered_df['kam_name'].notna()]
-        elif kam_filter == "미할당 / Chưa gán":
+        elif search_kam == "미할당":
             filtered_df = filtered_df[filtered_df['kam_name'].isna()]
         
+        # 7. 담당자명 검색
+        if search_contact and search_contact.strip():
+            contact_term = search_contact.strip().lower()
+            filtered_df = filtered_df[
+                filtered_df['contact_person'].fillna('').str.lower().str.contains(contact_term, na=False)
+            ]
+        
+        # 8. 등록일 범위
+        if search_date_from:
+            filtered_df = filtered_df[
+                pd.to_datetime(filtered_df['created_at']).dt.date >= search_date_from
+            ]
+        if search_date_to:
+            filtered_df = filtered_df[
+                pd.to_datetime(filtered_df['created_at']).dt.date <= search_date_to
+            ]
+        
         # 정렬
-        if sort_order == "최신순 / Mới nhất":
-            filtered_df = filtered_df.sort_values('created_at', ascending=False)
-        elif sort_order == "오래된순 / Cũ nhất":
-            filtered_df = filtered_df.sort_values('created_at', ascending=True)
-        elif sort_order == "회사명순 / Theo tên":
-            filtered_df['display_name'] = filtered_df.apply(
-                lambda x: str(x.get('company_name_short') or x.get('company_name_original') or ''),
-                axis=1
-            )
-            filtered_df = filtered_df.sort_values('display_name')
-        
-        # 통계 및 CSV 다운로드
-        st.write(f"📋 총 {len(filtered_df)}건의 고객 / Tổng {len(filtered_df)} khách hàng")
-        
-        if not filtered_df.empty:
-            csv_data = generate_customer_csv(filtered_df)
-            st.download_button(
-                label="📥 CSV 다운로드 / Tải CSV",
-                data=csv_data,
-                file_name=f"customers_{datetime.now().strftime('%Y%m%d')}.csv",
-                mime="text/csv"
-            )
+        filtered_df = filtered_df.sort_values('created_at', ascending=False)
         
         st.markdown("---")
         
-        # 고객 목록 표시
+        # 통계 및 다운로드
+        result_col1, result_col2, result_col3 = st.columns([2, 2, 1])
+        
+        with result_col1:
+            st.write(f"📋 검색 결과: **{len(filtered_df)}건** / Kết quả: **{len(filtered_df)}**")
+        
+        with result_col2:
+            if len(filtered_df) != len(customers_df):
+                st.info(f"전체 {len(customers_df)}건 중 {len(filtered_df)}건 표시")
+        
+        with result_col3:
+            if not filtered_df.empty:
+                csv_data = generate_customer_csv(filtered_df)
+                st.download_button(
+                    label="📥 CSV",
+                    data=csv_data,
+                    file_name=f"customers_{datetime.now().strftime('%Y%m%d')}.csv",
+                    mime="text/csv",
+                    use_container_width=True
+                )
+        
+        # 검색 결과 없음
+        if filtered_df.empty:
+            st.warning("검색 조건에 맞는 고객이 없습니다. / Không tìm thấy khách hàng phù hợp.")
+            return
+        
+        st.markdown("---")
+        
+        # 📊 테이블 형식으로 고객 목록 표시
+        st.subheader("📋 고객 테이블 / Bảng khách hàng")
+        
+        # 안전한 값 가져오기 함수
+        def safe_get(row, key, default=''):
+            value = row.get(key)
+            if pd.isna(value) or value is None:
+                return default
+            return str(value).strip() if str(value).strip() else default
+        
+        # 테이블 데이터 준비
+        table_data = []
         for idx, customer in filtered_df.iterrows():
             customer_id = customer.get('id')
-
-                # 안전한 값 가져오기 함수
-            def safe_get(key, default=''):
-                value = customer.get(key)
-                if pd.isna(value) or value is None:
-                    return default
-                return str(value).strip() if str(value).strip() else default
             
-            # 수정 모드 확인
-            if st.session_state.get(f"edit_customer_{customer_id}", False):
-                render_customer_edit_form(customer, update_func, customer_table)
-                continue
+            # 표시할 회사명
+            display_name = safe_get(customer, 'company_name_short') or safe_get(customer, 'company_name_original') or 'N/A'
             
-            # 안전한 값 가져오기 (None 처리)
-            def safe_get(key, default=''):
-                value = customer.get(key)
-                if pd.isna(value) or value is None:
-                    return default
-                return str(value).strip() if str(value).strip() else default
-            
-            # 표시할 회사명 (짧은 이름 우선)
-            display_name = safe_get('company_name_short') or safe_get('company_name_original') or 'N/A'
-            contact_person = safe_get('contact_person', 'N/A')
-            email = safe_get('email', 'N/A')
-            phone = safe_get('phone', 'N/A')
-            status = safe_get('status', 'active')
+            # 업종 변환
+            business_type_db = safe_get(customer, 'business_type')
+            business_type_ui = BUSINESS_TYPE_REVERSE.get(business_type_db, business_type_db or '-')
             
             # 상태 아이콘
+            status = safe_get(customer, 'status', 'active')
             status_icons = {
                 "active": "✅",
                 "inactive": "⏸️",
@@ -835,177 +937,242 @@ def render_customer_list(load_func, update_func, delete_func, customer_table):
             }
             status_icon = status_icons.get(status, "❓")
             
-            # 한 줄 표시
-            cols = st.columns([2, 1.2, 1.5, 1.2, 0.8])
+            table_data.append({
+                'ID': customer_id,
+                '회사명 / Tên CT': display_name,
+                '업종 / Ngành': business_type_ui,
+                '국가 / Quốc gia': safe_get(customer, 'country', '-'),
+                '도시 / Thành phố': safe_get(customer, 'city', '-'),
+                '담당자 / Người LH': safe_get(customer, 'contact_person', '-'),
+                '전화 / SĐT': safe_get(customer, 'phone', '-'),
+                '상태': status_icon,
+                'KAM': safe_get(customer, 'kam_name', '-')
+            })
+        
+        # DataFrame으로 변환
+        table_df = pd.DataFrame(table_data)
+        
+        # Streamlit 데이터프레임 표시 (인터랙티브)
+        st.dataframe(
+            table_df,
+            use_container_width=True,
+            hide_index=True,
+            column_config={
+                "ID": st.column_config.NumberColumn("ID", width="small"),
+                "회사명 / Tên CT": st.column_config.TextColumn("회사명 / Tên CT", width="large"),
+                "업종 / Ngành": st.column_config.TextColumn("업종 / Ngành", width="medium"),
+                "국가 / Quốc gia": st.column_config.TextColumn("국가", width="small"),
+                "도시 / Thành phố": st.column_config.TextColumn("도시", width="medium"),
+                "담당자 / Người LH": st.column_config.TextColumn("담당자", width="medium"),
+                "전화 / SĐT": st.column_config.TextColumn("전화", width="medium"),
+                "상태": st.column_config.TextColumn("상태", width="small"),
+                "KAM": st.column_config.TextColumn("KAM", width="medium")
+            }
+        )
+        
+        st.markdown("---")
+        
+        # 📄 상세보기 선택
+        st.subheader("📄 상세 정보 확인 / Xem chi tiết")
+        
+        detail_col1, detail_col2 = st.columns([2, 3])
+        
+        with detail_col1:
+            # 고객 선택 (ID와 회사명으로 선택)
+            customer_options = {
+                f"{row['ID']} - {row['회사명 / Tên CT']}": row['ID'] 
+                for row in table_data
+            }
             
-            cols[0].write(f"**{display_name}**")
-            cols[1].write(contact_person)
-            cols[2].write(email)
-            cols[3].write(phone)
-            
-            with cols[4]:
-                if st.button("📄 상세", key=f"detail_{customer_id}", use_container_width=True):
-                    st.session_state[f'show_detail_{customer_id}'] = not st.session_state.get(f'show_detail_{customer_id}', False)
+            selected_customer_key = st.selectbox(
+                "고객 선택 / Chọn khách hàng",
+                options=["선택하세요 / Chọn"] + list(customer_options.keys()),
+                key="selected_customer_detail"
+            )
+        
+        with detail_col2:
+            if selected_customer_key != "선택하세요 / Chọn":
+                if st.button("📄 상세보기 / Xem chi tiết", use_container_width=True, type="primary"):
+                    selected_customer_id = customer_options[selected_customer_key]
+                    st.session_state['show_customer_detail'] = selected_customer_id
                     st.rerun()
+        
+        # 선택된 고객 상세 정보 표시
+        if 'show_customer_detail' in st.session_state and st.session_state['show_customer_detail']:
+            customer_id = st.session_state['show_customer_detail']
+            customer = filtered_df[filtered_df['id'] == customer_id].iloc[0]
             
-            # 상세 정보 (토글)
-            if st.session_state.get(f'show_detail_{customer_id}', False):
-                with st.container():
-                    st.markdown("---")
-                    
-                    # 상태 표시
-                    status_names = {
-                        "active": "활성 / Hoạt động",
-                        "inactive": "비활성 / Không hoạt động",
-                        "potential": "잠재 고객 / Tiềm năng"
-                    }
-                    st.info(f"**상태 / Trạng thái:** {status_icon} {status_names.get(status, status)}")
-                    
-                    detail_cols = st.columns([2, 1])
-                    
-                    with detail_cols[0]:
-                        st.write("**기본 정보 / Thông tin cơ bản**")
-                        st.write(f"• 공식 회사명 / Tên chính thức: {safe_get('company_name_original', 'N/A')}")
-                        
-                        company_short = safe_get('company_name_short')
-                        if company_short:
-                            st.write(f"• 짧은 이름 / Tên ngắn: {company_short}")
-                        
-                        company_english = safe_get('company_name_english')
-                        if company_english:
-                            st.write(f"• 영어 이름 / Tên TA: {company_english}")
-                        
-                        # 업종 역매핑 (DB 영어 → UI 한글/베트남어)
-                        business_type_db = safe_get('business_type')
-                        business_type_ui = BUSINESS_TYPE_REVERSE.get(business_type_db, business_type_db or 'N/A')
-                        st.write(f"• 업종 / Ngành nghề: {business_type_ui}")
-                        
-                        st.write(f"• 국가 / Quốc gia: {safe_get('country', 'N/A')}")
-                        
-                        city = safe_get('city')
-                        if city:
-                            st.write(f"• 도시 / Thành phố: {city}")
-                        
-                        business_number = safe_get('business_number')
-                        if business_number:
-                            st.write(f"• 사업자번호 / MST: {business_number}")
-                        
-                        address = safe_get('address')
-                        if address:
-                            st.write(f"• 주소 / Địa chỉ: {address}")
-                        
-                        payment_terms = safe_get('payment_terms')
-                        if payment_terms:
-                            st.write(f"• 결제조건 / Thanh toán: {payment_terms}")
-                        
-                        st.write("")
-                        st.write("**담당자 정보 / Thông tin liên hệ**")
-                        st.write(f"• 담당자 / Người LH: {contact_person}")
-                        
-                        # 부서 역매핑 (DB 영어 → UI 한글/베트남어)
-                        contact_dept_db = safe_get('contact_department')
-                        contact_dept_ui = DEPARTMENT_REVERSE.get(contact_dept_db, contact_dept_db or '')
-                        if contact_dept_ui:
-                            st.write(f"• 부서 / Bộ phận: {contact_dept_ui}")
-                        
-                        # 직책 역매핑 (DB 영어 → UI 한글/베트남어)
-                        position_db = safe_get('position')
-                        position_ui = POSITION_REVERSE.get(position_db, position_db or '')
-                        if position_ui:
-                            st.write(f"• 직책 / Chức vụ: {position_ui}")
-                        
-                        st.write(f"• 이메일 / Email: {email}")
-                        st.write(f"• 전화 / SĐT: {phone}")
-                        
-                        mobile = safe_get('mobile')
-                        if mobile:
-                            st.write(f"• 휴대폰 / Di động: {mobile}")
-                        
-                        # KAM 정보
-                        kam_name = safe_get('kam_name')
-                        if kam_name:
-                            st.write("")
-                            st.write("**KAM 정보 / Thông tin KAM**")
-                            st.write(f"• KAM: {kam_name}")
-                            
-                            # KAM 부서 역매핑 (DB 영어 → UI 한글/베트남어)
-                            kam_dept_db = safe_get('kam_department')
-                            kam_dept_ui = DEPARTMENT_REVERSE.get(kam_dept_db, kam_dept_db or '')
-                            if kam_dept_ui:
-                                st.write(f"• 부서 / Bộ phận: {kam_dept_ui}")
-                            
-                            kam_position = safe_get('kam_position')
-                            if kam_position:
-                                st.write(f"• 직책 / Chức vụ: {kam_position}")
-                            
-                            kam_phone = safe_get('kam_phone')
-                            if kam_phone:
-                                st.write(f"• 전화 / SĐT: {kam_phone}")
-                            
-                            kam_notes = safe_get('kam_notes')
-                            if kam_notes:
-                                st.write(f"• 노트 / Ghi chú: {kam_notes}")
-                        
-                        notes = safe_get('notes')
-                        if notes:
-                            st.write("")
-                            st.write(f"**비고 / Ghi chú:** {notes}")
-                    
-                    with detail_cols[1]:
-                        st.write("**액션 / Thao tác**")
-                        
-                        # 수정 버튼
-                        if st.button("✏️ 수정 / Sửa", key=f"edit_{customer_id}", use_container_width=True):
-                            st.session_state[f"edit_customer_{customer_id}"] = True
-                            st.rerun()
-                        
-                        # 삭제 버튼
-                        if st.button("🗑️ 삭제 / Xóa", key=f"delete_{customer_id}", use_container_width=True):
-                            # 삭제 전 관련 데이터 확인
-                            can_delete, message = check_customer_deletion_safety(customer_id, load_func)
-                            
-                            if can_delete:
-                                if delete_func(customer_table, customer_id):
-                                    st.success("고객이 삭제되었습니다. / Đã xóa khách hàng.")
-                                    st.rerun()
-                                else:
-                                    st.error("삭제 실패 / Xóa thất bại")
-                            else:
-                                st.error(f"삭제 불가 / Không thể xóa: {message}")
-                                
-                                # 비활성화 옵션
-                                if st.button("대신 비활성화 / Vô hiệu hóa", key=f"deactivate_{customer_id}", use_container_width=True):
-                                    deactivate_data = {
-                                        'status': 'inactive',
-                                        'updated_at': datetime.now().isoformat()
-                                    }
-                                    
-                                    try:
-                                        success = update_func(customer_table, customer_id, deactivate_data)
-                                        if success:
-                                            st.success("비활성화되었습니다. / Đã vô hiệu hóa.")
-                                            st.rerun()
-                                    except:
-                                        try:
-                                            success = update_func(customer_table, deactivate_data, customer_id)
-                                            if success:
-                                                st.success("비활성화되었습니다. / Đã vô hiệu hóa.")
-                                                st.rerun()
-                                        except Exception as e:
-                                            st.error(f"오류 / Lỗi: {str(e)}")
-                        
-                        # 닫기 버튼
-                        if st.button("❌ 닫기 / Đóng", key=f"close_{customer_id}", use_container_width=True):
-                            st.session_state[f'show_detail_{customer_id}'] = False
-                            st.rerun()
-                    
-                    st.markdown("---")
-            
-            # 구분선 (지출 요청서와 동일)
-            st.markdown("<hr style='margin: 1px 0; border: none; border-top: 1px solid #ddd;'>", unsafe_allow_html=True)
+            # 수정 모드 확인
+            if st.session_state.get(f"edit_customer_{customer_id}", False):
+                render_customer_edit_form(customer, update_func, customer_table)
+            else:
+                render_customer_detail_view(customer, update_func, delete_func, load_func, customer_table)
+    
     except Exception as e:
         logging.error(f"고객 목록 로드 오류: {str(e)}")
         st.error(f"고객 목록 로딩 중 오류가 발생했습니다 / Lỗi tải danh sách: {str(e)}")
+
+
+def render_customer_detail_view(customer, update_func, delete_func, load_func, customer_table):
+    """고객 상세 정보 표시"""
+    
+    customer_id = customer.get('id')
+    
+    # 안전한 값 가져오기 함수
+    def safe_get(key, default=''):
+        value = customer.get(key)
+        if pd.isna(value) or value is None:
+            return default
+        return str(value).strip() if str(value).strip() else default
+    
+    st.markdown("---")
+    st.subheader(f"📋 고객 상세 정보 / Chi tiết khách hàng")
+    
+    # 닫기 버튼 (상단)
+    if st.button("❌ 닫기 / Đóng", key=f"close_detail_top_{customer_id}"):
+        del st.session_state['show_customer_detail']
+        st.rerun()
+    
+    # 상태 표시
+    status = safe_get('status', 'active')
+    status_names = {
+        "active": "✅ 활성 / Hoạt động",
+        "inactive": "⏸️ 비활성 / Không hoạt động",
+        "potential": "🌱 잠재 고객 / Tiềm năng"
+    }
+    st.info(f"**상태 / Trạng thái:** {status_names.get(status, status)}")
+    
+    detail_cols = st.columns([2, 1])
+    
+    with detail_cols[0]:
+        st.write("**📋 기본 정보 / Thông tin cơ bản**")
+        st.write(f"• 공식 회사명 / Tên chính thức: {safe_get('company_name_original', 'N/A')}")
+        
+        company_short = safe_get('company_name_short')
+        if company_short:
+            st.write(f"• 짧은 이름 / Tên ngắn: {company_short}")
+        
+        company_english = safe_get('company_name_english')
+        if company_english:
+            st.write(f"• 영어 이름 / Tên TA: {company_english}")
+        
+        # 업종 역매핑
+        business_type_db = safe_get('business_type')
+        business_type_ui = BUSINESS_TYPE_REVERSE.get(business_type_db, business_type_db or 'N/A')
+        st.write(f"• 업종 / Ngành nghề: {business_type_ui}")
+        
+        st.write(f"• 국가 / Quốc gia: {safe_get('country', 'N/A')}")
+        
+        city = safe_get('city')
+        if city:
+            st.write(f"• 도시 / Thành phố: {city}")
+        
+        business_number = safe_get('business_number')
+        if business_number:
+            st.write(f"• 사업자번호 / MST: {business_number}")
+        
+        address = safe_get('address')
+        if address:
+            st.write(f"• 주소 / Địa chỉ: {address}")
+        
+        payment_terms = safe_get('payment_terms')
+        if payment_terms:
+            st.write(f"• 결제조건 / Thanh toán: {payment_terms}")
+        
+        st.write("")
+        st.write("**👤 담당자 정보 / Thông tin liên hệ**")
+        st.write(f"• 담당자 / Người LH: {safe_get('contact_person', 'N/A')}")
+        
+        # 부서 역매핑
+        contact_dept_db = safe_get('contact_department')
+        contact_dept_ui = DEPARTMENT_REVERSE.get(contact_dept_db, contact_dept_db or '')
+        if contact_dept_ui:
+            st.write(f"• 부서 / Bộ phận: {contact_dept_ui}")
+        
+        # 직책 역매핑
+        position_db = safe_get('position')
+        position_ui = POSITION_REVERSE.get(position_db, position_db or '')
+        if position_ui:
+            st.write(f"• 직책 / Chức vụ: {position_ui}")
+        
+        st.write(f"• 이메일 / Email: {safe_get('email', 'N/A')}")
+        st.write(f"• 전화 / SĐT: {safe_get('phone', 'N/A')}")
+        
+        mobile = safe_get('mobile')
+        if mobile:
+            st.write(f"• 휴대폰 / Di động: {mobile}")
+        
+        # KAM 정보
+        kam_name = safe_get('kam_name')
+        if kam_name:
+            st.write("")
+            st.write("**🎯 KAM 정보 / Thông tin KAM**")
+            st.write(f"• KAM: {kam_name}")
+            
+            kam_dept_db = safe_get('kam_department')
+            kam_dept_ui = DEPARTMENT_REVERSE.get(kam_dept_db, kam_dept_db or '')
+            if kam_dept_ui:
+                st.write(f"• 부서 / Bộ phận: {kam_dept_ui}")
+            
+            kam_position = safe_get('kam_position')
+            if kam_position:
+                st.write(f"• 직책 / Chức vụ: {kam_position}")
+            
+            kam_phone = safe_get('kam_phone')
+            if kam_phone:
+                st.write(f"• 전화 / SĐT: {kam_phone}")
+            
+            kam_notes = safe_get('kam_notes')
+            if kam_notes:
+                st.write(f"• 노트 / Ghi chú: {kam_notes}")
+        
+        notes = safe_get('notes')
+        if notes:
+            st.write("")
+            st.write(f"**📝 비고 / Ghi chú:** {notes}")
+    
+    with detail_cols[1]:
+        st.write("**⚙️ 액션 / Thao tác**")
+        
+        # 수정 버튼
+        if st.button("✏️ 수정 / Sửa", key=f"edit_{customer_id}", use_container_width=True):
+            st.session_state[f"edit_customer_{customer_id}"] = True
+            st.rerun()
+        
+        # 삭제 버튼
+        if st.button("🗑️ 삭제 / Xóa", key=f"delete_{customer_id}", use_container_width=True):
+            can_delete, message = check_customer_deletion_safety(customer_id, load_func)
+            
+            if can_delete:
+                if delete_func(customer_table, customer_id):
+                    st.success("고객이 삭제되었습니다. / Đã xóa khách hàng.")
+                    del st.session_state['show_customer_detail']
+                    st.rerun()
+                else:
+                    st.error("삭제 실패 / Xóa thất bại")
+            else:
+                st.error(f"삭제 불가: {message}")
+                
+                if st.button("대신 비활성화", key=f"deactivate_{customer_id}", use_container_width=True):
+                    deactivate_data = {
+                        'id': customer_id,
+                        'status': 'inactive',
+                        'updated_at': datetime.now().isoformat()
+                    }
+                    
+                    if update_func(customer_table, deactivate_data):
+                        st.success("비활성화되었습니다.")
+                        st.rerun()
+                    else:
+                        st.error("비활성화 실패")
+        
+        # 닫기 버튼
+        if st.button("❌ 닫기 / Đóng", key=f"close_{customer_id}", use_container_width=True):
+            del st.session_state['show_customer_detail']
+            st.rerun()
+    
+    st.markdown("---")
+
 
 def render_customer_statistics(load_func, customer_table):
     """고객 통계 탭"""

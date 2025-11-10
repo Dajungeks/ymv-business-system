@@ -25,6 +25,7 @@ from components.sales.customer_management import show_customer_management
 from components.sales.quotation_management import show_quotation_management
 from components.sales.sales_process_main import show_sales_process_management
 from components.sales.performance_management import show_performance_management
+from components.sales.sales_activity import show_sales_activity 
 
 # 내부 컴포넌트 - Finance
 from components.finance.expense_management import show_expense_management
@@ -127,6 +128,7 @@ def should_show_menu(menu_name, current_user):
     allowed_for_all_corporate = [
         "대시보드",
         "고객 관리",
+        "영업 활동 관리",
         "견적서 관리",
         "실적 관리",
         "제품 코드 관리",  # 전체 공유
@@ -357,6 +359,22 @@ def show_customer_management_page():
         st.error(f"고객 관리 페이지 로드 중 오류: {str(e)}")
         st.info("시스템 관리자에게 문의해주세요.")
 
+def show_sales_activity_page():
+    """영업 활동 관리 페이지"""
+    try:
+        current_user = auth_manager.get_current_user()
+        show_sales_activity(
+            load_func=db_operations.load_data,
+            save_func=db_operations.save_data,
+            update_func=db_operations.update_data,
+            delete_func=db_operations.delete_data,
+            load_customers_func=db_operations.load_data,
+            current_user=current_user
+        )
+    except Exception as e:
+        st.error(f"영업 활동 관리 페이지 로드 중 오류: {str(e)}")
+        st.info("시스템 관리자에게 문의해주세요.")
+
 def show_sales_process_management_page():
     """영업 프로세스 관리 페이지"""
     show_sales_process_management(
@@ -500,6 +518,7 @@ def main():
         st.subheader("📊 분석 및 관리")
         if should_show_menu("대시보드", current_user):
             if st.button("📈 대시보드", use_container_width=True, 
+                        key="btn_dashboard",  # ⭐ 추가
                         type="primary" if st.session_state.current_page == "대시보드" else "secondary"):
                 st.session_state.current_page = "대시보드"
                 st.rerun()
@@ -509,37 +528,49 @@ def main():
         
         if should_show_menu("고객 관리", current_user):
             if st.button("👥 고객 관리", use_container_width=True,
+                        key="btn_customer",  # ⭐ 추가
                         type="primary" if st.session_state.current_page == "고객 관리" else "secondary"):
                 st.session_state.current_page = "고객 관리"
                 st.rerun()
         
+        if should_show_menu("영업 활동 관리", current_user):
+            if st.button("📅 영업 활동 관리", use_container_width=True,
+                        key="btn_sales_activity",  # ⭐ 추가
+                        type="primary" if st.session_state.current_page == "영업 활동 관리" else "secondary"):
+                st.session_state.current_page = "영업 활동 관리"
+                st.rerun()
+        
         if should_show_menu("견적서 관리", current_user):
             if st.button("📋 견적서 관리", use_container_width=True,
+                        key="btn_quotation",  # ⭐ 추가
                         type="primary" if st.session_state.current_page == "견적서 관리" else "secondary"):
                 st.session_state.current_page = "견적서 관리"
                 st.rerun()
         
         if should_show_menu("규격 결정서", current_user):
             if st.button("🔥 규격 결정서", use_container_width=True,
+                        key="btn_spec",  # ⭐ 추가
                         type="primary" if st.session_state.current_page == "규격 결정서" else "secondary"):
                 st.session_state.current_page = "규격 결정서"
                 st.rerun()
         
-        # YMK/CEO 전용 승인 페이지
         if should_show_menu("규격 결정서 승인", current_user):
             if st.button("✅ 규격결정서 승인", use_container_width=True,
+                        key="btn_spec_approval",  # ⭐ 추가
                         type="primary" if st.session_state.current_page == "규격결정서 승인" else "secondary"):
                 st.session_state.current_page = "규격결정서 승인"
                 st.rerun()
         
         if should_show_menu("실적 관리", current_user):
             if st.button("📊 실적 관리", use_container_width=True,
+                        key="btn_performance",  # ⭐ 추가
                         type="primary" if st.session_state.current_page == "실적 관리" else "secondary"):
                 st.session_state.current_page = "실적 관리"
                 st.rerun()
         
         if should_show_menu("영업 프로세스", current_user):
             if st.button("🎯 영업 프로세스", use_container_width=True,
+                        key="btn_sales_process",  # ⭐ 추가
                         type="primary" if st.session_state.current_page == "영업 프로세스" else "secondary"):
                 st.session_state.current_page = "영업 프로세스"
                 st.rerun()
@@ -549,24 +580,28 @@ def main():
         
         if should_show_menu("제품 코드 관리", current_user):
             if st.button("🏷️ 제품 코드 관리", use_container_width=True,
+                        key="btn_product_code",  # ⭐ 추가
                         type="primary" if st.session_state.current_page == "제품 코드 관리" else "secondary"):
                 st.session_state.current_page = "제품 코드 관리"
                 st.rerun()
         
         if should_show_menu("제품 관리", current_user):
             if st.button("📦 제품 관리", use_container_width=True,
+                        key="btn_product",  # ⭐ 추가
                         type="primary" if st.session_state.current_page == "제품 관리" else "secondary"):
                 st.session_state.current_page = "제품 관리"
                 st.rerun()
         
         if should_show_menu("공급업체 관리", current_user):
             if st.button("🏢 공급업체 관리", use_container_width=True,
+                        key="btn_supplier",  # ⭐ 추가
                         type="primary" if st.session_state.current_page == "공급업체 관리" else "secondary"):
                 st.session_state.current_page = "공급업체 관리"
                 st.rerun()
         
         if should_show_menu("구매품 관리", current_user):
             if st.button("🛒 구매품 관리", use_container_width=True,
+                        key="btn_purchase",  # ⭐ 추가
                         type="primary" if st.session_state.current_page == "구매품 관리" else "secondary"):
                 st.session_state.current_page = "구매품 관리"
                 st.rerun()
@@ -575,6 +610,7 @@ def main():
         if should_show_menu("물류사 관리", current_user):
             st.subheader("🚚 물류 관리")
             if st.button("🚚 물류사 관리", use_container_width=True,
+                        key="btn_logistics",  # ⭐ 추가
                         type="primary" if st.session_state.current_page == "물류사 관리" else "secondary"):
                 st.session_state.current_page = "물류사 관리"
                 st.rerun()
@@ -584,23 +620,26 @@ def main():
             st.subheader("👤 인사 관리")
             
             if st.button("👨‍💼 직원 관리", use_container_width=True,
+                        key="btn_employee",  # ⭐ 추가
                         type="primary" if st.session_state.current_page == "직원 관리" else "secondary"):
                 st.session_state.current_page = "직원 관리"
                 st.rerun()
             
             if st.button("🏢 법인 관리", use_container_width=True,
+                        key="btn_corporate",  # ⭐ 추가
                         type="primary" if st.session_state.current_page == "법인 계정 관리" else "secondary"):
                 st.session_state.current_page = "법인 계정 관리"
                 st.rerun()
             
             if st.button("💳 지출 요청서", use_container_width=True,
+                        key="btn_expense",  # ⭐ 추가
                         type="primary" if st.session_state.current_page == "지출 요청서" else "secondary"):
                 st.session_state.current_page = "지출 요청서"
                 st.rerun()
             
-            # 환급 관리 메뉴 (권한 있는 사용자만)
             if current_user and current_user.get('role') in ['Admin', 'CEO']:
                 if st.button("💰 환급 관리", use_container_width=True,
+                            key="btn_reimbursement",  # ⭐ 추가
                             type="primary" if st.session_state.current_page == "환급 관리" else "secondary"):
                     st.session_state.current_page = "환급 관리"
                     st.rerun()
@@ -609,10 +648,10 @@ def main():
         if not current_user.get('is_corporate', False) or current_user.get('is_super_admin', False):
             st.subheader("⚙️ 시스템 설정")
             if st.button("🌐 다국어 입력", use_container_width=True,
+                        key="btn_multilingual",  # ⭐ 추가
                         type="primary" if st.session_state.current_page == "다국어 입력" else "secondary"):
                 st.session_state.current_page = "다국어 입력"
                 st.rerun()
-    
     # 현재 페이지 표시
     current_page = st.session_state.current_page
     
@@ -621,6 +660,8 @@ def main():
         show_dashboard()
     elif current_page == "고객 관리":
         show_customer_management_page()
+    elif current_page == "영업 활동 관리":  
+        show_sales_activity_page()    
     elif current_page == "견적서 관리":
         show_quotation_management_page()
     elif current_page == "규격 결정서":
