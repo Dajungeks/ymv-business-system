@@ -635,29 +635,61 @@ def test_connection() -> bool:
     except Exception as e:
         logging.error(f"데이터베이스 연결 실패: {str(e)}")
         return False
-    
+
 def create_database_operations(supabase_client):
     """
     DatabaseOperations 인스턴스 생성 (main.py 호환용)
     """
-    # 간단한 래퍼 클래스 반환
     class SimpleDBOperations:
         def __init__(self, client):
             self.client = client
         
-        def load_data(self, table_name, filters=None):
+        def load_data(self, table_name, filters=None, *args, **kwargs):
+            """
+            데이터 로드 (유연한 인자 처리)
+            Args:
+                table_name: 테이블명
+                filters: 필터 조건 (dict 또는 None)
+                *args: 추가 위치 인자 (무시)
+                **kwargs: 추가 키워드 인자 (무시)
+            """
+            # 추가 인자는 무시하고 table_name과 filters만 사용
             return load_data(table_name, filters)
         
-        def save_data(self, table_name, data):
+        def save_data(self, table_name, data, *args, **kwargs):
+            """데이터 저장 (유연한 인자 처리)"""
             return save_data(table_name, data)
         
-        def update_data(self, table_name, data):
-            return update_data(table_name, data)
+        def update_data(self, table_name, *args, **kwargs):
+            """
+            데이터 수정 (유연한 인자 처리)
+            호출 패턴:
+            1. update_data(table_name, record_id, data)
+            2. update_data(table_name, data) where data contains 'id'
+            """
+            if len(args) == 2:
+                # 패턴 1: (record_id, data)
+                record_id, data = args
+                return update_data(table_name, record_id, data)
+            elif len(args) == 1:
+                # 패턴 2: (data) where data contains 'id'
+                data = args[0]
+                if isinstance(data, dict) and 'id' in data:
+                    record_id = data['id']
+                    return update_data(table_name, record_id, data)
+                else:
+                    logging.error("update_data: data must contain 'id' field")
+                    return False
+            else:
+                logging.error(f"update_data: invalid arguments count: {len(args)}")
+                return False
         
-        def delete_data(self, table_name, record_id):
+        def delete_data(self, table_name, record_id, *args, **kwargs):
+            """데이터 삭제 (유연한 인자 처리)"""
             return delete_data(table_name, record_id)
     
     return SimpleDBOperations(supabase_client)
+
 
 def test_connection() -> bool:
     """데이터베이스 연결 테스트"""
