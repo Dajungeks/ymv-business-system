@@ -656,29 +656,28 @@ def create_database_operations(supabase_client):
             """
             데이터 수정 (유연한 인자 처리)
             호출 패턴:
-            1. update_data(table_name, record_id, data)
+            1. update_data(table_name, record_id, data) → data에 id 추가
             2. update_data(table_name, data) where data contains 'id'
             """
             if len(args) == 2:
                 # 패턴 1: (record_id, data)
                 record_id, data = args
-                # ⭐ 전역 함수 명시적 호출
-                from utils.database import update_data as _update_data
-                return _update_data(table_name, record_id, data)
+                # data에 id 추가해서 전역 함수 호출
+                data_with_id = {**data, 'id': record_id}
+                return update_data(table_name, data_with_id)
             elif len(args) == 1:
                 # 패턴 2: (data) where data contains 'id'
                 data = args[0]
                 if isinstance(data, dict) and 'id' in data:
-                    record_id = data['id']
-                    from utils.database import update_data as _update_data
-                    return _update_data(table_name, record_id, data)
+                    return update_data(table_name, data)
                 else:
                     logging.error(f"update_data: data must contain 'id' field")
                     return False
             else:
                 logging.error(f"update_data: invalid arguments count: {len(args)}")
-                return False
-        
+                return False 
+
+
         def delete_data(self, table_name, record_id, *args, **kwargs):
             """데이터 삭제 (유연한 인자 처리)"""
             return delete_data(table_name, record_id)
