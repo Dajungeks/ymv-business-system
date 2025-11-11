@@ -645,15 +645,7 @@ def create_database_operations(supabase_client):
             self.client = client
         
         def load_data(self, table_name, filters=None, *args, **kwargs):
-            """
-            데이터 로드 (유연한 인자 처리)
-            Args:
-                table_name: 테이블명
-                filters: 필터 조건 (dict 또는 None)
-                *args: 추가 위치 인자 (무시)
-                **kwargs: 추가 키워드 인자 (무시)
-            """
-            # 추가 인자는 무시하고 table_name과 filters만 사용
+            """데이터 로드 (유연한 인자 처리)"""
             return load_data(table_name, filters)
         
         def save_data(self, table_name, data, *args, **kwargs):
@@ -670,15 +662,18 @@ def create_database_operations(supabase_client):
             if len(args) == 2:
                 # 패턴 1: (record_id, data)
                 record_id, data = args
-                return update_data(table_name, record_id, data)
+                # ⭐ 전역 함수 명시적 호출
+                from utils.database import update_data as _update_data
+                return _update_data(table_name, record_id, data)
             elif len(args) == 1:
                 # 패턴 2: (data) where data contains 'id'
                 data = args[0]
                 if isinstance(data, dict) and 'id' in data:
                     record_id = data['id']
-                    return update_data(table_name, record_id, data)
+                    from utils.database import update_data as _update_data
+                    return _update_data(table_name, record_id, data)
                 else:
-                    logging.error("update_data: data must contain 'id' field")
+                    logging.error(f"update_data: data must contain 'id' field")
                     return False
             else:
                 logging.error(f"update_data: invalid arguments count: {len(args)}")
@@ -689,7 +684,6 @@ def create_database_operations(supabase_client):
             return delete_data(table_name, record_id)
     
     return SimpleDBOperations(supabase_client)
-
 
 def test_connection() -> bool:
     """데이터베이스 연결 테스트"""
