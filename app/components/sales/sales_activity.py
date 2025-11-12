@@ -39,6 +39,268 @@ STATUS_OPTIONS = {
 
 STATUS_REVERSE = {v: k for k, v in STATUS_OPTIONS.items()}
 
+def render_activity_edit_form(activity, update_func, activity_table, customer_table, load_customers_func):
+    """영업 활동 수정 폼"""
+    activity_id = activity['id']
+    st.subheader(f"✏️ 영업 활동 수정 / Chỉnh sửa hoạt động")
+    
+    # 안전한 값 가져오기
+    def safe_get(key, default=''):
+        value = activity.get(key)
+        if pd.isna(value) or value is None:
+            return default
+        return str(value).strip() if str(value).strip() else default
+    
+    # 고객 정보 로드
+    customers = load_customers_func(customer_table)
+    customer_id = activity.get('customer_id')
+    
+    # 고객명 찾기
+    customer_name = 'N/A'
+    for customer in customers:
+        if customer['id'] == customer_id:
+            customer_name = customer.get('company_name_short') or customer.get('company_name_original')
+            break
+    
+    st.info(f"✅ **고객:** {customer_name}")
+    
+    with st.form("activity_edit_form"):
+        st.markdown("#### 📋 기본 정보 / Thông tin cơ bản")
+        
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            # 활동 유형
+            current_type = safe_get('activity_type')
+            type_ui_value = ACTIVITY_TYPES.get(current_type, list(ACTIVITY_TYPES.values())[0])
+            type_list = list(ACTIVITY_TYPES.values())
+            type_index = type_list.index(type_ui_value) if type_ui_value in type_list else 0
+            
+            activity_type_ui = st.selectbox(
+                "활동 유형 * / Loại hoạt động *",
+                options=type_list,
+                index=type_index,
+                key="edit_activity_type"
+            )
+            
+            # 활동 날짜
+            current_date = safe_get('activity_date')
+            if current_date:
+                try:
+                    activity_date = st.date_input(
+                        "활동 날짜 * / Ngày hoạt động *",
+                        value=pd.to_datetime(current_date).date(),
+                        key="edit_activity_date"
+                    )
+                except:
+                    activity_date = st.date_input(
+                        "활동 날짜 * / Ngày hoạt động *",
+                        value=date.today(),
+                        key="edit_activity_date"
+                    )
+            else:
+                activity_date = st.date_input(
+                    "활동 날짜 * / Ngày hoạt động *",
+                    value=date.today(),
+                    key="edit_activity_date"
+                )
+        
+        with col2:
+            # 중요도
+            current_importance = safe_get('importance', 'normal')
+            importance_ui_value = IMPORTANCE_LEVELS.get(current_importance, list(IMPORTANCE_LEVELS.values())[1])
+            importance_list = list(IMPORTANCE_LEVELS.values())
+            importance_index = importance_list.index(importance_ui_value) if importance_ui_value in importance_list else 1
+            
+            importance_ui = st.selectbox(
+                "중요도 / Mức độ quan trọng",
+                options=importance_list,
+                index=importance_index,
+                key="edit_activity_importance"
+            )
+            
+            # 상태
+            current_status = safe_get('status', 'completed')
+            status_ui_value = STATUS_OPTIONS.get(current_status, list(STATUS_OPTIONS.values())[1])
+            status_list = list(STATUS_OPTIONS.values())
+            status_index = status_list.index(status_ui_value) if status_ui_value in status_list else 1
+            
+            status_ui = st.selectbox(
+                "상태 / Trạng thái",
+                options=status_list,
+                index=status_index,
+                key="edit_activity_status"
+            )
+        
+        # 제목
+        subject = st.text_input(
+            "제목 * / Tiêu đề *",
+            value=safe_get('subject'),
+            key="edit_activity_subject"
+        )
+        
+        st.markdown("#### 👥 미팅 정보 / Thông tin cuộc họp")
+        
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            meeting_with = st.text_input(
+                "만난 사람 (고객 측) / Người gặp",
+                value=safe_get('meeting_with'),
+                key="edit_meeting_with"
+            )
+            
+            meeting_with_position = st.text_input(
+                "직책/부서 / Chức vụ",
+                value=safe_get('meeting_with_position'),
+                key="edit_meeting_with_position"
+            )
+        
+        with col2:
+            meeting_location = st.text_input(
+                "미팅 장소 / Địa điểm",
+                value=safe_get('meeting_location'),
+                key="edit_meeting_location"
+            )
+            
+            primary_contact = st.text_input(
+                "주 담당자 (우리 측) / Người phụ trách",
+                value=safe_get('primary_contact'),
+                key="edit_primary_contact"
+            )
+        
+        # 우리 측 참석자
+        our_attendees_value = activity.get('our_attendees')
+        if our_attendees_value:
+            if isinstance(our_attendees_value, list):
+                our_attendees_str = ', '.join(our_attendees_value)
+            else:
+                our_attendees_str = str(our_attendees_value)
+        else:
+            our_attendees_str = ''
+        
+        our_attendees = st.text_area(
+            "우리 측 참석자 (쉼표로 구분) / Người tham dự",
+            value=our_attendees_str,
+            key="edit_our_attendees",
+            height=60
+        )
+        
+        st.markdown("#### 📄 활동 내용 / Nội dung hoạt động")
+        
+        description = st.text_area(
+            "상세 내용 / Chi tiết",
+            value=safe_get('description'),
+            key="edit_activity_description",
+            height=150
+        )
+        
+        st.markdown("#### 📊 결과 및 후속 조치 / Kết quả và hành động tiếp theo")
+        
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            outcome = st.text_area(
+                "미팅 결과 / Kết quả",
+                value=safe_get('outcome'),
+                key="edit_activity_outcome",
+                height=100
+            )
+        
+        with col2:
+            next_action = st.text_area(
+                "다음 액션 / Hành động tiếp theo",
+                value=safe_get('next_action'),
+                key="edit_next_action",
+                height=100
+            )
+        
+        # 다음 액션 예정일
+        next_action_date_value = activity.get('next_action_date')
+        if next_action_date_value:
+            try:
+                next_action_date = st.date_input(
+                    "다음 액션 예정일 / Ngày dự kiến",
+                    value=pd.to_datetime(next_action_date_value).date(),
+                    key="edit_next_action_date"
+                )
+            except:
+                next_action_date = st.date_input(
+                    "다음 액션 예정일 / Ngày dự kiến",
+                    value=None,
+                    key="edit_next_action_date"
+                )
+        else:
+            next_action_date = st.date_input(
+                "다음 액션 예정일 / Ngày dự kiến",
+                value=None,
+                key="edit_next_action_date"
+            )
+        
+        # 태그
+        tags_value = activity.get('tags')
+        if tags_value:
+            if isinstance(tags_value, list):
+                tags_str = ', '.join(tags_value)
+            else:
+                tags_str = str(tags_value)
+        else:
+            tags_str = ''
+        
+        tags_input = st.text_input(
+            "태그 (쉼표로 구분) / Tags",
+            value=tags_str,
+            key="edit_activity_tags"
+        )
+        
+        # 버튼
+        col1, col2 = st.columns(2)
+        with col1:
+            submitted = st.form_submit_button("💾 수정 저장 / Lưu thay đổi", use_container_width=True)
+        with col2:
+            cancelled = st.form_submit_button("❌ 취소 / Hủy", use_container_width=True)
+        
+        if cancelled:
+            st.session_state[f"edit_activity_{activity_id}"] = False
+            st.rerun()
+        
+        if submitted:
+            if not subject:
+                st.error("❌ 제목은 필수 항목입니다.")
+                return
+            
+            # 업데이트 데이터 구성
+            updated_data = {
+                'id': activity_id,
+                'customer_id': customer_id,
+                'activity_date': activity_date.isoformat(),
+                'activity_type': ACTIVITY_TYPES_REVERSE.get(activity_type_ui),
+                'subject': subject.strip(),
+                'description': description.strip() if description and description.strip() else None,
+                'meeting_with': meeting_with.strip() if meeting_with and meeting_with.strip() else None,
+                'meeting_with_position': meeting_with_position.strip() if meeting_with_position and meeting_with_position.strip() else None,
+                'meeting_location': meeting_location.strip() if meeting_location and meeting_location.strip() else None,
+                'primary_contact': primary_contact.strip() if primary_contact and primary_contact.strip() else None,
+                'our_attendees': [a.strip() for a in our_attendees.split(',')] if our_attendees and our_attendees.strip() else None,
+                'outcome': outcome.strip() if outcome and outcome.strip() else None,
+                'next_action': next_action.strip() if next_action and next_action.strip() else None,
+                'next_action_date': next_action_date.isoformat() if next_action_date else None,
+                'status': STATUS_REVERSE.get(status_ui),
+                'importance': IMPORTANCE_REVERSE.get(importance_ui),
+                'tags': [t.strip() for t in tags_input.split(',')] if tags_input and tags_input.strip() else None,
+                'updated_at': datetime.now().isoformat()
+            }
+            
+            # 데이터 업데이트
+            result = update_func(activity_table, updated_data)
+            
+            if result:
+                st.success("✅ 영업 활동이 성공적으로 수정되었습니다.")
+                st.session_state[f"edit_activity_{activity_id}"] = False
+                st.rerun()
+            else:
+                st.error("❌ 수정 중 오류가 발생했습니다.")
+
 
 def show_sales_activity(load_func, save_func, update_func, delete_func, 
                         load_customers_func, current_user):
@@ -421,6 +683,12 @@ def render_activity_list(load_func, update_func, delete_func,
             customer_id = activity.get('customer_id')
             customer_name = customer_map.get(customer_id, 'N/A')
             
+            # ⭐ 수정 모드 확인
+            if st.session_state.get(f"edit_activity_{activity_id}", False):
+                render_activity_edit_form(activity, update_func, activity_table, customer_table, load_customers_func)
+                st.markdown("---")
+                continue
+            
             # 활동 타입 아이콘
             activity_type = activity.get('activity_type')
             activity_type_ui = ACTIVITY_TYPES.get(activity_type, activity_type)
@@ -496,6 +764,12 @@ def render_activity_list(load_func, update_func, delete_func,
                     
                     with detail_cols[1]:
                         st.write("**액션**")
+                        
+                        # ⭐ 수정 버튼 추가
+                        if st.button("✏️ 수정", key=f"edit_{activity_id}", use_container_width=True, type="primary"):
+                            st.session_state[f"edit_activity_{activity_id}"] = True
+                            st.session_state[f'show_activity_{activity_id}'] = False
+                            st.rerun()
                         
                         if st.button("🗑️ 삭제", key=f"delete_{activity_id}", use_container_width=True):
                             if delete_func(activity_table, activity_id):
@@ -850,3 +1124,4 @@ def render_visit_statistics(load_func, activity_table, customer_table, load_cust
     except Exception as e:
         logging.error(f"방문 통계 로드 오류: {str(e)}")
         st.error(f"방문 통계 로딩 중 오류: {str(e)}")
+
