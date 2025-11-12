@@ -73,20 +73,21 @@ CITIES_BY_COUNTRY = {
 # 부서 목록 / Danh sách bộ phận / Departments
 DEPARTMENTS = [
     "선택 안 함 / Không chọn / Not Selected",
-    "구매팀 / Phòng Mua hàng / Purchasing",
-    "영업팀 / Phòng Kinh doanh / Sales",
-    "생산팀 / Phòng Sản xuất / Production",
-    "생산관리팀 / Phòng Quản lý SX / Production Management",
-    "품질관리팀 / Phòng Quản lý Chất lượng / Quality Control",
-    "품질보증팀 / Phòng Đảm bảo Chất lượng / Quality Assurance",
-    "기술팀 / Phòng Kỹ thuật / Engineering",
-    "금형팀 / Phòng Khuôn mẫu / Tooling",
-    "사출팀 / Phòng Ép phun / Injection Molding",
-    "설계팀 / Phòng Thiết kế / Design",
-    "연구개발팀 / Phòng R&D / R&D",
-    "자재팀 / Phòng Vật tư / Material",
-    "물류팀 / Phòng Logistics / Logistics",
-    "경영지원팀 / Phòng Hỗ trợ Kinh doanh / Management Support",
+    "법인장 / Giám đốc Pháp nhân / Corporate Head",
+    "구매부서 / Phòng Mua hàng / Purchasing",
+    "영업부서 / Phòng Kinh doanh / Sales",
+    "생산부서 / Phòng Sản xuất / Production",
+    "생산관리부서 / Phòng Quản lý SX / Production Management",
+    "품질관리부서 / Phòng Quản lý Chất lượng / Quality Control",
+    "품질보증부서 / Phòng Đảm bảo Chất lượng / Quality Assurance",
+    "기술부서 / Phòng Kỹ thuật / Engineering",
+    "금형부서 / Phòng Khuôn mẫu / Tooling",
+    "사출부서 / Phòng Ép phun / Injection Molding",
+    "설계부서 / Phòng Thiết kế / Design",
+    "연구개발부서 / Phòng R&D / R&D",
+    "자재부서 / Phòng Vật tư / Material",
+    "물류부서 / Phòng Logistics / Logistics",
+    "경영지원부서 / Phòng Hỗ trợ Kinh doanh / Management Support",
     "기타 / Khác / Other"
 ]
 
@@ -134,20 +135,21 @@ BUSINESS_TYPE_REVERSE = {v: k for k, v in BUSINESS_TYPE_MAPPING.items()}
 # 부서 매핑 (UI 표시 → DB 저장)
 DEPARTMENT_MAPPING = {
     "선택 안 함 / Không chọn / Not Selected": None,
-    "구매팀 / Phòng Mua hàng / Purchasing": "Purchasing",
-    "영업팀 / Phòng Kinh doanh / Sales": "Sales",
-    "생산팀 / Phòng Sản xuất / Production": "Production",
-    "생산관리팀 / Phòng Quản lý SX / Production Management": "Production Management",
-    "품질관리팀 / Phòng Quản lý Chất lượng / Quality Control": "Quality Control",
-    "품질보증팀 / Phòng Đảm bảo Chất lượng / Quality Assurance": "Quality Assurance",
-    "기술팀 / Phòng Kỹ thuật / Engineering": "Engineering",
-    "금형팀 / Phòng Khuôn mẫu / Tooling": "Tooling Department",
-    "사출팀 / Phòng Ép phun / Injection Molding": "Injection Molding Department",
-    "설계팀 / Phòng Thiết kế / Design": "Design",
-    "연구개발팀 / Phòng R&D / R&D": "R&D",
-    "자재팀 / Phòng Vật tư / Material": "Material",
-    "물류팀 / Phòng Logistics / Logistics": "Logistics",
-    "경영지원팀 / Phòng Hỗ trợ Kinh doanh / Management Support": "Management Support",
+    "법인장 / Giám đốc Pháp nhân / Corporate Head": "Corporate Head",
+    "구매부서 / Phòng Mua hàng / Purchasing": "Purchasing",
+    "영업부서 / Phòng Kinh doanh / Sales": "Sales",
+    "생산부서 / Phòng Sản xuất / Production": "Production",
+    "생산관리부서 / Phòng Quản lý SX / Production Management": "Production Management",
+    "품질관리부서 / Phòng Quản lý Chất lượng / Quality Control": "Quality Control",
+    "품질보증부서 / Phòng Đảm bảo Chất lượng / Quality Assurance": "Quality Assurance",
+    "기술부서 / Phòng Kỹ thuật / Engineering": "Engineering",
+    "금형부서 / Phòng Khuôn mẫu / Tooling": "Tooling Department",
+    "사출부서 / Phòng Ép phun / Injection Molding": "Injection Molding Department",
+    "설계부서 / Phòng Thiết kế / Design": "Design",
+    "연구개발부서 / Phòng R&D / R&D": "R&D",
+    "자재부서 / Phòng Vật tư / Material": "Material",
+    "물류부서 / Phòng Logistics / Logistics": "Logistics",
+    "경영지원부서 / Phòng Hỗ trợ Kinh doanh / Management Support": "Management Support",
     "기타 / Khác / Other": "Other"
 }
 
@@ -216,7 +218,7 @@ def render_customer_form(save_func, customer_table):
             company_name_original = st.text_input("회사명 (공식) * / Tên công ty (chính thức) *")
             company_name_short = st.text_input("회사명 (짧은) / Tên công ty (ngắn)")
             company_name_english = st.text_input("회사명 (영어) / Tên công ty (tiếng Anh)")
-            business_number = st.text_input("사업자 번호 / Mã số doanh nghiệp")
+            tax_id = st.text_input("세금 ID / Mã số thuế")
             
         with col2:
             business_type_ui = st.selectbox(
@@ -233,7 +235,40 @@ def render_customer_form(save_func, customer_table):
             cities = CITIES_BY_COUNTRY.get(country, ["기타"])
             city = st.selectbox("도시 / Thành phố", cities)
             
-            address = st.text_area("주소 / Địa chỉ", height=100)
+            address = st.text_area("주소 / Địa chỉ", height=80)
+        
+        # ⭐ 고객 위치 정보 (최대 3개)
+        st.markdown("#### 📍 고객 위치 (최대 3개) / Vị trí khách hàng (tối đa 3)")
+        
+        locations = []
+        
+        for i in range(3):
+            st.write(f"**위치 {i+1} / Vị trí {i+1}**")
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                location_name = st.text_input(
+                    f"위치 이름 / Tên vị trí",
+                    placeholder=f"예: 본사, 공장 {i+1}",
+                    key=f"location_name_{i}"
+                )
+            
+            with col2:
+                map_link = st.text_input(
+                    f"구글 지도 링크 / Link Google Maps",
+                    placeholder="https://maps.google.com/...",
+                    key=f"map_link_{i}"
+                )
+            
+            # 둘 다 입력된 경우만 추가
+            if location_name and location_name.strip():
+                locations.append({
+                    'name': location_name.strip(),
+                    'map_link': map_link.strip() if map_link and map_link.strip() else None
+                })
+            
+            if i < 2:  # 마지막 항목 뒤에는 구분선 없음
+                st.markdown("---")
         
         # 담당자 정보 섹션
         st.markdown("#### 👤 담당자 정보 / Thông tin người liên hệ")
@@ -281,7 +316,6 @@ def render_customer_form(save_func, customer_table):
         with col2:
             phone = st.text_input("전화번호 / Số điện thoại")
             mobile = st.text_input("휴대폰 / Di động")
-            tax_id = st.text_input("세금 ID / Mã số thuế")
             payment_terms = st.selectbox(
                 "결제 조건 / Điều kiện thanh toán",
                 PAYMENT_TERMS,
@@ -313,6 +347,7 @@ def render_customer_form(save_func, customer_table):
                 kam_department = DEPARTMENT_MAPPING.get(kam_department_ui)
             
             kam_position = st.text_input("KAM 직책 / Chức vụ KAM")
+            kam_email = st.text_input("KAM 이메일 / Email KAM")
             
         with col2:
             kam_phone = st.text_input("KAM 연락처 / Số điện thoại KAM")
@@ -344,27 +379,30 @@ def render_customer_form(save_func, customer_table):
                 st.error("❌ 회사명을 입력해주세요 / Vui lòng nhập tên công ty")
                 return
             
-            # 고객 데이터 구성 (영어로 저장)
+            # 고객 데이터 구성
+            import json
+            
             customer_data = {
                 'company_name_original': company_name_original,
                 'company_name_short': company_name_short.strip() if company_name_short and company_name_short.strip() else None,
                 'company_name_english': company_name_english.strip() if company_name_english and company_name_english.strip() else None,
-                'business_number': business_number.strip() if business_number and business_number.strip() else None,
-                'business_type': BUSINESS_TYPE_MAPPING.get(business_type_ui),  # 영어로 변환
+                'tax_id': tax_id.strip() if tax_id and tax_id.strip() else None,
+                'business_type': BUSINESS_TYPE_MAPPING.get(business_type_ui),
                 'country': country,
                 'city': city,
                 'address': address.strip() if address and address.strip() else None,
+                'locations': json.dumps(locations) if locations else json.dumps([]),  # ⭐ JSON으로 저장
                 'contact_person': contact_person.strip() if contact_person and contact_person.strip() else None,
-                'contact_department': contact_department,  # 이미 영어로 변환됨
-                'position': position,  # 이미 영어로 변환됨
+                'contact_department': contact_department,
+                'position': position,
                 'email': email.strip() if email and email.strip() else None,
                 'phone': phone.strip() if phone and phone.strip() else None,
                 'mobile': mobile.strip() if mobile and mobile.strip() else None,
-                'tax_id': tax_id.strip() if tax_id and tax_id.strip() else None,
                 'payment_terms': payment_terms if payment_terms else None,
                 'kam_name': kam_name.strip() if kam_name and kam_name.strip() else None,
-                'kam_department': kam_department,  # 이미 영어로 변환됨
+                'kam_department': kam_department,
                 'kam_position': kam_position.strip() if kam_position and kam_position.strip() else None,
+                'kam_email': kam_email.strip() if kam_email and kam_email.strip() else None,
                 'kam_phone': kam_phone.strip() if kam_phone and kam_phone.strip() else None,
                 'kam_notes': kam_notes.strip() if kam_notes and kam_notes.strip() else None,
                 'status': status,
@@ -372,7 +410,7 @@ def render_customer_form(save_func, customer_table):
                 'created_at': datetime.now().isoformat()
             }
             
-            # 데이터 저장 (법인별 테이블 사용)
+            # 데이터 저장
             result = save_func(customer_table, customer_data)
             
             if result:
@@ -393,6 +431,23 @@ def render_customer_edit_form(customer, update_func, customer_table):
             return default
         return str(value).strip() if str(value).strip() else default
     
+    # 기존 위치 정보 로드
+    import json
+    existing_locations = []
+    try:
+        locations_data = customer.get('locations')
+        if locations_data:
+            if isinstance(locations_data, str):
+                existing_locations = json.loads(locations_data)
+            elif isinstance(locations_data, list):
+                existing_locations = locations_data
+    except:
+        existing_locations = []
+    
+    # 최대 3개로 제한
+    while len(existing_locations) < 3:
+        existing_locations.append({'name': '', 'map_link': ''})
+    
     with st.form("customer_edit_form"):
         # 회사 정보 섹션
         st.markdown("#### 📋 회사 정보 / Thông tin công ty")
@@ -411,9 +466,9 @@ def render_customer_edit_form(customer, update_func, customer_table):
                 "회사명 (영어) / Tên công ty (tiếng Anh)",
                 value=safe_get('company_name_english')
             )
-            business_number = st.text_input(
-                "사업자 번호 / Mã số doanh nghiệp",
-                value=safe_get('business_number')
+            tax_id = st.text_input(
+                "세금 ID / Mã số thuế",
+                value=safe_get('tax_id')
             )
             
         with col2:
@@ -453,8 +508,47 @@ def render_customer_edit_form(customer, update_func, customer_table):
             address = st.text_area(
                 "주소 / Địa chỉ",
                 value=safe_get('address'),
-                height=100
+                height=80
             )
+        
+        # ⭐ 고객 위치 정보 (최대 3개)
+        st.markdown("#### 📍 고객 위치 (최대 3개) / Vị trí khách hàng (tối đa 3)")
+        
+        locations = []
+        
+        for i in range(3):
+            st.write(f"**위치 {i+1} / Vị trí {i+1}**")
+            col1, col2 = st.columns(2)
+            
+            # 기존 값 가져오기
+            existing_name = existing_locations[i].get('name', '') if i < len(existing_locations) else ''
+            existing_link = existing_locations[i].get('map_link', '') if i < len(existing_locations) else ''
+            
+            with col1:
+                location_name = st.text_input(
+                    f"위치 이름 / Tên vị trí",
+                    value=existing_name,
+                    placeholder=f"예: 본사, 공장 {i+1}",
+                    key=f"edit_location_name_{i}"
+                )
+            
+            with col2:
+                map_link = st.text_input(
+                    f"구글 지도 링크 / Link Google Maps",
+                    value=existing_link,
+                    placeholder="https://maps.google.com/...",
+                    key=f"edit_map_link_{i}"
+                )
+            
+            # 둘 다 입력된 경우만 추가
+            if location_name and location_name.strip():
+                locations.append({
+                    'name': location_name.strip(),
+                    'map_link': map_link.strip() if map_link and map_link.strip() else None
+                })
+            
+            if i < 2:
+                st.markdown("---")
         
         # 담당자 정보 섹션
         st.markdown("#### 👤 담당자 정보 / Thông tin người liên hệ")
@@ -536,10 +630,6 @@ def render_customer_edit_form(customer, update_func, customer_table):
                 "휴대폰 / Di động",
                 value=safe_get('mobile')
             )
-            tax_id = st.text_input(
-                "세금 ID / Mã số thuế",
-                value=safe_get('tax_id')
-            )
             
             payment_terms_value = safe_get('payment_terms')
             payment_terms_index = PAYMENT_TERMS.index(payment_terms_value) if payment_terms_value in PAYMENT_TERMS else 0
@@ -592,6 +682,11 @@ def render_customer_edit_form(customer, update_func, customer_table):
             kam_position = st.text_input(
                 "KAM 직책 / Chức vụ KAM",
                 value=safe_get('kam_position')
+            )
+            
+            kam_email = st.text_input(
+                "KAM 이메일 / Email KAM",
+                value=safe_get('kam_email')
             )
             
         with col2:
@@ -647,28 +742,29 @@ def render_customer_edit_form(customer, update_func, customer_table):
                 st.error("❌ 회사명을 입력해주세요 / Vui lòng nhập tên công ty")
                 return
             
-            # 데이터 업데이트 (영어로 저장)
+            # 데이터 업데이트
             updated_data = {
                 'id': customer_id,
                 'company_name_original': company_name_original,
                 'company_name_short': company_name_short.strip() if company_name_short and company_name_short.strip() else None,
                 'company_name_english': company_name_english.strip() if company_name_english and company_name_english.strip() else None,
-                'business_number': business_number.strip() if business_number and business_number.strip() else None,
+                'tax_id': tax_id.strip() if tax_id and tax_id.strip() else None,
                 'business_type': BUSINESS_TYPE_MAPPING.get(business_type_ui),
                 'country': country,
                 'city': city,
                 'address': address.strip() if address and address.strip() else None,
+                'locations': json.dumps(locations) if locations else json.dumps([]),  # ⭐ JSON으로 저장
                 'contact_person': contact_person.strip() if contact_person and contact_person.strip() else None,
                 'contact_department': contact_department,
                 'position': position,
                 'email': email.strip() if email and email.strip() else None,
                 'phone': phone.strip() if phone and phone.strip() else None,
                 'mobile': mobile.strip() if mobile and mobile.strip() else None,
-                'tax_id': tax_id.strip() if tax_id and tax_id.strip() else None,
                 'payment_terms': payment_terms if payment_terms else None,
                 'kam_name': kam_name.strip() if kam_name and kam_name.strip() else None,
                 'kam_department': kam_department,
                 'kam_position': kam_position.strip() if kam_position and kam_position.strip() else None,
+                'kam_email': kam_email.strip() if kam_email and kam_email.strip() else None,
                 'kam_phone': kam_phone.strip() if kam_phone and kam_phone.strip() else None,
                 'kam_notes': kam_notes.strip() if kam_notes and kam_notes.strip() else None,
                 'status': status,
@@ -1053,20 +1149,17 @@ def render_customer_detail_view(customer, update_func, delete_func, load_func, c
         st.write(f"**회사명 (원어):** {safe_get('company_name_original', 'N/A')}")
         st.write(f"**회사명 (약칭):** {safe_get('company_name_short', 'N/A')}")
         st.write(f"**회사명 (영문):** {safe_get('company_name_english', 'N/A')}")
+        st.write(f"**세금 ID:** {safe_get('tax_id', 'N/A')}")
         
         # 업종 변환
         business_type_db = safe_get('business_type')
         business_type_ui = BUSINESS_TYPE_REVERSE.get(business_type_db, business_type_db or 'N/A')
         st.write(f"**업종:** {business_type_ui}")
-        
-        st.write(f"**국가:** {safe_get('country', 'N/A')}")
-        st.write(f"**도시:** {safe_get('city', 'N/A')}")
     
     with col2:
+        st.write(f"**국가:** {safe_get('country', 'N/A')}")
+        st.write(f"**도시:** {safe_get('city', 'N/A')}")
         st.write(f"**주소:** {safe_get('address', 'N/A')}")
-        st.write(f"**사업자번호:** {safe_get('business_number', 'N/A')}")
-        st.write(f"**전화번호:** {safe_get('phone', 'N/A')}")
-        st.write(f"**세금ID:** {safe_get('tax_id', 'N/A')}")
         
         status = safe_get('status', 'active')
         status_display = {
@@ -1075,6 +1168,39 @@ def render_customer_detail_view(customer, update_func, delete_func, load_func, c
             "potential": "🌱 잠재고객"
         }.get(status, status)
         st.write(f"**상태:** {status_display}")
+    
+    st.markdown("---")
+    
+    # ⭐ 고객 위치 정보 (최대 3개)
+    st.markdown("#### 📍 고객 위치")
+    
+    import json
+    locations = []
+    try:
+        locations_data = customer.get('locations')
+        if locations_data:
+            if isinstance(locations_data, str):
+                locations = json.loads(locations_data)
+            elif isinstance(locations_data, list):
+                locations = locations_data
+    except:
+        locations = []
+    
+    if locations:
+        for i, location in enumerate(locations, 1):
+            location_name = location.get('name', 'N/A')
+            map_link = location.get('map_link')
+            
+            st.write(f"**위치 {i}: {location_name}**")
+            if map_link and map_link.strip():
+                st.markdown(f"  🗺️ [구글 지도 보기]({map_link})")
+            else:
+                st.write("  🗺️지도 링크 없음")
+            
+            if i < len(locations):
+                st.write("")
+    else:
+        st.info("등록된 위치 정보가 없습니다.")
     
     st.markdown("---")
     
@@ -1115,6 +1241,7 @@ def render_customer_detail_view(customer, update_func, delete_func, load_func, c
         st.write(f"**KAM 부서:** {kam_dept_ui}")
         
         st.write(f"**KAM 직책:** {safe_get('kam_position', 'N/A')}")
+        st.write(f"**KAM 이메일:** {safe_get('kam_email', 'N/A')}")
     
     with col2:
         st.write(f"**KAM 연락처:** {safe_get('kam_phone', 'N/A')}")
