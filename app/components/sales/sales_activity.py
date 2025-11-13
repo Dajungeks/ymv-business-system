@@ -301,7 +301,6 @@ def render_activity_edit_form(activity, update_func, activity_table, customer_ta
             else:
                 st.error("❌ 수정 중 오류가 발생했습니다.")
 
-
 def show_sales_activity(load_func, save_func, update_func, delete_func, 
                         load_customers_func, current_user):
     """영업 활동 관리 메인 페이지"""
@@ -318,26 +317,27 @@ def show_sales_activity(load_func, save_func, update_func, delete_func,
     activity_table = get_company_table('sales_activities', company_code)
     customer_table = get_company_table('customers', company_code)
     
-    # 탭 구성
+    # ⭐ 탭 순서 변경: 방문 통계를 맨 앞으로
     tab1, tab2, tab3, tab4 = st.tabs([
+        "방문 통계 / Thống kê",  # ⭐ 1번으로 이동
         "활동 등록 / Đăng ký",
         "활동 목록 / Danh sách",
-        "고객별 타임라인 / Timeline KH",
-        "방문 통계 / Thống kê"
+        "고객별 타임라인 / Timeline KH"
     ])
     
     with tab1:
-        render_activity_form(save_func, activity_table, customer_table, load_customers_func)
+        render_visit_statistics(load_func, activity_table, customer_table, load_customers_func)
     
     with tab2:
+        render_activity_form(save_func, activity_table, customer_table, load_customers_func)
+    
+    with tab3:
         render_activity_list(load_func, update_func, delete_func, 
                             activity_table, customer_table, load_customers_func)
     
-    with tab3:
-        render_customer_timeline_search(load_func, activity_table, customer_table, load_customers_func)
-    
     with tab4:
-        render_visit_statistics(load_func, activity_table, customer_table, load_customers_func)
+        render_customer_timeline_search(load_func, activity_table, customer_table, load_customers_func)
+
 
 def render_activity_form(save_func, activity_table, customer_table, load_customers_func):
     """영업 활동 등록 폼 (고객 검색 방식)"""
@@ -952,7 +952,7 @@ def render_customer_timeline_search(load_func, activity_table, customer_table, l
         st.error(f"타임라인 로딩 중 오류: {str(e)}")
 
 def render_visit_statistics(load_func, activity_table, customer_table, load_customers_func):
-    """방문 통계 (Top 10 + 미방문 고객)"""
+    """활동 유형별 통계 (활성 고객만, 유형별 상세 테이블)"""
     st.subheader("📊 고객 방문 통계 / Thống kê thăm khách hàng")
     
     try:
@@ -970,25 +970,39 @@ def render_visit_statistics(load_func, activity_table, customer_table, load_cust
             name = customer.get('company_name_short') or customer.get('company_name_original')
             customer_map[customer['id']] = {
                 'name': name,
-                'status': customer.get('status', 'active')
+                'status': customer.get('status'),
+                'country': customer.get('country', 'N/A'),
+                'city': customer.get('city', 'N/A')
             }
         
-        # 활성 고객만 필터링
-        active_customers = {k: v for k, v in customer_map.items() if v['status'] == 'active'}
+        # 활성 고객만 필터링 (명시적으로 'active'인 경우만)
+        active_customers = {}
+        for cid, info in customer_map.items():
+            status_value = info.get('status')
+            
+            # 명시적으로 'active'인 경우만 포함
+            if status_value and str(status_value).lower() == 'active':
+                active_customers[cid] = info
+        
+        # 활성 고객 수 표시
+        st.info(f"💡 통계는 **활성 고객 {len(active_customers)}개사**만 대상으로 합니다.")
+        
+        if len(active_customers) == 0:
+            st.warning("⚠️ 활성 상태인 고객이 없습니다. 고객 관리에서 고객 상태를 '활성'으로 설정해주세요.")
+            st.info(f"전체 고객: {len(customers)}개 (활성: 0개)")
+            return
         
         if not activities:
             st.info("등록된 영업 활동이 없습니다.")
             
-            # 미방문 고객 전체 표시
-            st.write(f"**미방문 고객: {len(active_customers)}개사**")
+            st.write(f"### ❌ 미활동 고객: {len(active_customers)}개사")
             
             not_visited_data = []
             for customer_id, info in active_customers.items():
                 not_visited_data.append({
                     '고객명': info['name'],
-                    '상태': '❌ 미방문',
-                    '마지막 방문': '-',
-                    '경과 일수': '-'
+                    '도시': info['city'],
+                    '상태': '❌ 미활동'
                 })
             
             st.dataframe(
@@ -1001,127 +1015,406 @@ def render_visit_statistics(load_func, activity_table, customer_table, load_cust
         # DataFrame 변환
         activities_df = pd.DataFrame(activities)
         
-        # 방문/미팅 활동만 필터링
-        visit_types = ['visit', 'meeting']
-        visit_df = activities_df[activities_df['activity_type'].isin(visit_types)].copy()
+        # 전체 통계 요약
+        st.markdown("### 📈 전체 통계 요약 / Tổng quan")
         
-        # 고객별 방문 횟수 및 마지막 방문일 계산
-        customer_stats = {}
+        col1, col2, col3, col4, col5 = st.columns(5)
         
+        # 고객별 활동 집계
+        customer_activity_count = {}
         for customer_id in active_customers.keys():
-            customer_visits = visit_df[visit_df['customer_id'] == customer_id]
-            
-            if len(customer_visits) > 0:
-                visit_count = len(customer_visits)
-                last_visit = pd.to_datetime(customer_visits['activity_date']).max()
-                days_since = (datetime.now() - last_visit).days
-                
-                customer_stats[customer_id] = {
-                    'name': active_customers[customer_id]['name'],
-                    'visit_count': visit_count,
-                    'last_visit': last_visit,
-                    'days_since': days_since
-                }
-            else:
-                customer_stats[customer_id] = {
-                    'name': active_customers[customer_id]['name'],
-                    'visit_count': 0,
-                    'last_visit': None,
-                    'days_since': None
-                }
+            count = len(activities_df[activities_df['customer_id'] == customer_id])
+            customer_activity_count[customer_id] = count
         
-        # 방문 횟수별 정렬
-        sorted_stats = sorted(customer_stats.items(), key=lambda x: x[1]['visit_count'], reverse=True)
+        active_count = len([c for c in customer_activity_count.values() if c > 0])
+        inactive_count = len([c for c in customer_activity_count.values() if c == 0])
+        total_activities = sum(customer_activity_count.values())
         
-        # Top 10 방문 고객
-        st.markdown("### 🏆 Top 10 방문 고객 / Top 10 KH được thăm nhiều nhất")
-        
-        top_10_data = []
-        for i, (customer_id, stats) in enumerate(sorted_stats[:10]):
-            if stats['visit_count'] > 0:
-                # 1달(30일) 기준 경고
-                if stats['days_since'] > 30:
-                    status_icon = "⚠️ 재방문 필요"
-                    status_color = "🔴"
-                else:
-                    status_icon = "✅ 정상"
-                    status_color = "🟢"
-                
-                top_10_data.append({
-                    '순위': f"{i+1}위",
-                    '고객명': stats['name'],
-                    '방문 횟수': stats['visit_count'],
-                    '마지막 방문': stats['last_visit'].strftime('%Y-%m-%d'),
-                    '경과 일수': f"{stats['days_since']}일",
-                    '상태': f"{status_color} {status_icon}"
-                })
-        
-        if top_10_data:
-            st.dataframe(
-                pd.DataFrame(top_10_data),
-                use_container_width=True,
-                hide_index=True,
-                column_config={
-                    '순위': st.column_config.TextColumn('순위', width='small'),
-                    '고객명': st.column_config.TextColumn('고객명', width='large'),
-                    '방문 횟수': st.column_config.NumberColumn('방문 횟수', width='small'),
-                    '마지막 방문': st.column_config.TextColumn('마지막 방문', width='medium'),
-                    '경과 일수': st.column_config.TextColumn('경과 일수', width='small'),
-                    '상태': st.column_config.TextColumn('상태', width='medium')
-                }
-            )
-        else:
-            st.info("방문 기록이 있는 고객이 없습니다.")
-        
-        st.markdown("---")
-        
-        # 미방문 고객 리스트
-        st.markdown("### ❌ 미방문 고객 / KH chưa được thăm")
-        
-        not_visited = [(cid, stats) for cid, stats in customer_stats.items() if stats['visit_count'] == 0]
-        
-        st.write(f"**총 {len(not_visited)}개사**")
-        
-        if not_visited:
-            not_visited_data = []
-            for customer_id, stats in not_visited:
-                not_visited_data.append({
-                    '고객명': stats['name'],
-                    '상태': '❌ 미방문',
-                    '비고': '첫 방문 필요'
-                })
-            
-            st.dataframe(
-                pd.DataFrame(not_visited_data),
-                use_container_width=True,
-                hide_index=True
-            )
-        else:
-            st.success("모든 활성 고객을 방문했습니다! 🎉")
-        
-        st.markdown("---")
-        
-        # 전체 통계
-        st.markdown("### 📈 전체 통계 / Tổng quan")
-        
-        col1, col2, col3, col4 = st.columns(4)
+        # 30일 이상 미활동 고객
+        overdue_count = 0
+        for customer_id in active_customers.keys():
+            customer_acts = activities_df[activities_df['customer_id'] == customer_id]
+            if len(customer_acts) > 0:
+                last_date = pd.to_datetime(customer_acts['activity_date']).max()
+                days_since = (datetime.now() - last_date).days
+                if days_since > 30:
+                    overdue_count += 1
         
         with col1:
             st.metric("총 고객 수", len(active_customers))
         
         with col2:
-            visited_count = len([s for s in customer_stats.values() if s['visit_count'] > 0])
-            st.metric("방문 고객", visited_count)
+            st.metric("활동 고객", active_count)
         
         with col3:
-            st.metric("미방문 고객", len(not_visited))
+            st.metric("미활동 고객", inactive_count)
         
         with col4:
-            # 30일 이상 미방문 고객
-            overdue = len([s for s in customer_stats.values() if s['days_since'] and s['days_since'] > 30])
-            st.metric("재방문 필요", overdue, delta="30일 초과", delta_color="inverse")
+            st.metric("재방문 필요", overdue_count, delta="30일 초과", delta_color="inverse")
+        
+        with col5:
+            st.metric("총 활동 수", total_activities)
+        
+        st.markdown("---")
+        
+        # 활동 유형별 탭
+        st.markdown("### 📊 활동 유형별 통계 / Thống kê theo loại hoạt động")
+        
+        # 탭 생성
+        tab_labels = ["📊 전체"]
+        for type_key, type_label in ACTIVITY_TYPES.items():
+            tab_labels.append(type_label)
+        
+        tabs = st.tabs(tab_labels)
+        
+        # 각 탭별 처리
+        for tab_idx, tab in enumerate(tabs):
+            with tab:
+                if tab_idx == 0:
+                    # 전체 탭 - 유형별 상세 테이블
+                    selected_type = None
+                    filtered_activities = activities_df.copy()
+                    tab_title = "전체 활동"
+                    
+                    if len(filtered_activities) == 0:
+                        st.warning(f"활동이 없습니다.")
+                        continue
+                    
+                    # 활동 유형별 상세 테이블
+                    st.markdown(f"#### 🏆 Top 20 고객 (활동 유형별)")
+                    
+                    # 고객별 활동 유형 집계
+                    customer_activity_details = {}
+                    
+                    for customer_id in active_customers.keys():
+                        customer_acts = filtered_activities[filtered_activities['customer_id'] == customer_id]
+                        
+                        if len(customer_acts) > 0:
+                            # 활동 유형별 카운트
+                            type_counts = {}
+                            for act_type in ACTIVITY_TYPES.keys():
+                                count = len(customer_acts[customer_acts['activity_type'] == act_type])
+                                type_counts[act_type] = count
+                            
+                            # 총 활동 수
+                            total_count = len(customer_acts)
+                            
+                            # 마지막 활동
+                            last_date = pd.to_datetime(customer_acts['activity_date']).max()
+                            days_since = (datetime.now() - last_date).days
+                            
+                            customer_activity_details[customer_id] = {
+                                'name': active_customers[customer_id]['name'],
+                                'city': active_customers[customer_id]['city'],
+                                'total': total_count,
+                                'types': type_counts,
+                                'last_date': last_date,
+                                'days_since': days_since
+                            }
+                    
+                    # 총 활동 수로 정렬
+                    sorted_details = sorted(customer_activity_details.items(), 
+                                          key=lambda x: x[1]['total'], 
+                                          reverse=True)
+                    
+                    # Top 20 데이터 준비
+                    detail_data = []
+                    for i, (customer_id, details) in enumerate(sorted_details[:20]):
+                        # 경과 일수에 따른 상태
+                        if details['days_since'] > 30:
+                            status = "🔴"
+                        elif details['days_since'] > 14:
+                            status = "🟡"
+                        else:
+                            status = "🟢"
+                        
+                        detail_data.append({
+                            '순위': f"#{i+1}",
+                            '고객명': details['name'],
+                            '도시': details['city'],
+                            '총': details['total'],
+                            '🤝': details['types'].get('meeting', 0),
+                            '🏢': details['types'].get('visit', 0),
+                            '📞': details['types'].get('call', 0),
+                            '📧': details['types'].get('email', 0),
+                            '💰': details['types'].get('quotation', 0),
+                            '🎬': details['types'].get('demo', 0),
+                            '협상': details['types'].get('negotiation', 0),
+                            '📝': details['types'].get('contract', 0),
+                            '마지막': details['last_date'].strftime('%m-%d'),
+                            '경과': f"{details['days_since']}일",
+                            '상태': status
+                        })
+                    
+                    if detail_data:
+                        # DataFrame으로 표시
+                        detail_df = pd.DataFrame(detail_data)
+                        
+                        st.dataframe(
+                            detail_df,
+                            use_container_width=True,
+                            hide_index=True,
+                            column_config={
+                                '순위': st.column_config.TextColumn('순위', width='small'),
+                                '고객명': st.column_config.TextColumn('고객명', width='large'),
+                                '도시': st.column_config.TextColumn('도시', width='medium'),
+                                '총': st.column_config.NumberColumn('총', width='small'),
+                                '🤝': st.column_config.NumberColumn('미팅', width='small'),
+                                '🏢': st.column_config.NumberColumn('방문', width='small'),
+                                '📞': st.column_config.NumberColumn('통화', width='small'),
+                                '📧': st.column_config.NumberColumn('이메일', width='small'),
+                                '💰': st.column_config.NumberColumn('견적', width='small'),
+                                '🎬': st.column_config.NumberColumn('데모', width='small'),
+                                '협상': st.column_config.TextColumn('협상', width='small'),
+                                '📝': st.column_config.NumberColumn('계약', width='small'),
+                                '마지막': st.column_config.TextColumn('마지막', width='small'),
+                                '경과': st.column_config.TextColumn('경과', width='small'),
+                                '상태': st.column_config.TextColumn('상태', width='small')
+                            }
+                        )
+                        
+                        st.caption("💡 🤝=미팅, 🏢=방문, 📞=통화, 📧=이메일, 💰=견적, 🎬=데모, 📝=계약")
+                    else:
+                        st.info("활동 기록이 있는 고객이 없습니다.")
+                    
+                    st.markdown("---")
+                    
+                    # 월별 활동 추이
+                    st.markdown(f"#### 📈 월별 활동 추이")
+                    
+                    filtered_activities['month'] = pd.to_datetime(filtered_activities['activity_date']).dt.to_period('M')
+                    monthly_counts = filtered_activities.groupby('month').size()
+                    recent_months = monthly_counts.tail(6)
+                    
+                    if len(recent_months) > 0:
+                        month_data = []
+                        for month, count in recent_months.items():
+                            month_data.append({
+                                '월': str(month),
+                                '활동 수': count
+                            })
+                        
+                        col1, col2 = st.columns([2, 1])
+                        
+                        with col1:
+                            st.dataframe(
+                                pd.DataFrame(month_data),
+                                use_container_width=True,
+                                hide_index=True
+                            )
+                        
+                        with col2:
+                            st.bar_chart(pd.DataFrame(month_data).set_index('월'))
+                    else:
+                        st.info("월별 데이터가 충분하지 않습니다.")
+                    
+                    continue
+                
+                else:
+                    # 특정 활동 유형 탭
+                    type_key = list(ACTIVITY_TYPES.keys())[tab_idx - 1]
+                    selected_type = type_key
+                    filtered_activities = activities_df[activities_df['activity_type'] == type_key]
+                    tab_title = ACTIVITY_TYPES[type_key]
+                
+                if len(filtered_activities) == 0:
+                    st.warning(f"'{tab_title}' 활동이 없습니다.")
+                    
+                    # 미활동 고객 표시
+                    st.write(f"### ❌ 해당 활동이 없는 고객: {len(active_customers)}개사")
+                    
+                    no_activity_data = []
+                    for customer_id, info in active_customers.items():
+                        no_activity_data.append({
+                            '고객명': info['name'],
+                            '도시': f"{info['city']}",
+                            '비고': f"{tab_title} 필요"
+                        })
+                    
+                    st.dataframe(
+                        pd.DataFrame(no_activity_data),
+                        use_container_width=True,
+                        hide_index=True
+                    )
+                    continue
+                
+                # 고객별 통계 계산
+                customer_stats = {}
+                
+                for customer_id in active_customers.keys():
+                    customer_acts = filtered_activities[filtered_activities['customer_id'] == customer_id]
+                    
+                    if len(customer_acts) > 0:
+                        count = len(customer_acts)
+                        last_date = pd.to_datetime(customer_acts['activity_date']).max()
+                        days_since = (datetime.now() - last_date).days
+                        
+                        # 담당자 집계
+                        contacts = customer_acts['primary_contact'].dropna().tolist()
+                        
+                        customer_stats[customer_id] = {
+                            'name': active_customers[customer_id]['name'],
+                            'city': active_customers[customer_id]['city'],
+                            'count': count,
+                            'last_date': last_date,
+                            'days_since': days_since,
+                            'contacts': contacts
+                        }
+                
+                # 정렬 (활동 수 기준)
+                sorted_stats = sorted(customer_stats.items(), key=lambda x: x[1]['count'], reverse=True)
+                
+                # Top 10 고객
+                st.markdown(f"#### 🏆 Top 10 고객 ({tab_title})")
+                
+                top_10_data = []
+                for i, (customer_id, stats) in enumerate(sorted_stats[:10]):
+                    # 상태 결정
+                    if stats['days_since'] > 30:
+                        status_icon = "🔴"
+                        status_text = "주의"
+                    elif stats['days_since'] > 14:
+                        status_icon = "🟡"
+                        status_text = "확인"
+                    else:
+                        status_icon = "🟢"
+                        status_text = "정상"
+                    
+                    top_10_data.append({
+                        '순위': f"#{i+1}",
+                        '고객명': stats['name'],
+                        '도시': f"{stats['city']}",
+                        '활동 수': stats['count'],
+                        '마지막 활동': stats['last_date'].strftime('%Y-%m-%d'),
+                        '경과': f"{stats['days_since']}일",
+                        '상태': f"{status_icon} {status_text}"
+                    })
+                
+                if top_10_data:
+                    st.dataframe(
+                        pd.DataFrame(top_10_data),
+                        use_container_width=True,
+                        hide_index=True
+                    )
+                
+                st.markdown("---")
+                
+                # 월별 활동 추이
+                st.markdown(f"#### 📈 월별 활동 추이 ({tab_title})")
+                
+                filtered_activities['month'] = pd.to_datetime(filtered_activities['activity_date']).dt.to_period('M')
+                monthly_counts = filtered_activities.groupby('month').size()
+                recent_months = monthly_counts.tail(6)
+                
+                if len(recent_months) > 0:
+                    month_data = []
+                    for month, count in recent_months.items():
+                        month_data.append({
+                            '월': str(month),
+                            '활동 수': count
+                        })
+                    
+                    col1, col2 = st.columns([2, 1])
+                    
+                    with col1:
+                        st.dataframe(
+                            pd.DataFrame(month_data),
+                            use_container_width=True,
+                            hide_index=True
+                        )
+                    
+                    with col2:
+                        st.bar_chart(pd.DataFrame(month_data).set_index('월'))
+                else:
+                    st.info("월별 데이터가 충분하지 않습니다.")
+                
+                st.markdown("---")
+                
+                # 담당자별 활동 수
+                st.markdown(f"#### 👥 담당자별 활동 수 ({tab_title})")
+                
+                contact_counts = {}
+                for customer_id, stats in customer_stats.items():
+                    for contact in stats['contacts']:
+                        if contact and contact.strip():
+                            contact_counts[contact] = contact_counts.get(contact, 0) + 1
+                
+                if contact_counts:
+                    sorted_contacts = sorted(contact_counts.items(), key=lambda x: x[1], reverse=True)
+                    
+                    contact_data = []
+                    for contact, count in sorted_contacts[:10]:
+                        contact_data.append({
+                            '담당자': contact,
+                            '활동 수': count
+                        })
+                    
+                    col1, col2 = st.columns([2, 1])
+                    
+                    with col1:
+                        st.dataframe(
+                            pd.DataFrame(contact_data),
+                            use_container_width=True,
+                            hide_index=True
+                        )
+                    
+                    with col2:
+                        st.bar_chart(pd.DataFrame(contact_data).set_index('담당자'))
+                else:
+                    st.info("담당자 정보가 없습니다.")
+                
+                st.markdown("---")
+                
+                # 주의 필요 고객 (30일 이상)
+                overdue_customers = [(cid, stats) for cid, stats in customer_stats.items() 
+                                    if stats['days_since'] > 30]
+                
+                if overdue_customers:
+                    st.markdown(f"#### ⚠️ 주의 필요 고객 (30일 이상 {tab_title} 없음)")
+                    st.write(f"**총 {len(overdue_customers)}개사**")
+                    
+                    overdue_data = []
+                    for customer_id, stats in overdue_customers:
+                        overdue_data.append({
+                            '고객명': stats['name'],
+                            '도시': f"{stats['city']}",
+                            '마지막 활동': stats['last_date'].strftime('%Y-%m-%d'),
+                            '경과 일수': f"🔴 {stats['days_since']}일"
+                        })
+                    
+                    st.dataframe(
+                        pd.DataFrame(overdue_data),
+                        use_container_width=True,
+                        hide_index=True
+                    )
+                    
+                    st.markdown("---")
+                
+                # 미활동 고객
+                no_activity_customers = set(active_customers.keys()) - set(customer_stats.keys())
+                
+                if no_activity_customers:
+                    st.markdown(f"#### ❌ 해당 활동이 없는 고객 ({tab_title})")
+                    st.write(f"**총 {len(no_activity_customers)}개사**")
+                    
+                    no_activity_data = []
+                    for customer_id in no_activity_customers:
+                        info = active_customers[customer_id]
+                        no_activity_data.append({
+                            '고객명': info['name'],
+                            '도시': f"{info['city']}",
+                            '비고': f"{tab_title} 필요"
+                        })
+                    
+                    st.dataframe(
+                        pd.DataFrame(no_activity_data),
+                        use_container_width=True,
+                        hide_index=True
+                    )
     
     except Exception as e:
         logging.error(f"방문 통계 로드 오류: {str(e)}")
         st.error(f"방문 통계 로딩 중 오류: {str(e)}")
+
+
 
