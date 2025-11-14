@@ -237,7 +237,7 @@ def render_customer_form(save_func, customer_table):
             
             address = st.text_area("주소 / Địa chỉ", height=80)
         
-        # ⭐ 고객 위치 정보 (최대 3개)
+        # 고객 위치 정보 (최대 3개)
         st.markdown("#### 📍 고객 위치 (최대 3개) / Vị trí khách hàng (tối đa 3)")
         
         locations = []
@@ -260,14 +260,13 @@ def render_customer_form(save_func, customer_table):
                     key=f"map_link_{i}"
                 )
             
-            # 둘 다 입력된 경우만 추가
             if location_name and location_name.strip():
                 locations.append({
                     'name': location_name.strip(),
                     'map_link': map_link.strip() if map_link and map_link.strip() else None
                 })
             
-            if i < 2:  # 마지막 항목 뒤에는 구분선 없음
+            if i < 2:
                 st.markdown("---")
         
         # 담당자 정보 섹션
@@ -277,14 +276,12 @@ def render_customer_form(save_func, customer_table):
         with col1:
             contact_person = st.text_input("담당자명 / Tên người liên hệ")
             
-            # 담당자 부서 선택
             contact_department_ui = st.selectbox(
                 "담당자 부서 / Bộ phận",
                 DEPARTMENTS,
                 key="contact_department"
             )
             
-            # "기타" 선택 시 직접 입력
             if contact_department_ui == "기타 / Khác / Other":
                 contact_department_custom = st.text_input(
                     "부서 입력 / Nhập bộ phận",
@@ -294,14 +291,12 @@ def render_customer_form(save_func, customer_table):
             else:
                 contact_department = DEPARTMENT_MAPPING.get(contact_department_ui)
             
-            # 담당자 직책 선택
             position_ui = st.selectbox(
                 "직책 / Chức vụ",
                 POSITION_OPTIONS,
                 key="position"
             )
             
-            # "기타" 선택 시 직접 입력
             if position_ui == "기타 / Khác / Other":
                 position_custom = st.text_input(
                     "직책 입력 / Nhập chức vụ",
@@ -322,6 +317,50 @@ def render_customer_form(save_func, customer_table):
                 key="payment_terms"
             )
         
+        # ⭐ 구매 직원 정보 섹션 (새로 추가)
+        st.markdown("#### 🛒 구매 직원 정보 / Thông tin Nhân viên Mua hàng")
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            purchasing_person = st.text_input("구매 직원명 / Tên NV Mua hàng")
+            
+            purchasing_department_ui = st.selectbox(
+                "구매 직원 부서 / Bộ phận",
+                DEPARTMENTS,
+                key="purchasing_department"
+            )
+            
+            if purchasing_department_ui == "기타 / Khác / Other":
+                purchasing_department_custom = st.text_input(
+                    "부서 입력 / Nhập bộ phận",
+                    key="purchasing_department_custom"
+                )
+                purchasing_department = purchasing_department_custom if purchasing_department_custom.strip() else None
+            else:
+                purchasing_department = DEPARTMENT_MAPPING.get(purchasing_department_ui)
+            
+            purchasing_position_ui = st.selectbox(
+                "구매 직원 직책 / Chức vụ",
+                POSITION_OPTIONS,
+                key="purchasing_position"
+            )
+            
+            if purchasing_position_ui == "기타 / Khác / Other":
+                purchasing_position_custom = st.text_input(
+                    "직책 입력 / Nhập chức vụ",
+                    key="purchasing_position_custom"
+                )
+                purchasing_position = purchasing_position_custom if purchasing_position_custom.strip() else None
+            else:
+                purchasing_position = POSITION_MAPPING.get(purchasing_position_ui)
+            
+            purchasing_email = st.text_input("구매 직원 이메일 / Email NV Mua hàng")
+            
+        with col2:
+            purchasing_phone = st.text_input("구매 직원 연락처 / SĐT NV Mua hàng")
+            purchasing_mobile = st.text_input("구매 직원 휴대폰 / Di động NV Mua hàng")
+            purchasing_notes = st.text_area("구매 직원 메모 / Ghi chú", height=100)
+        
         # KAM 정보 섹션
         st.markdown("#### 🎯 KAM 정보 / Thông tin KAM")
         col1, col2 = st.columns(2)
@@ -329,14 +368,12 @@ def render_customer_form(save_func, customer_table):
         with col1:
             kam_name = st.text_input("KAM 이름 / Tên KAM")
             
-            # KAM 부서 선택
             kam_department_ui = st.selectbox(
                 "KAM 부서 / Bộ phận KAM",
                 DEPARTMENTS,
                 key="kam_department"
             )
             
-            # "기타" 선택 시 직접 입력
             if kam_department_ui == "기타 / Khác / Other":
                 kam_department_custom = st.text_input(
                     "KAM 부서 입력 / Nhập bộ phận KAM",
@@ -352,6 +389,35 @@ def render_customer_form(save_func, customer_table):
         with col2:
             kam_phone = st.text_input("KAM 연락처 / Số điện thoại KAM")
             kam_notes = st.text_area("KAM 메모 / Ghi chú KAM", height=100)
+        
+        # ⭐ KAM II 정보 섹션 (새로 추가)
+        st.markdown("#### 🎯 KAM II 정보 / Thông tin KAM II")
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            kam2_name = st.text_input("KAM II 이름 / Tên KAM II")
+            
+            kam2_department_ui = st.selectbox(
+                "KAM II 부서 / Bộ phận KAM II",
+                DEPARTMENTS,
+                key="kam2_department"
+            )
+            
+            if kam2_department_ui == "기타 / Khác / Other":
+                kam2_department_custom = st.text_input(
+                    "KAM II 부서 입력 / Nhập bộ phận KAM II",
+                    key="kam2_department_custom"
+                )
+                kam2_department = kam2_department_custom if kam2_department_custom.strip() else None
+            else:
+                kam2_department = DEPARTMENT_MAPPING.get(kam2_department_ui)
+            
+            kam2_position = st.text_input("KAM II 직책 / Chức vụ KAM II")
+            kam2_email = st.text_input("KAM II 이메일 / Email KAM II")
+            
+        with col2:
+            kam2_phone = st.text_input("KAM II 연락처 / Số điện thoại KAM II")
+            kam2_notes = st.text_area("KAM II 메모 / Ghi chú KAM II", height=100)
         
         # 기타 정보
         st.markdown("#### 📝 기타 정보 / Thông tin khác")
@@ -374,12 +440,10 @@ def render_customer_form(save_func, customer_table):
         submitted = st.form_submit_button("💾 등록 / Đăng ký", use_container_width=True)
         
         if submitted:
-            # 필수 항목 검증
             if not company_name_original:
                 st.error("❌ 회사명을 입력해주세요 / Vui lòng nhập tên công ty")
                 return
             
-            # 고객 데이터 구성
             import json
             
             customer_data = {
@@ -391,7 +455,7 @@ def render_customer_form(save_func, customer_table):
                 'country': country,
                 'city': city,
                 'address': address.strip() if address and address.strip() else None,
-                'locations': json.dumps(locations) if locations else json.dumps([]),  # ⭐ JSON으로 저장
+                'locations': json.dumps(locations) if locations else json.dumps([]),
                 'contact_person': contact_person.strip() if contact_person and contact_person.strip() else None,
                 'contact_department': contact_department,
                 'position': position,
@@ -399,18 +463,33 @@ def render_customer_form(save_func, customer_table):
                 'phone': phone.strip() if phone and phone.strip() else None,
                 'mobile': mobile.strip() if mobile and mobile.strip() else None,
                 'payment_terms': payment_terms if payment_terms else None,
+                # ⭐ 구매 직원 정보
+                'purchasing_person': purchasing_person.strip() if purchasing_person and purchasing_person.strip() else None,
+                'purchasing_department': purchasing_department,
+                'purchasing_position': purchasing_position,
+                'purchasing_email': purchasing_email.strip() if purchasing_email and purchasing_email.strip() else None,
+                'purchasing_phone': purchasing_phone.strip() if purchasing_phone and purchasing_phone.strip() else None,
+                'purchasing_mobile': purchasing_mobile.strip() if purchasing_mobile and purchasing_mobile.strip() else None,
+                'purchasing_notes': purchasing_notes.strip() if purchasing_notes and purchasing_notes.strip() else None,
+                # KAM 정보
                 'kam_name': kam_name.strip() if kam_name and kam_name.strip() else None,
                 'kam_department': kam_department,
                 'kam_position': kam_position.strip() if kam_position and kam_position.strip() else None,
                 'kam_email': kam_email.strip() if kam_email and kam_email.strip() else None,
                 'kam_phone': kam_phone.strip() if kam_phone and kam_phone.strip() else None,
                 'kam_notes': kam_notes.strip() if kam_notes and kam_notes.strip() else None,
+                # ⭐ KAM II 정보
+                'kam2_name': kam2_name.strip() if kam2_name and kam2_name.strip() else None,
+                'kam2_department': kam2_department,
+                'kam2_position': kam2_position.strip() if kam2_position and kam2_position.strip() else None,
+                'kam2_email': kam2_email.strip() if kam2_email and kam2_email.strip() else None,
+                'kam2_phone': kam2_phone.strip() if kam2_phone and kam2_phone.strip() else None,
+                'kam2_notes': kam2_notes.strip() if kam2_notes and kam2_notes.strip() else None,
                 'status': status,
                 'notes': notes.strip() if notes and notes.strip() else None,
                 'created_at': datetime.now().isoformat()
             }
             
-            # 데이터 저장
             result = save_func(customer_table, customer_data)
             
             if result:
@@ -424,7 +503,6 @@ def render_customer_edit_form(customer, update_func, customer_table):
     customer_id = customer['id']
     st.subheader(f"✏️ 고객 정보 수정 / Chỉnh sửa thông tin khách hàng")
     
-    # 안전한 값 가져오기 함수
     def safe_get(key, default=''):
         value = customer.get(key)
         if pd.isna(value) or value is None:
@@ -444,9 +522,29 @@ def render_customer_edit_form(customer, update_func, customer_table):
     except:
         existing_locations = []
     
-    # 최대 3개로 제한
     while len(existing_locations) < 3:
         existing_locations.append({'name': '', 'map_link': ''})
+    
+    # ⭐ Form 밖에서 국가 선택 (동적 업데이트 위해)
+    country_list = [
+        "Vietnam", "Korea", "Japan", "China", "Thailand", "USA", 
+        "France", "Hong Kong", "Malaysia", "Singapore", 
+        "Taiwan", "Other", "기타"
+    ]
+    country_value = safe_get('country', 'Vietnam')
+    country_index = country_list.index(country_value) if country_value in country_list else 0
+    
+    selected_country = st.selectbox(
+        "🌍 국가 선택 (먼저 선택) / Chọn quốc gia",
+        country_list,
+        index=country_index,
+        key=f"country_selector_{customer_id}"
+    )
+    
+    # 선택된 국가의 도시 목록
+    cities = CITIES_BY_COUNTRY.get(selected_country, ["기타"])
+    
+    st.markdown("---")
     
     with st.form("customer_edit_form"):
         # 회사 정보 섹션
@@ -472,7 +570,7 @@ def render_customer_edit_form(customer, update_func, customer_table):
             )
             
         with col2:
-            # 업종 - DB값을 UI값으로 역변환
+            # 업종
             current_business_type = safe_get('business_type')
             business_type_ui_value = BUSINESS_TYPE_REVERSE.get(current_business_type, list(BUSINESS_TYPE_MAPPING.keys())[0])
             business_type_list = list(BUSINESS_TYPE_MAPPING.keys())
@@ -484,22 +582,10 @@ def render_customer_edit_form(customer, update_func, customer_table):
                 index=business_type_index
             )
             
-            country_list = [
-                "Vietnam", "Korea", "Japan", "China", "Thailand", "USA", 
-                "France", "Hong Kong", "Malaysia", "Singapore", 
-                "Taiwan", "Other", "기타"
-            ]
-            country_value = safe_get('country', 'Vietnam')
-            country_index = country_list.index(country_value) if country_value in country_list else 0
+            # ⭐ 국가는 form 밖에서 선택됨 (읽기 전용 표시)
+            st.info(f"선택된 국가 / Quốc gia: **{selected_country}**")
             
-            country = st.selectbox(
-                "국가 / Quốc gia",
-                country_list,
-                index=country_index
-            )
-            
-            # 국가별 주요 도시
-            cities = CITIES_BY_COUNTRY.get(country, ["기타"])
+            # ⭐ 도시는 선택된 국가에 따라 자동 업데이트
             city_value = safe_get('city')
             city_index = cities.index(city_value) if city_value in cities else 0
             
@@ -511,7 +597,7 @@ def render_customer_edit_form(customer, update_func, customer_table):
                 height=80
             )
         
-        # ⭐ 고객 위치 정보 (최대 3개)
+        # 고객 위치 정보 (최대 3개)
         st.markdown("#### 📍 고객 위치 (최대 3개) / Vị trí khách hàng (tối đa 3)")
         
         locations = []
@@ -520,7 +606,6 @@ def render_customer_edit_form(customer, update_func, customer_table):
             st.write(f"**위치 {i+1} / Vị trí {i+1}**")
             col1, col2 = st.columns(2)
             
-            # 기존 값 가져오기
             existing_name = existing_locations[i].get('name', '') if i < len(existing_locations) else ''
             existing_link = existing_locations[i].get('map_link', '') if i < len(existing_locations) else ''
             
@@ -540,7 +625,6 @@ def render_customer_edit_form(customer, update_func, customer_table):
                     key=f"edit_map_link_{i}"
                 )
             
-            # 둘 다 입력된 경우만 추가
             if location_name and location_name.strip():
                 locations.append({
                     'name': location_name.strip(),
@@ -550,7 +634,7 @@ def render_customer_edit_form(customer, update_func, customer_table):
             if i < 2:
                 st.markdown("---")
         
-        # 담당자 정보 섹션
+        # 담당자 정보 (계속)...
         st.markdown("#### 👤 담당자 정보 / Thông tin người liên hệ")
         col1, col2 = st.columns(2)
         
@@ -560,7 +644,6 @@ def render_customer_edit_form(customer, update_func, customer_table):
                 value=safe_get('contact_person')
             )
             
-            # 담당자 부서 - DB값을 UI값으로 역변환
             current_contact_dept = safe_get('contact_department')
             contact_dept_ui_value = DEPARTMENT_REVERSE.get(current_contact_dept, "선택 안 함 / Không chọn / Not Selected")
             
@@ -576,7 +659,6 @@ def render_customer_edit_form(customer, update_func, customer_table):
                 key="edit_contact_department"
             )
             
-            # "기타" 선택 시 직접 입력
             if contact_department_ui == "기타 / Khác / Other":
                 default_dept = current_contact_dept if current_contact_dept not in DEPARTMENT_MAPPING.values() else ""
                 contact_department_custom = st.text_input(
@@ -588,7 +670,6 @@ def render_customer_edit_form(customer, update_func, customer_table):
             else:
                 contact_department = DEPARTMENT_MAPPING.get(contact_department_ui)
             
-            # 담당자 직책 - DB값을 UI값으로 역변환
             current_position = safe_get('position')
             position_ui_value = POSITION_REVERSE.get(current_position, "기타 / Khác / Other")
             
@@ -604,7 +685,6 @@ def render_customer_edit_form(customer, update_func, customer_table):
                 key="edit_position"
             )
             
-            # "기타" 선택 시 직접 입력
             if position_ui == "기타 / Khác / Other":
                 default_position = current_position if current_position not in POSITION_MAPPING.values() else ""
                 position_custom = st.text_input(
@@ -641,7 +721,89 @@ def render_customer_edit_form(customer, update_func, customer_table):
                 key="edit_payment_terms"
             )
         
-        # KAM 정보 섹션
+        # ⭐ 구매 직원 정보
+        st.markdown("#### 🛒 구매 직원 정보 / Thông tin Nhân viên Mua hàng")
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            purchasing_person = st.text_input(
+                "구매 직원명 / Tên NV Mua hàng",
+                value=safe_get('purchasing_person')
+            )
+            
+            current_purchasing_dept = safe_get('purchasing_department')
+            purchasing_dept_ui_value = DEPARTMENT_REVERSE.get(current_purchasing_dept, "선택 안 함 / Không chọn / Not Selected")
+            
+            if purchasing_dept_ui_value in DEPARTMENTS:
+                purchasing_dept_index = DEPARTMENTS.index(purchasing_dept_ui_value)
+            else:
+                purchasing_dept_index = DEPARTMENTS.index("기타 / Khác / Other")
+            
+            purchasing_department_ui = st.selectbox(
+                "구매 직원 부서 / Bộ phận",
+                DEPARTMENTS,
+                index=purchasing_dept_index,
+                key="edit_purchasing_department"
+            )
+            
+            if purchasing_department_ui == "기타 / Khác / Other":
+                default_purchasing_dept = current_purchasing_dept if current_purchasing_dept not in DEPARTMENT_MAPPING.values() else ""
+                purchasing_department_custom = st.text_input(
+                    "부서 입력 / Nhập bộ phận",
+                    value=default_purchasing_dept,
+                    key="edit_purchasing_department_custom"
+                )
+                purchasing_department = purchasing_department_custom.strip() if purchasing_department_custom and purchasing_department_custom.strip() else None
+            else:
+                purchasing_department = DEPARTMENT_MAPPING.get(purchasing_department_ui)
+            
+            current_purchasing_position = safe_get('purchasing_position')
+            purchasing_position_ui_value = POSITION_REVERSE.get(current_purchasing_position, "기타 / Khác / Other")
+            
+            if purchasing_position_ui_value in POSITION_OPTIONS:
+                purchasing_position_index = POSITION_OPTIONS.index(purchasing_position_ui_value)
+            else:
+                purchasing_position_index = POSITION_OPTIONS.index("기타 / Khác / Other")
+            
+            purchasing_position_ui = st.selectbox(
+                "구매 직원 직책 / Chức vụ",
+                POSITION_OPTIONS,
+                index=purchasing_position_index,
+                key="edit_purchasing_position"
+            )
+            
+            if purchasing_position_ui == "기타 / Khác / Other":
+                default_purchasing_position = current_purchasing_position if current_purchasing_position not in POSITION_MAPPING.values() else ""
+                purchasing_position_custom = st.text_input(
+                    "직책 입력 / Nhập chức vụ",
+                    value=default_purchasing_position,
+                    key="edit_purchasing_position_custom"
+                )
+                purchasing_position = purchasing_position_custom.strip() if purchasing_position_custom and purchasing_position_custom.strip() else None
+            else:
+                purchasing_position = POSITION_MAPPING.get(purchasing_position_ui)
+            
+            purchasing_email = st.text_input(
+                "구매 직원 이메일 / Email",
+                value=safe_get('purchasing_email')
+            )
+            
+        with col2:
+            purchasing_phone = st.text_input(
+                "구매 직원 연락처 / SĐT",
+                value=safe_get('purchasing_phone')
+            )
+            purchasing_mobile = st.text_input(
+                "구매 직원 휴대폰 / Di động",
+                value=safe_get('purchasing_mobile')
+            )
+            purchasing_notes = st.text_area(
+                "구매 직원 메모 / Ghi chú",
+                value=safe_get('purchasing_notes'),
+                height=100
+            )
+        
+        # KAM 정보 (계속)...
         st.markdown("#### 🎯 KAM 정보 / Thông tin KAM")
         col1, col2 = st.columns(2)
         
@@ -651,7 +813,6 @@ def render_customer_edit_form(customer, update_func, customer_table):
                 value=safe_get('kam_name')
             )
             
-            # KAM 부서 - DB값을 UI값으로 역변환
             current_kam_dept = safe_get('kam_department')
             kam_dept_ui_value = DEPARTMENT_REVERSE.get(current_kam_dept, "선택 안 함 / Không chọn / Not Selected")
             
@@ -667,7 +828,6 @@ def render_customer_edit_form(customer, update_func, customer_table):
                 key="edit_kam_department"
             )
             
-            # "기타" 선택 시 직접 입력
             if kam_department_ui == "기타 / Khác / Other":
                 default_kam_dept = current_kam_dept if current_kam_dept not in DEPARTMENT_MAPPING.values() else ""
                 kam_department_custom = st.text_input(
@@ -697,6 +857,63 @@ def render_customer_edit_form(customer, update_func, customer_table):
             kam_notes = st.text_area(
                 "KAM 메모 / Ghi chú KAM",
                 value=safe_get('kam_notes'),
+                height=100
+            )
+        
+        # ⭐ KAM II 정보
+        st.markdown("#### 🎯 KAM II 정보 / Thông tin KAM II")
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            kam2_name = st.text_input(
+                "KAM II 이름 / Tên KAM II",
+                value=safe_get('kam2_name')
+            )
+            
+            current_kam2_dept = safe_get('kam2_department')
+            kam2_dept_ui_value = DEPARTMENT_REVERSE.get(current_kam2_dept, "선택 안 함 / Không chọn / Not Selected")
+            
+            if kam2_dept_ui_value in DEPARTMENTS:
+                kam2_dept_index = DEPARTMENTS.index(kam2_dept_ui_value)
+            else:
+                kam2_dept_index = DEPARTMENTS.index("기타 / Khác / Other")
+            
+            kam2_department_ui = st.selectbox(
+                "KAM II 부서 / Bộ phận KAM II",
+                DEPARTMENTS,
+                index=kam2_dept_index,
+                key="edit_kam2_department"
+            )
+            
+            if kam2_department_ui == "기타 / Khác / Other":
+                default_kam2_dept = current_kam2_dept if current_kam2_dept not in DEPARTMENT_MAPPING.values() else ""
+                kam2_department_custom = st.text_input(
+                    "KAM II 부서 입력 / Nhập bộ phận KAM II",
+                    value=default_kam2_dept,
+                    key="edit_kam2_department_custom"
+                )
+                kam2_department = kam2_department_custom.strip() if kam2_department_custom and kam2_department_custom.strip() else None
+            else:
+                kam2_department = DEPARTMENT_MAPPING.get(kam2_department_ui)
+            
+            kam2_position = st.text_input(
+                "KAM II 직책 / Chức vụ KAM II",
+                value=safe_get('kam2_position')
+            )
+            
+            kam2_email = st.text_input(
+                "KAM II 이메일 / Email KAM II",
+                value=safe_get('kam2_email')
+            )
+            
+        with col2:
+            kam2_phone = st.text_input(
+                "KAM II 연락처 / Số điện thoại KAM II",
+                value=safe_get('kam2_phone')
+            )
+            kam2_notes = st.text_area(
+                "KAM II 메모 / Ghi chú KAM II",
+                value=safe_get('kam2_notes'),
                 height=100
             )
         
@@ -750,10 +967,10 @@ def render_customer_edit_form(customer, update_func, customer_table):
                 'company_name_english': company_name_english.strip() if company_name_english and company_name_english.strip() else None,
                 'tax_id': tax_id.strip() if tax_id and tax_id.strip() else None,
                 'business_type': BUSINESS_TYPE_MAPPING.get(business_type_ui),
-                'country': country,
+                'country': selected_country,  # ⭐ form 밖에서 선택한 국가 사용
                 'city': city,
                 'address': address.strip() if address and address.strip() else None,
-                'locations': json.dumps(locations) if locations else json.dumps([]),  # ⭐ JSON으로 저장
+                'locations': json.dumps(locations) if locations else json.dumps([]),
                 'contact_person': contact_person.strip() if contact_person and contact_person.strip() else None,
                 'contact_department': contact_department,
                 'position': position,
@@ -761,12 +978,28 @@ def render_customer_edit_form(customer, update_func, customer_table):
                 'phone': phone.strip() if phone and phone.strip() else None,
                 'mobile': mobile.strip() if mobile and mobile.strip() else None,
                 'payment_terms': payment_terms if payment_terms else None,
+                # ⭐ 구매 직원 정보
+                'purchasing_person': purchasing_person.strip() if purchasing_person and purchasing_person.strip() else None,
+                'purchasing_department': purchasing_department,
+                'purchasing_position': purchasing_position,
+                'purchasing_email': purchasing_email.strip() if purchasing_email and purchasing_email.strip() else None,
+                'purchasing_phone': purchasing_phone.strip() if purchasing_phone and purchasing_phone.strip() else None,
+                'purchasing_mobile': purchasing_mobile.strip() if purchasing_mobile and purchasing_mobile.strip() else None,
+                'purchasing_notes': purchasing_notes.strip() if purchasing_notes and purchasing_notes.strip() else None,
+                # KAM 정보
                 'kam_name': kam_name.strip() if kam_name and kam_name.strip() else None,
                 'kam_department': kam_department,
                 'kam_position': kam_position.strip() if kam_position and kam_position.strip() else None,
                 'kam_email': kam_email.strip() if kam_email and kam_email.strip() else None,
                 'kam_phone': kam_phone.strip() if kam_phone and kam_phone.strip() else None,
                 'kam_notes': kam_notes.strip() if kam_notes and kam_notes.strip() else None,
+                # ⭐ KAM II 정보
+                'kam2_name': kam2_name.strip() if kam2_name and kam2_name.strip() else None,
+                'kam2_department': kam2_department,
+                'kam2_position': kam2_position.strip() if kam2_position and kam2_position.strip() else None,
+                'kam2_email': kam2_email.strip() if kam2_email and kam2_email.strip() else None,
+                'kam2_phone': kam2_phone.strip() if kam2_phone and kam2_phone.strip() else None,
+                'kam2_notes': kam2_notes.strip() if kam2_notes and kam2_notes.strip() else None,
                 'status': status,
                 'notes': notes.strip() if notes and notes.strip() else None,
                 'updated_at': datetime.now().isoformat()
@@ -1171,7 +1404,7 @@ def render_customer_detail_view(customer, update_func, delete_func, load_func, c
     
     st.markdown("---")
     
-    # ⭐ 고객 위치 정보 (최대 3개)
+    # 고객 위치 정보 (최대 3개)
     st.markdown("#### 📍 고객 위치")
     
     import json
@@ -1195,7 +1428,7 @@ def render_customer_detail_view(customer, update_func, delete_func, load_func, c
             if map_link and map_link.strip():
                 st.markdown(f"  🗺️ [구글 지도 보기]({map_link})")
             else:
-                st.write("  🗺️지도 링크 없음")
+                st.write("  🗺️ 지도 링크 없음")
             
             if i < len(locations):
                 st.write("")
@@ -1228,6 +1461,37 @@ def render_customer_detail_view(customer, update_func, delete_func, load_func, c
     
     st.markdown("---")
     
+    # ⭐ 구매 직원 정보
+    st.markdown("#### 🛒 구매 직원 정보")
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        st.write(f"**구매 직원명:** {safe_get('purchasing_person', 'N/A')}")
+        
+        # 구매 직원 부서 변환
+        purchasing_dept_db = safe_get('purchasing_department')
+        purchasing_dept_ui = DEPARTMENT_REVERSE.get(purchasing_dept_db, purchasing_dept_db or 'N/A')
+        st.write(f"**부서:** {purchasing_dept_ui}")
+        
+        # 구매 직원 직책 변환
+        purchasing_position_db = safe_get('purchasing_position')
+        purchasing_position_ui = POSITION_REVERSE.get(purchasing_position_db, purchasing_position_db or 'N/A')
+        st.write(f"**직책:** {purchasing_position_ui}")
+        
+        st.write(f"**이메일:** {safe_get('purchasing_email', 'N/A')}")
+    
+    with col2:
+        st.write(f"**연락처:** {safe_get('purchasing_phone', 'N/A')}")
+        st.write(f"**모바일:** {safe_get('purchasing_mobile', 'N/A')}")
+        
+    # 구매 직원 메모
+    purchasing_notes = safe_get('purchasing_notes')
+    if purchasing_notes and purchasing_notes != 'N/A':
+        st.write(f"**구매 직원 메모:**")
+        st.info(purchasing_notes)
+    
+    st.markdown("---")
+    
     # KAM 정보
     st.markdown("#### 🎯 KAM 정보")
     col1, col2 = st.columns(2)
@@ -1251,6 +1515,32 @@ def render_customer_detail_view(customer, update_func, delete_func, load_func, c
     if kam_notes and kam_notes != 'N/A':
         st.write(f"**KAM 메모:**")
         st.info(kam_notes)
+    
+    st.markdown("---")
+    
+    # ⭐ KAM II 정보
+    st.markdown("#### 🎯 KAM II 정보")
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        st.write(f"**KAM II 이름:** {safe_get('kam2_name', 'N/A')}")
+        
+        # KAM II 부서 변환
+        kam2_dept_db = safe_get('kam2_department')
+        kam2_dept_ui = DEPARTMENT_REVERSE.get(kam2_dept_db, kam2_dept_db or 'N/A')
+        st.write(f"**KAM II 부서:** {kam2_dept_ui}")
+        
+        st.write(f"**KAM II 직책:** {safe_get('kam2_position', 'N/A')}")
+        st.write(f"**KAM II 이메일:** {safe_get('kam2_email', 'N/A')}")
+    
+    with col2:
+        st.write(f"**KAM II 연락처:** {safe_get('kam2_phone', 'N/A')}")
+        
+    # KAM II 메모
+    kam2_notes = safe_get('kam2_notes')
+    if kam2_notes and kam2_notes != 'N/A':
+        st.write(f"**KAM II 메모:**")
+        st.info(kam2_notes)
     
     st.markdown("---")
     
@@ -1325,7 +1615,7 @@ def render_customer_detail_view(customer, update_func, delete_func, load_func, c
                 st.rerun()
 
 def render_customer_statistics(load_func, customer_table):
-    """고객 통계 탭"""
+    """고객 통계 탭 (활성 고객만)"""
     st.header("고객 통계 / Thống kê khách hàng")
     
     try:
@@ -1345,46 +1635,52 @@ def render_customer_statistics(load_func, customer_table):
             st.info("통계를 표시할 고객 데이터가 없습니다. / Không có dữ liệu để hiển thị thống kê.")
             return
         
+        # ⭐ 활성 고객만 필터링
+        active_customers_df = customers_df[customers_df['status'] == 'active'].copy()
+        
+        if active_customers_df.empty:
+            st.warning("⚠️ 활성 상태인 고객이 없습니다. 고객 상태를 '활성'으로 설정해주세요.")
+            st.info(f"전체 고객: {len(customers_df)}개 (활성: 0개)")
+            return
+        
         # 전체 통계
         st.subheader("📊 전체 통계 / Tổng quan")
-        col1, col2, col3, col4 = st.columns(4)
+        
+        col1, col2, col3 = st.columns(3)
         
         with col1:
-            total_customers = len(customers_df)
-            st.metric("총 고객 수 / Tổng số KH", total_customers)
+            st.metric("활성 고객 수 / KH hoạt động", len(active_customers_df))
         
         with col2:
-            active_customers = len(customers_df[customers_df['status'] == 'Active'])
-            st.metric("활성 고객 / KH hoạt động", active_customers)
+            inactive_count = len(customers_df[customers_df['status'] == 'inactive'])
+            st.metric("비활성 고객 / KH không hoạt động", inactive_count)
         
         with col3:
-            inactive_customers = len(customers_df[customers_df['status'] == 'Inactive'])
-            st.metric("비활성 고객 / KH không hoạt động", inactive_customers)
+            potential_count = len(customers_df[customers_df['status'] == 'potential'])
+            st.metric("잠재 고객 / KH tiềm năng", potential_count)
         
-        with col4:
-            pending_customers = len(customers_df[customers_df['status'] == 'Pending'])
-            st.metric("대기 고객 / KH đang chờ", pending_customers)
+        st.caption(f"💡 통계는 **활성 고객 {len(active_customers_df)}개사**만 대상으로 합니다.")
         
         st.markdown("---")
         
-        # 업종별 통계
-        st.subheader("🏭 업종별 통계 / Thống kê theo ngành nghề")
+        # 업종별 통계 (활성 고객만)
+        st.subheader("🏭 업종별 통계 (활성) / Thống kê theo ngành nghề")
         
-        if 'business_type' in customers_df.columns:
-            business_counts = customers_df['business_type'].value_counts()
+        if 'business_type' in active_customers_df.columns:
+            business_counts = active_customers_df['business_type'].value_counts()
             
             if not business_counts.empty:
-                # 테이블 형식
                 col1, col2 = st.columns([2, 3])
                 
                 with col1:
                     st.write("**업종별 고객 수 / Số KH theo ngành:**")
                     for business_type, count in business_counts.items():
-                        percentage = (count / total_customers * 100)
-                        st.write(f"• {business_type}: **{count}개** ({percentage:.1f}%)")
+                        percentage = (count / len(active_customers_df) * 100)
+                        # DB 값을 UI 값으로 변환
+                        business_type_ui = BUSINESS_TYPE_REVERSE.get(business_type, business_type)
+                        st.write(f"• {business_type_ui}: **{count}개** ({percentage:.1f}%)")
                 
                 with col2:
-                    # 차트
                     st.bar_chart(business_counts)
             else:
                 st.info("업종 데이터가 없습니다. / Không có dữ liệu ngành nghề.")
@@ -1393,11 +1689,11 @@ def render_customer_statistics(load_func, customer_table):
         
         st.markdown("---")
         
-        # 국가별 통계
-        st.subheader("🌍 국가별 통계 / Thống kê theo quốc gia")
+        # 국가별 통계 (활성 고객만)
+        st.subheader("🌍 국가별 통계 (활성) / Thống kê theo quốc gia")
         
-        if 'country' in customers_df.columns:
-            country_counts = customers_df['country'].value_counts()
+        if 'country' in active_customers_df.columns:
+            country_counts = active_customers_df['country'].value_counts()
             
             if not country_counts.empty:
                 col1, col2 = st.columns([2, 3])
@@ -1405,7 +1701,7 @@ def render_customer_statistics(load_func, customer_table):
                 with col1:
                     st.write("**국가별 고객 수 / Số KH theo quốc gia:**")
                     for country, count in country_counts.items():
-                        percentage = (count / total_customers * 100)
+                        percentage = (count / len(active_customers_df) * 100)
                         st.write(f"• {country}: **{count}개** ({percentage:.1f}%)")
                 
                 with col2:
@@ -1417,12 +1713,11 @@ def render_customer_statistics(load_func, customer_table):
         
         st.markdown("---")
         
-        # 도시별 통계
-        st.subheader("🏙️ 도시별 통계 / Thống kê theo thành phố")
+        # 도시별 통계 (활성 고객만)
+        st.subheader("🏙️ 도시별 통계 (활성) / Thống kê theo thành phố")
         
-        if 'city' in customers_df.columns:
-            # 도시 데이터가 있는 행만 필터
-            city_df = customers_df[customers_df['city'].notna()]
+        if 'city' in active_customers_df.columns:
+            city_df = active_customers_df[active_customers_df['city'].notna()]
             
             if not city_df.empty:
                 city_counts = city_df['city'].value_counts()
@@ -1431,7 +1726,6 @@ def render_customer_statistics(load_func, customer_table):
                 
                 with col1:
                     st.write("**도시별 고객 수 / Số KH theo thành phố:**")
-                    # 상위 10개 도시만 표시
                     for city, count in city_counts.head(10).items():
                         percentage = (count / len(city_df) * 100)
                         st.write(f"• {city}: **{count}개** ({percentage:.1f}%)")
@@ -1440,7 +1734,6 @@ def render_customer_statistics(load_func, customer_table):
                         st.caption(f"...외 {len(city_counts) - 10}개 도시 / ...và {len(city_counts) - 10} thành phố khác")
                 
                 with col2:
-                    # 상위 10개 도시 차트
                     st.bar_chart(city_counts.head(10))
             else:
                 st.info("도시 데이터가 없습니다. / Không có dữ liệu thành phố.")
@@ -1449,12 +1742,12 @@ def render_customer_statistics(load_func, customer_table):
         
         st.markdown("---")
         
-        # KAM 할당 통계
-        st.subheader("👥 KAM 할당 통계 / Thống kê phân công KAM")
+        # KAM 할당 통계 (활성 고객만)
+        st.subheader("👥 KAM 할당 통계 (활성) / Thống kê phân công KAM")
         
-        if 'kam_name' in customers_df.columns:
-            kam_assigned = len(customers_df[customers_df['kam_name'].notna()])
-            kam_unassigned = len(customers_df[customers_df['kam_name'].isna()])
+        if 'kam_name' in active_customers_df.columns:
+            kam_assigned = len(active_customers_df[active_customers_df['kam_name'].notna()])
+            kam_unassigned = len(active_customers_df[active_customers_df['kam_name'].isna()])
             
             col1, col2, col3 = st.columns(3)
             
@@ -1465,7 +1758,7 @@ def render_customer_statistics(load_func, customer_table):
                 st.metric("KAM 미할당 / Chưa gán KAM", kam_unassigned)
             
             with col3:
-                assignment_rate = (kam_assigned / total_customers * 100) if total_customers > 0 else 0
+                assignment_rate = (kam_assigned / len(active_customers_df) * 100) if len(active_customers_df) > 0 else 0
                 st.metric("할당률 / Tỷ lệ phân công", f"{assignment_rate:.1f}%")
             
             # KAM별 담당 고객 수
@@ -1473,7 +1766,7 @@ def render_customer_statistics(load_func, customer_table):
                 st.write("")
                 st.write("**KAM별 담당 고객 수 / Số KH theo KAM:**")
                 
-                kam_customers = customers_df[customers_df['kam_name'].notna()]
+                kam_customers = active_customers_df[active_customers_df['kam_name'].notna()]
                 kam_counts = kam_customers['kam_name'].value_counts()
                 
                 col1, col2 = st.columns([2, 3])
