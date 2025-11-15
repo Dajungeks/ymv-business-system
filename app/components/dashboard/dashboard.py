@@ -1,7 +1,7 @@
 """
-YMV ERP 시스템 - 대시보드 컴포넌트 (Step 9 완료)
-Dashboard Component for YMV ERP System - Step 9 Complete
-백업 파일과 호환되는 안전한 필드 접근 방식 적용
+YMV ERP 시스템 - 대시보드 컴포넌트 (수정 완료)
+Dashboard Component for YMV ERP System - Fixed
+데이터베이스 호출 방식 정상화
 """
 
 import streamlit as st
@@ -13,8 +13,8 @@ import calendar
 
 def show_dashboard_main(load_data_func, get_current_user_func):
     """
-    메인 대시보드 함수 (백업 파일과 호환)
-    Main dashboard function compatible with backup file
+    메인 대시보드 함수
+    Main dashboard function
     """
     st.title("📊 YMV 관리 시스템 대시보드")
     
@@ -50,16 +50,15 @@ def show_dashboard_main(load_data_func, get_current_user_func):
 
 def render_overview_metrics(col1, col2, col3, load_data_func):
     """
-    개요 통계 메트릭 렌더링 (안전한 필드 체크)
-    Render overview metrics with safe field checking
+    개요 통계 메트릭 렌더링
+    Render overview metrics
     """
     try:
         # 지출 요청서 통계
         with col1:
-            expenses = load_data_func("expenses", "*", None)
+            expenses = load_data_func("expenses")  # ✅ 수정됨
             if expenses:
                 total_expenses = len(expenses)
-                # 안전한 필드 접근 - 백업 파일과 호환
                 pending_count = sum(1 for exp in expenses if exp.get('approval_status') == '대기중' or exp.get('status') == 'pending')
                 approved_count = sum(1 for exp in expenses if exp.get('approval_status') == '승인됨' or exp.get('status') == 'approved')
                 
@@ -78,10 +77,9 @@ def render_overview_metrics(col1, col2, col3, load_data_func):
         
         # 견적서 통계
         with col2:
-            quotations = load_data_func("quotations", "*", None)
+            quotations = load_data_func("quotations")  # ✅ 수정됨
             if quotations:
                 total_quotations = len(quotations)
-                # 안전한 필드 접근
                 total_amount = sum(
                     float(q.get('total_amount', 0)) for q in quotations 
                     if q.get('total_amount') is not None
@@ -97,7 +95,7 @@ def render_overview_metrics(col1, col2, col3, load_data_func):
         
         # 구매 요청 통계
         with col3:
-            purchases = load_data_func("purchases", "*", None)
+            purchases = load_data_func("purchases")  # ✅ 수정됨
             if purchases:
                 total_purchases = len(purchases)
                 pending_purchases = sum(1 for p in purchases if p.get('status') == '대기중' or p.get('status') == 'requested')
@@ -135,14 +133,13 @@ def render_status_charts(load_data_func):
 
 
 def render_expense_status_chart(load_data_func):
-    """지출 요청서 상태별 차트 (백업 파일과 호환)"""
+    """지출 요청서 상태별 차트"""
     try:
-        expenses = load_data_func("expenses", "*", None)
+        expenses = load_data_func("expenses")  # ✅ 수정됨
         if expenses:
-            # 상태별 집계 - 백업 파일과 호환되는 방식
+            # 상태별 집계
             status_count = defaultdict(int)
             for exp in expenses:
-                # 두 가지 필드명 모두 지원
                 status = exp.get('approval_status') or exp.get('status', '미분류')
                 # 상태값 정규화
                 if status in ['pending', '대기중']:
@@ -188,7 +185,7 @@ def render_expense_status_chart(load_data_func):
 def render_purchase_status_chart(load_data_func):
     """구매 요청 상태별 차트"""
     try:
-        purchases = load_data_func("purchases", "*", None)
+        purchases = load_data_func("purchases")  # ✅ 수정됨
         if purchases:
             # 상태별 집계
             status_count = defaultdict(int)
@@ -231,21 +228,19 @@ def render_purchase_status_chart(load_data_func):
 
 
 def render_monthly_trends(load_data_func):
-    """월별 동향 차트 (백업 파일과 호환)"""
+    """월별 동향 차트"""
     try:
         # 현재 년도 기준으로 월별 데이터 수집
         current_year = datetime.now().year
         monthly_data = defaultdict(lambda: {'expenses': 0, 'purchases': 0, 'quotations': 0})
         
         # 지출 요청서 월별 집계
-        expenses = load_data_func("expenses", "*", None)
+        expenses = load_data_func("expenses")  # ✅ 수정됨
         if expenses:
             for exp in expenses:
-                # 여러 날짜 필드 지원
                 created_at = exp.get('created_at') or exp.get('request_date') or exp.get('expense_date')
                 if created_at:
                     try:
-                        # 다양한 날짜 형식 지원
                         if isinstance(created_at, str):
                             if 'T' in created_at:
                                 dt = datetime.fromisoformat(created_at.replace('Z', '+00:00'))
@@ -261,7 +256,7 @@ def render_monthly_trends(load_data_func):
                         continue
         
         # 구매 요청 월별 집계
-        purchases = load_data_func("purchases", "*", None)
+        purchases = load_data_func("purchases")  # ✅ 수정됨
         if purchases:
             for purchase in purchases:
                 created_at = purchase.get('created_at') or purchase.get('request_date')
@@ -282,7 +277,7 @@ def render_monthly_trends(load_data_func):
                         continue
         
         # 견적서 월별 집계
-        quotations = load_data_func("quotations", "*", None)
+        quotations = load_data_func("quotations")  # ✅ 수정됨
         if quotations:
             for quot in quotations:
                 created_at = quot.get('created_at') or quot.get('quote_date')
@@ -350,30 +345,27 @@ def render_monthly_trends(load_data_func):
 
 def render_recent_activities(load_data_func, current_user):
     """
-    최근 활동 렌더링 (백업 파일과 호환)
-    Render recent activities compatible with backup file
+    최근 활동 렌더링
+    Render recent activities
     """
     st.subheader("🕒 최근 활동")
     
     try:
         recent_activities = []
         
-        # 현재 사용자의 최근 지출 요청서 (최대 5개)
-        expenses = load_data_func("expenses", "*", None)
+        # 현재 사용자의 최근 지출 요청서
+        expenses = load_data_func("expenses")  # ✅ 수정됨
         if expenses and current_user:
             user_expenses = []
             
-            # 요청자 필드 확인 (여러 필드명 지원)
+            # 요청자 필드 확인
             for exp in expenses:
                 requester_match = False
                 
-                # employee_id 필드가 있는 경우
                 if exp.get('employee_id') == current_user.get('id'):
                     requester_match = True
-                # requester 필드가 있는 경우
                 elif exp.get('requester') == current_user.get('id'):
                     requester_match = True
-                # user_id 필드가 있는 경우
                 elif exp.get('user_id') == current_user.get('id'):
                     requester_match = True
                 
@@ -402,7 +394,6 @@ def render_recent_activities(load_data_func, current_user):
                     date_str = '날짜불명'
                 
                 amount = exp.get('amount', 0)
-                # 상태 필드 통합
                 status = exp.get('approval_status') or exp.get('status', '미분류')
                 if status == 'pending':
                     status = '대기중'
@@ -411,7 +402,6 @@ def render_recent_activities(load_data_func, current_user):
                 elif status == 'rejected':
                     status = '거부됨'
                 
-                # 내용 필드 통합
                 content = exp.get('expense_details') or exp.get('description') or exp.get('content', '내용없음')
                 
                 recent_activities.append({
@@ -422,11 +412,11 @@ def render_recent_activities(load_data_func, current_user):
                     'status': status
                 })
         
-        # 최근 구매 요청 (관리자인 경우 전체, 일반사용자인 경우 본인것만)
-        purchases = load_data_func("purchases", "*", None)
+        # 최근 구매 요청
+        purchases = load_data_func("purchases")  # ✅ 수정됨
         if purchases and current_user:
             if current_user.get('role') == 'manager':
-                user_purchases = purchases  # 관리자는 전체
+                user_purchases = purchases
             else:
                 user_purchases = [
                     p for p in purchases 
@@ -519,21 +509,21 @@ def get_dashboard_metrics_summary(load_data_func):
         }
         
         # 지출 요청서 통계
-        expenses = load_data_func("expenses", "*", None)
+        expenses = load_data_func("expenses")  # ✅ 수정됨
         if expenses:
             summary['expenses']['total'] = len(expenses)
             summary['expenses']['pending'] = sum(1 for exp in expenses if exp.get('approval_status') == '대기중' or exp.get('status') == 'pending')
             summary['expenses']['approved'] = sum(1 for exp in expenses if exp.get('approval_status') == '승인됨' or exp.get('status') == 'approved')
         
         # 구매 요청 통계
-        purchases = load_data_func("purchases", "*", None)
+        purchases = load_data_func("purchases")  # ✅ 수정됨
         if purchases:
             summary['purchases']['total'] = len(purchases)
             summary['purchases']['pending'] = sum(1 for p in purchases if p.get('status') in ['대기중', 'requested'])
             summary['purchases']['completed'] = sum(1 for p in purchases if p.get('status') in ['완료됨', 'received'])
         
         # 견적서 통계
-        quotations = load_data_func("quotations", "*", None)
+        quotations = load_data_func("quotations")  # ✅ 수정됨
         if quotations:
             summary['quotations']['total'] = len(quotations)
             summary['quotations']['total_amount'] = sum(

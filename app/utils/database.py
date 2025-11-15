@@ -50,13 +50,21 @@ def save_data(table_name: str, data: Dict[str, Any]) -> Optional[Dict]:
         logging.error(f"데이터 저장 오류 ({table_name}): {str(e)}")
         return None
 
-def load_data(table_name: str, filters: Optional[Dict[str, Any]] = None) -> List[Dict]:
-    """데이터 로드"""
+def load_data(table_name: str, columns: str = "*", filters: Optional[Dict[str, Any]] = None) -> List[Dict]:
+    """
+    데이터 로드
+    Args:
+        table_name: 테이블 명
+        columns: 선택할 컬럼 (호환성을 위해 존재, 항상 "*" 사용)
+        filters: 필터 조건 딕셔너리
+    Returns:
+        데이터 리스트
+    """
     try:
         conn = get_connection()
-        query = conn.table(table_name).select("*")
+        query = conn.table(table_name).select("*")  # columns 인자는 무시하고 항상 "*" 사용
         
-        if filters:
+        if filters and isinstance(filters, dict):  # ✅ dict 타입 체크 추가
             for key, value in filters.items():
                 query = query.eq(key, value)
         
@@ -644,10 +652,15 @@ def create_database_operations(supabase_client):
         def __init__(self, client):
             self.client = client
         
-        def load_data(self, table_name, filters=None, *args, **kwargs):
-            """데이터 로드 (유연한 인자 처리)"""
-            return load_data(table_name, filters)
-        
+        def load_data(self, table_name, columns="*", filters=None, *args, **kwargs):
+            """
+            데이터 로드 (유연한 인자 처리)
+            Args:
+                table_name: 테이블 명
+                columns: 컬럼 선택 (호환성용, 무시됨)
+                filters: 필터 조건
+            """
+            return load_data(table_name, columns, filters)
         def save_data(self, table_name, data, *args, **kwargs):
             """데이터 저장 (유연한 인자 처리)"""
             return save_data(table_name, data)

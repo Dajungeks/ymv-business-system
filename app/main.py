@@ -49,7 +49,7 @@ from components.operations.purchase_management import show_purchase_management
 from components.logistics.logistics_management import show_logistics_management
 
 # 내부 컴포넌트 - Dashboard
-from components.dashboard.dashboard import show_dashboard_main
+from components.dashboard import show_dashboard_main
 
 # 내부 컴포넌트 - System
 from components.system.multilingual_input import MultilingualInputComponent

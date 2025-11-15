@@ -404,7 +404,6 @@ def render_customer_search_for_quotation(load_func, customer_table):
     except Exception as e:
         st.error(f"❌ 고객 검색 중 오류: {str(e)}")
 
-
 def render_quotation_form_with_customer(save_func, load_func, customer_table, quotation_table, product_table):
     """선택한 고객으로 견적서 작성 - 여러 제품 추가 가능"""
     selected_customer = st.session_state.get('selected_customer_for_quotation', {})
@@ -472,18 +471,27 @@ def render_quotation_form_with_customer(save_func, load_func, customer_table, qu
             
             st.success(f"✅ 선택된 제품: {selected_product_data.get('product_code', '')} - {selected_product_data.get('product_name_vn', '')}")
             
-            col1, col2, col3, col4 = st.columns(4)
+            col1, col2, col3 = st.columns(3)
             with col1:
                 item_quantity = st.number_input("수량", min_value=1, value=1, key="item_qty_temp")
             with col2:
                 item_unit_price = st.number_input("단가 (VND)", min_value=0.0, value=float(selected_product_data.get('actual_selling_price_vnd', 0)), step=10000.0, format="%.0f", key="item_price_temp")
             with col3:
                 st.metric("합계", f"{item_quantity * item_unit_price:,.0f} VND")
-            with col4:
-                st.write("")
-                st.write("")
+            
+            # ✅ 상세 설명 입력란 추가
+            item_detail_description = st.text_area(
+                "상세 설명 (선택사항)", 
+                placeholder="예: 특수 코팅, 색상 지정, 포장 방법, 기타 요구사항 등",
+                height=80,
+                key="item_detail_desc_temp",
+                help="이 내용은 견적서 출력 시 제품명 아래에 표시됩니다."
+            )
+            
+            col_btn1, col_btn2, col_btn3 = st.columns([2, 1, 2])
+            with col_btn2:
                 if st.button("➕ 항목 추가", type="primary", use_container_width=True):
-                    if len(st.session_state.quotation_items) < 5:  # ✅ 다시 한번 체크
+                    if len(st.session_state.quotation_items) < 5:
                         item = {
                             'product_id': selected_product_data.get('id'),
                             'product_code': selected_product_data.get('product_code'),
@@ -492,7 +500,8 @@ def render_quotation_form_with_customer(save_func, load_func, customer_table, qu
                             'quantity': item_quantity,
                             'unit_price_vnd': item_unit_price,
                             'line_total': item_quantity * item_unit_price,
-                            'cost_price_usd': selected_product_data.get('cost_price_usd', 0)
+                            'cost_price_usd': selected_product_data.get('cost_price_usd', 0),
+                            'item_detail_description': item_detail_description.strip() if item_detail_description else ''
                         }
                         st.session_state.quotation_items.append(item)
                         st.session_state.pop('selected_product_for_quotation_new', None)
@@ -508,30 +517,80 @@ def render_quotation_form_with_customer(save_func, load_func, customer_table, qu
         
         items_data = []
         for idx, item in enumerate(st.session_state.quotation_items):
+            detail_text = item.get('item_detail_description', '')
+            detail_preview = detail_text[:30] + '...' if len(detail_text) > 30 else detail_text
+            
             items_data.append({
                 'No': idx + 1,
                 'Code': item['product_code'],
                 '품명': item['product_name_vn'],
+                '상세설명': detail_preview if detail_preview else '-',
                 '수량': f"{item['quantity']:,}",
                 '단가': f"{item['unit_price_vnd']:,.0f}",
                 '합계': f"{item['line_total']:,.0f}",
-                '삭제': idx
             })
         
         df_items = pd.DataFrame(items_data)
-        st.dataframe(df_items[['No', 'Code', '품명', '수량', '단가', '합계']], use_container_width=True, hide_index=True)
+        st.dataframe(df_items[['No', 'Code', '품명', '상세설명', '수량', '단가', '합계']], use_container_width=True, hide_index=True)
         
-        # 항목 삭제
-        col1, col2 = st.columns([3, 1])
+        # ✅ 항목 수정/삭제
+        st.markdown("---")
+        col1, col2, col3, col4 = st.columns([2, 1, 1, 2])
+        
         with col1:
-            delete_idx = st.number_input("삭제할 항목 번호", min_value=1, max_value=len(st.session_state.quotation_items), value=1, key="delete_item_idx")
+            action_idx = st.number_input("항목 번호", min_value=1, max_value=len(st.session_state.quotation_items), value=1, key="action_item_idx")
+        
         with col2:
-            st.write("")
-            st.write("")
+            if st.button("✏️ 수정", use_container_width=True):
+                st.session_state.editing_item_idx = action_idx - 1
+                st.rerun()
+        
+        with col3:
             if st.button("🗑️ 삭제", use_container_width=True):
-                st.session_state.quotation_items.pop(delete_idx - 1)
+                st.session_state.quotation_items.pop(action_idx - 1)
                 st.success("✅ 항목이 삭제되었습니다!")
                 st.rerun()
+        
+        # ✅ 항목 수정 UI
+        if st.session_state.get('editing_item_idx') is not None:
+            editing_idx = st.session_state.editing_item_idx
+            editing_item = st.session_state.quotation_items[editing_idx]
+            
+            st.markdown("---")
+            st.subheader(f"📝 항목 {editing_idx + 1} 수정")
+            
+            st.info(f"제품: {editing_item['product_code']} - {editing_item['product_name_vn']}")
+            
+            col1, col2 = st.columns(2)
+            with col1:
+                edit_quantity = st.number_input("수량", min_value=1, value=editing_item['quantity'], key="edit_qty")
+            with col2:
+                edit_unit_price = st.number_input("단가 (VND)", min_value=0.0, value=float(editing_item['unit_price_vnd']), step=10000.0, format="%.0f", key="edit_price")
+            
+            edit_detail_description = st.text_area(
+                "상세 설명", 
+                value=editing_item.get('item_detail_description', ''),
+                height=80,
+                key="edit_detail_desc"
+            )
+            
+            st.metric("합계", f"{edit_quantity * edit_unit_price:,.0f} VND")
+            
+            col_save, col_cancel = st.columns(2)
+            with col_save:
+                if st.button("💾 수정 저장", type="primary", use_container_width=True):
+                    st.session_state.quotation_items[editing_idx]['quantity'] = edit_quantity
+                    st.session_state.quotation_items[editing_idx]['unit_price_vnd'] = edit_unit_price
+                    st.session_state.quotation_items[editing_idx]['line_total'] = edit_quantity * edit_unit_price
+                    st.session_state.quotation_items[editing_idx]['item_detail_description'] = edit_detail_description.strip()
+                    st.session_state.pop('editing_item_idx', None)
+                    st.success("✅ 항목이 수정되었습니다!")
+                    st.rerun()
+            
+            with col_cancel:
+                if st.button("❌ 취소", use_container_width=True):
+                    st.session_state.pop('editing_item_idx', None)
+                    st.rerun()
         
         # 총 금액 계산
         exchange_rate = 26387.45
@@ -639,9 +698,9 @@ def render_quotation_form_with_customer(save_func, load_func, customer_table, qu
                 'quote_date': quote_date.isoformat(),
                 'valid_until': valid_until.isoformat(),
                 'customer_id': selected_customer['id'],
-                'contact_person': (selected_customer.get('contact_person') or '')[:100],  # ✅ 수정
-                'email': (selected_customer.get('email') or '')[:100],  # ✅ 수정
-                'phone': (selected_customer.get('phone') or '')[:20],  # ✅ 수정
+                'contact_person': (selected_customer.get('contact_person') or '')[:100],
+                'email': (selected_customer.get('email') or '')[:100],
+                'phone': (selected_customer.get('phone') or '')[:20],
                 'customer_address': selected_customer.get('address'),
                 'quote_number': quote_number[:30],
                 'revision_number': 'Rv00',
@@ -679,38 +738,41 @@ def render_quotation_form_with_customer(save_func, load_func, customer_table, qu
                 'updated_at': datetime.now().isoformat()
             }
 
-            # 견적서 저장
-            quotation_id = save_func(quotation_table, quotation_data)
+            # ✅ 견적서 저장
+            quotation_result = save_func(quotation_table, quotation_data)
             
-            if quotation_id:
+            if quotation_result:
+                # ✅ 딕셔너리에서 ID 추출
+                quotation_id = quotation_result.get('id') if isinstance(quotation_result, dict) else quotation_result
+                
                 # quotation_items 저장
-                # 법인별 quotation_items 테이블
                 current_user = st.session_state.get('current_user', {})
                 company_code = current_user.get('company', 'YMV')
                 from utils.helpers import get_company_table
-                quotation_items_table = f'quotation_items_{company_code.lower()}'  # 'quotation_items_ymv'
+                quotation_items_table = f'quotation_items_{company_code.lower()}'
 
-                # quotation_items 저장
+                # ✅ quotation_items 저장 (item_detail_description 추가)
                 for item in st.session_state.quotation_items:
                     item_data = {
                         'quotation_id': quotation_id,
                         'product_id': item['product_id'],
                         'item_description': f"{item['product_code']} - {item['product_name_vn']}",
+                        'item_detail_description': item.get('item_detail_description', ''),
                         'quantity': item['quantity'],
                         'unit_price': item['unit_price_vnd'],
                         'line_total': item['line_total']
                     }
-                    save_func(quotation_items_table, item_data)  # ✅
+                    save_func(quotation_items_table, item_data)
 
                 save_type = "임시저장" if temp_save else "정식저장"
                 st.success(f"✅ 견적서가 성공적으로 {save_type}되었습니다!")
                 st.session_state.pop('selected_customer_for_quotation', None)
                 st.session_state.show_quotation_input_form = False
                 st.session_state.pop('quotation_items', None)
+                st.session_state.pop('editing_item_idx', None)
                 st.rerun()
             else:
                 st.error("❌ 견적서 저장에 실패했습니다.")
-
 
 def render_quotation_list(load_func, update_func, delete_func, save_func, 
                          customer_table, quotation_table):
@@ -822,7 +884,7 @@ def render_quotation_edit_inline(load_func, update_func, save_func, delete_func,
     employees_data = load_func('employees')
     products_table = get_company_table('products', company_code)
     products_data = load_func(products_table)
-    quotation_items_table = f'quotation_items_{company_code.lower()}'  # 'quotation_items_ymv'
+    quotation_items_table = f'quotation_items_{company_code.lower()}'
     
     customers_df = pd.DataFrame(customers_data) if customers_data else pd.DataFrame()
     employees_df = pd.DataFrame(employees_data) if employees_data else pd.DataFrame()
@@ -852,7 +914,8 @@ def render_quotation_edit_inline(load_func, update_func, save_func, delete_func,
                         'quantity': item.get('quantity', 1),
                         'unit_price_vnd': item.get('unit_price', 0),
                         'line_total': item.get('line_total', 0),
-                        'cost_price_usd': product_data.get('cost_price_usd', 0)
+                        'cost_price_usd': product_data.get('cost_price_usd', 0),
+                        'item_detail_description': item.get('item_detail_description', '')
                     })
         else:
             st.session_state.editing_quotation_items = []
@@ -905,16 +968,25 @@ def render_quotation_edit_inline(load_func, update_func, save_func, delete_func,
             
             st.success(f"✅ 선택된 제품: {selected_product_data.get('product_code', '')} - {selected_product_data.get('product_name_vn', '')}")
             
-            col1, col2, col3, col4 = st.columns(4)
+            col1, col2, col3 = st.columns(3)
             with col1:
                 item_quantity = st.number_input("수량", min_value=1, value=1, key="item_qty_temp_edit")
             with col2:
                 item_unit_price = st.number_input("단가 (VND)", min_value=0.0, value=float(selected_product_data.get('actual_selling_price_vnd', 0)), step=10000.0, format="%.0f", key="item_price_temp_edit")
             with col3:
                 st.metric("합계", f"{item_quantity * item_unit_price:,.0f} VND")
-            with col4:
-                st.write("")
-                st.write("")
+            
+            # ✅ 상세 설명 입력란 추가
+            item_detail_description = st.text_area(
+                "상세 설명 (선택사항)", 
+                placeholder="예: 특수 코팅, 색상 지정, 포장 방법, 기타 요구사항 등",
+                height=80,
+                key="item_detail_desc_temp_edit",
+                help="이 내용은 견적서 출력 시 제품명 아래에 표시됩니다."
+            )
+            
+            col_btn1, col_btn2, col_btn3 = st.columns([2, 1, 2])
+            with col_btn2:
                 if st.button("➕ 항목 추가", type="primary", use_container_width=True, key="add_item_edit"):
                     if len(st.session_state.editing_quotation_items) < 5:
                         item = {
@@ -925,7 +997,8 @@ def render_quotation_edit_inline(load_func, update_func, save_func, delete_func,
                             'quantity': item_quantity,
                             'unit_price_vnd': item_unit_price,
                             'line_total': item_quantity * item_unit_price,
-                            'cost_price_usd': selected_product_data.get('cost_price_usd', 0)
+                            'cost_price_usd': selected_product_data.get('cost_price_usd', 0),
+                            'item_detail_description': item_detail_description.strip() if item_detail_description else ''
                         }
                         st.session_state.editing_quotation_items.append(item)
                         st.session_state.pop('selected_product_for_quotation_edit', None)
@@ -943,31 +1016,84 @@ def render_quotation_edit_inline(load_func, update_func, save_func, delete_func,
         
         items_data = []
         for idx, item in enumerate(st.session_state.editing_quotation_items):
+            detail_text = item.get('item_detail_description', '')
+            detail_preview = detail_text[:30] + '...' if len(detail_text) > 30 else detail_text
+            
             items_data.append({
                 'No': idx + 1,
                 'Code': item['product_code'],
                 '품명': item['product_name_vn'],
+                '상세설명': detail_preview if detail_preview else '-',
                 '수량': f"{item['quantity']:,}",
                 '단가': f"{item['unit_price_vnd']:,.0f}",
                 '합계': f"{item['line_total']:,.0f}",
-                '삭제': idx
             })
         
         df_items = pd.DataFrame(items_data)
-        st.dataframe(df_items[['No', 'Code', '품명', '수량', '단가', '합계']], use_container_width=True, hide_index=True)
+        st.dataframe(df_items[['No', 'Code', '품명', '상세설명', '수량', '단가', '합계']], use_container_width=True, hide_index=True)
+
+        # ✅ 항목 수정/삭제 UI
+        st.markdown("---")
+        st.markdown("### 항목 관리")
         
-        # 항목 삭제
-        col1, col2 = st.columns([3, 1])
+        col1, col2, col3, col4 = st.columns([2, 1, 1, 2])
+        
         with col1:
-            delete_idx = st.number_input("삭제할 항목 번호", min_value=1, max_value=len(st.session_state.editing_quotation_items), value=1, key="delete_item_idx_edit")
+            action_idx = st.number_input("항목 번호", min_value=1, max_value=len(st.session_state.editing_quotation_items), value=1, key="action_item_idx_edit")
+        
         with col2:
-            st.write("")
-            st.write("")
-            if st.button("🗑️ 삭제", use_container_width=True, key="delete_item_edit"):
-                st.session_state.editing_quotation_items.pop(delete_idx - 1)
-                st.success("✅ 항목이 삭제되었습니다!")
+            if st.button("✏️ 수정", use_container_width=True, key="btn_edit_item_edit"):
+                st.session_state.editing_item_idx_edit = action_idx - 1
                 st.rerun()
         
+        with col3:
+            if st.button("🗑️ 삭제", use_container_width=True, key="btn_delete_item_edit"):
+                st.session_state.editing_quotation_items.pop(action_idx - 1)
+                st.success("✅ 항목이 삭제되었습니다!")
+                st.rerun()
+
+        # ✅ 항목 수정 UI
+        if st.session_state.get('editing_item_idx_edit') is not None:
+            editing_idx = st.session_state.editing_item_idx_edit
+            editing_item = st.session_state.editing_quotation_items[editing_idx]
+            
+            st.markdown("---")
+            st.subheader(f"📝 항목 {editing_idx + 1} 수정")
+            
+            st.info(f"제품: {editing_item['product_code']} - {editing_item['product_name_vn']}")
+            
+            col1, col2 = st.columns(2)
+            with col1:
+                edit_quantity = st.number_input("수량", min_value=1, value=int(editing_item['quantity']), key="edit_qty_edit")
+            with col2:
+                edit_unit_price = st.number_input("단가 (VND)", min_value=0.0, value=float(editing_item['unit_price_vnd']), step=10000.0, format="%.0f", key="edit_price_edit")
+            
+            edit_detail_description = st.text_area(
+                "상세 설명", 
+                value=editing_item.get('item_detail_description', ''),
+                height=80,
+                key="edit_detail_desc_edit"
+            )
+            
+            st.metric("합계", f"{edit_quantity * edit_unit_price:,.0f} VND")
+            
+            col_save, col_cancel = st.columns(2)
+            with col_save:
+                if st.button("💾 수정 저장", type="primary", use_container_width=True, key="btn_save_edit_edit"):
+                    st.session_state.editing_quotation_items[editing_idx]['quantity'] = edit_quantity
+                    st.session_state.editing_quotation_items[editing_idx]['unit_price_vnd'] = edit_unit_price
+                    st.session_state.editing_quotation_items[editing_idx]['line_total'] = edit_quantity * edit_unit_price
+                    st.session_state.editing_quotation_items[editing_idx]['item_detail_description'] = edit_detail_description.strip()
+                    st.session_state.pop('editing_item_idx_edit', None)
+                    st.success("✅ 항목이 수정되었습니다!")
+                    st.rerun()
+            
+            with col_cancel:
+                if st.button("❌ 취소", use_container_width=True, key="btn_cancel_edit_edit"):
+                    st.session_state.pop('editing_item_idx_edit', None)
+                    st.rerun()
+
+
         # 총 금액 계산
         exchange_rate = 26387.45
         total_vnd = sum(item['line_total'] for item in st.session_state.editing_quotation_items)
@@ -1146,12 +1272,13 @@ def render_quotation_edit_inline(load_func, update_func, save_func, delete_func,
                     except Exception as delete_error:
                         st.warning(f"기존 항목 삭제 중 오류: {str(delete_error)}")
                     
-                    # ✅ 새 quotation_items 저장
+                    # ✅ 새 quotation_items 저장 (item_detail_description 포함)
                     for item in st.session_state.editing_quotation_items:
                         item_data = {
                             'quotation_id': editing_data['id'],
                             'product_id': item['product_id'],
                             'item_description': f"{item['product_code']} - {item['product_name_vn']}",
+                            'item_detail_description': item.get('item_detail_description', ''),
                             'quantity': item['quantity'],
                             'unit_price': item['unit_price_vnd'],
                             'line_total': item['line_total']
@@ -1164,6 +1291,7 @@ def render_quotation_edit_inline(load_func, update_func, save_func, delete_func,
                     st.session_state.pop('editing_quotation_items', None)
                     st.session_state.pop('selected_product_for_quotation_edit', None)
                     st.session_state.pop('show_product_selector_edit', None)
+                    st.session_state.pop('editing_item_idx_edit', None)
                     st.rerun()
                 else:
                     st.error("❌ 수정 실패")
@@ -1176,6 +1304,7 @@ def render_quotation_edit_inline(load_func, update_func, save_func, delete_func,
             st.session_state.pop('editing_quotation_items', None)
             st.session_state.pop('selected_product_for_quotation_edit', None)
             st.session_state.pop('show_product_selector_edit', None)
+            st.session_state.pop('editing_item_idx_edit', None)
             st.info("✅ 수정이 취소되었습니다.")
             st.rerun()
 
@@ -1411,7 +1540,7 @@ def generate_quotation_html(quotation, load_func, customer_table, language='한�
         current_user = st.session_state.get('current_user', {})
         company_code = current_user.get('company', 'YMV')
         from utils.helpers import get_company_table
-        quotation_items_table = f'quotation_items_{company_code.lower()}'  # 'quotation_items_ymv'
+        quotation_items_table = f'quotation_items_{company_code.lower()}'
         quotation_items_data = load_func(quotation_items_table)
         
         # 해당 견적서의 항목만 필터링
@@ -1450,7 +1579,7 @@ def generate_quotation_html(quotation, load_func, customer_table, language='한�
             stamp_img_tag = f'<img src="{stamp_base64}" class="stamp-image" alt="Company Stamp" />'
         
 
-        # ✅ 제품 테이블 HTML 생성 (3행 구조)
+        # ✅ 제품 테이블 HTML 생성 (3행 구조: 1)기본정보, 2)제품명, 3)상세설명)
         items_rows = ""
         if items:
             for idx, item in enumerate(items, 1):
@@ -1460,13 +1589,16 @@ def generate_quotation_html(quotation, load_func, customer_table, language='한�
                 item_code = parts[0] if len(parts) > 0 else ''
                 item_name_vn = parts[1] if len(parts) > 1 else item_desc
                 
+                # ✅ 상세 설명 가져오기
+                detail_description = item.get('item_detail_description', '').strip()
+                
                 qty = item.get('quantity', 0)
                 unit_price = item.get('unit_price', 0)
                 line_total = item.get('line_total', 0)
                 discount_rate = quotation.get('discount_rate', 0)
                 discounted_price = unit_price * (1 - discount_rate / 100)
                 
-                # 3행 구조: 1) 기본 정보, 2) 베트남어 제품명, 3) 비고
+                # ✅ 3행 구조: 1) 기본 정보, 2) 제품명(베트남어), 3) 상세 설명
                 items_rows += f"""
                     <tr>
                         <td rowspan="3" style="vertical-align: top; padding-top: 30px; font-weight: bold;">{idx}</td>
@@ -1478,17 +1610,18 @@ def generate_quotation_html(quotation, load_func, customer_table, language='한�
                         <td class="text-right" style="font-size: 10px; font-weight: bold;">{line_total:,.0f}</td>
                     </tr>
                     <tr>
-                        <td colspan="6" style="padding: 6px; border-top: none; text-align: left; color: #000;">
+                        <td colspan="6" style="padding: 6px; border-top: none; text-align: left; color: #000; font-size: 11px;">
                             {item_name_vn}
                         </td>
                     </tr>
                     <tr>
-                        <td colspan="6" style="padding: 8px; border-top: none; text-align: left;">
-                            {quotation.get('remarks', '')}
+                        <td colspan="6" style="padding: 8px; border-top: none; text-align: left; font-size: 10px; color: #555;">
+                            {detail_description if detail_description else ''}
                         </td>
                     </tr>
                 """
         else:
+            # ✅ 항목이 없을 때
             items_rows = """
                 <tr>
                     <td rowspan="3" style="vertical-align: top; padding-top: 30px; font-weight: bold;">1</td>
