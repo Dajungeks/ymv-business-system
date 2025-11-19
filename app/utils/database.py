@@ -707,3 +707,15 @@ def test_connection() -> bool:
     except Exception as e:
         logging.error(f"데이터베이스 연결 실패: {str(e)}")
         return False
+
+def delete_quotation_items_by_quotation_id(table_name: str, quotation_id: int) -> bool:
+    """견적서 ID로 모든 항목 삭제"""
+    try:
+        conn = get_connection()
+        result = conn.table(table_name).delete().eq('quotation_id', quotation_id).execute()
+        
+        logging.info(f"견적 항목 삭제 성공: {table_name}, quotation_id={quotation_id}")
+        return True
+    except Exception as e:
+        logging.error(f"견적 항목 삭제 오류 ({table_name}, quotation_id={quotation_id}): {str(e)}")
+        return False

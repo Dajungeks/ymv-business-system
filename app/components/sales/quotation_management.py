@@ -1261,16 +1261,8 @@ def render_quotation_edit_inline(load_func, update_func, save_func, delete_func,
                 
                 if success:
                     # ✅ 기존 quotation_items 삭제
-                    try:
-                        existing_items = load_func(quotation_items_table)
-                        if existing_items:
-                            for item in existing_items:
-                                if item.get('quotation_id') == editing_data['id']:
-                                    item_id = item.get('item_id')
-                                    if item_id:
-                                        delete_func(quotation_items_table, item_id, id_field='item_id')
-                    except Exception as delete_error:
-                        st.warning(f"기존 항목 삭제 중 오류: {str(delete_error)}")
+                    from utils.database import delete_quotation_items_by_quotation_id
+                    delete_quotation_items_by_quotation_id(quotation_items_table, editing_data['id'])   
                     
                     # ✅ 새 quotation_items 저장 (item_detail_description 포함)
                     for item in st.session_state.editing_quotation_items:
