@@ -1515,7 +1515,8 @@ def generate_quotation_html(quotation, load_func, customer_table, language='í•œê
         from pathlib import Path
         
         stamp_base64 = ""
-        stamp_path = Path("D:/ymv-business-system/app/images/Stemp-sign.png")
+        #stamp_path = Path("D:/ymv-business-system/app/images/Stemp-sign.png")
+        stamp_path = Path(__file__).parent.parent.parent / "images" / "Stemp-sign.png"
         
         try:
             if stamp_path.exists():
